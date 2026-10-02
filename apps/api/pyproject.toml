@@ -1,0 +1,54 @@
+[project]
+name = "cinematic-celebration-api"
+version = "0.1.0"
+description = "Cinematic Celebration booking platform API (Phase 1, no payment gateway)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.115.5",
+    "uvicorn[standard]==0.32.1",
+    "pydantic==2.10.3",
+    "pydantic-settings==2.6.1",
+    "sqlalchemy==2.0.36",
+    "psycopg[binary]==3.2.3",
+    "alembic==1.14.0",
+    "pyjwt==2.10.1",
+    "argon2-cffi==23.1.0",
+    "slowapi==0.1.9",
+    "openpyxl==3.1.5",
+    "boto3==1.35.71",
+    "structlog==24.4.0",
+    "python-multipart==0.0.19",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.24.0",
+    "hypothesis==6.122.3",
+    "testcontainers[postgres]==4.9.0",
+    "httpx==0.28.1",
+    "ruff==0.8.3",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = [
+    "integration: tests that require a real PostgreSQL database (testcontainers)",
+]
