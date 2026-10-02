@@ -7,12 +7,11 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-    "types": ["vitest/globals", "@testing-library/jest-dom"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", ".astro/types.d.ts", "astro.config.mjs"],
+  "include": ["src", ".astro/types.d.ts", "astro.config.mjs", "vitest.d.ts"],
   "exclude": ["dist"]
 }
