@@ -1,0 +1,12 @@
+# Dependencies for the one-off MariaDB -> PostgreSQL migration.
+# These are standalone scripts; they are intentionally NOT part of the API app
+# package and do not import the FastAPI application.
+#
+# Install into a throwaway virtualenv on the migration machine:
+#   python -m venv .venv && . .venv/bin/activate
+#   pip install -r requirements.txt
+
+pymysql>=1.1.0          # read the old MariaDB database (pure-Python, no C deps)
+boto3>=1.34.0           # upload image blobs to the Cloudflare R2 (S3-compatible) bucket
+psycopg[binary]>=3.1.0  # insert into the target PostgreSQL 16 database
+argon2-cffi>=23.1.0     # hash a random reset password per user (never copy plaintext)

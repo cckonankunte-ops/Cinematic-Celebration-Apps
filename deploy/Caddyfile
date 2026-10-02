@@ -1,0 +1,6 @@
+# Automatic HTTPS for the API. Caddy obtains and renews certificates.
+# The customer site and admin panel are served by Cloudflare Pages, not here.
+api.cinematiccelebration.in {
+	encode gzip
+	reverse_proxy api:8000
+}

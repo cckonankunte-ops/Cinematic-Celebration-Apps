@@ -1,0 +1,71 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'Cinematic Celebration — Private Theatre Booking in Bangalore';
+const description =
+  'Book a private theatre for birthdays, anniversaries, and celebrations across our Bangalore branches. Add cakes, decor, and combos, and reserve your slot online.';
+
+// LocalBusiness structured data for local SEO on the landing page.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'LocalBusiness',
+  name: 'Cinematic Celebration',
+  description,
+  url: 'https://cinematiccelebration.in',
+  areaServed: 'Bangalore',
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'Bangalore',
+    addressRegion: 'Karnataka',
+    addressCountry: 'IN',
+  },
+};
+---
+
+<Base title={title} description={description} jsonLd={jsonLd}>
+  <section class="py-10 text-center">
+    <h1 class="text-4xl font-bold text-brand">
+      Celebrate on the big screen
+    </h1>
+    <p class="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
+      Private theatres for birthdays, anniversaries, proposals, and more — across
+      three Bangalore branches. Pick a plan, add a cake and decor, and reserve
+      your slot in minutes.
+    </p>
+    <div class="mt-8 flex justify-center gap-4">
+      <a
+        href="/locations"
+        class="rounded bg-brand px-6 py-3 font-semibold text-white"
+      >
+        Browse locations
+      </a>
+      <a
+        href="/booking-status"
+        class="rounded border border-brand px-6 py-3 font-semibold text-brand"
+      >
+        Track a booking
+      </a>
+    </div>
+  </section>
+
+  <section class="grid gap-6 py-10 sm:grid-cols-3">
+    <div class="rounded border border-gray-200 p-6">
+      <h2 class="font-semibold">Private &amp; exclusive</h2>
+      <p class="mt-2 text-sm text-gray-600">
+        The whole theatre is yours for your slot — no strangers, no sharing.
+      </p>
+    </div>
+    <div class="rounded border border-gray-200 p-6">
+      <h2 class="font-semibold">Add-ons made easy</h2>
+      <p class="mt-2 text-sm text-gray-600">
+        Cakes, special decor, and food combos — all added during booking.
+      </p>
+    </div>
+    <div class="rounded border border-gray-200 p-6">
+      <h2 class="font-semibold">Simple booking</h2>
+      <p class="mt-2 text-sm text-gray-600">
+        Request a slot online and pay the advance to confirm. No account needed.
+      </p>
+    </div>
+  </section>
+</Base>

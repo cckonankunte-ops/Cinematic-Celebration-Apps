@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+import BookingWizard from '../components/booking/BookingWizard.tsx';
+
+const title = 'Book Your Celebration — Cinematic Celebration';
+const description =
+  'Reserve a private theatre slot: pick a plan and date, choose a time slot, add cakes and decor, and submit your booking request.';
+---
+
+<Base title={title} description={description}>
+  <h1 class="text-3xl font-bold">Book your celebration</h1>
+  <p class="mt-2 text-gray-600">
+    Complete the steps below. Your slot is a request until the advance is paid.
+  </p>
+  <div class="mt-8">
+    <!--
+      Static route with a query param (`/book?location=slug`). Because the site
+      is a STATIC build we don't know location slugs at build time, so routing
+      data is carried in the URL and the island does all runtime fetching
+      instead of a dynamic [location] path segment (which would need SSR/
+      getStaticPaths). See README.
+    -->
+    <BookingWizard client:load />
+  </div>
+</Base>

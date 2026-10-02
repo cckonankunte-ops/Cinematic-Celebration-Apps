@@ -1,0 +1,54 @@
+# Cinematic Celebration — single-VPS stack (API + Postgres + Caddy).
+# Memory limits keep the whole stack within a 1-2 GB VPS budget.
+services:
+  postgres:
+    image: postgres:16-alpine
+    mem_limit: 300m
+    restart: unless-stopped
+    command: postgres -c shared_buffers=64MB -c max_connections=20
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-cinematic}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../apps/api
+    mem_limit: 220m
+    restart: unless-stopped
+    env_file: ../.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Internal only; Caddy proxies. Not published to the host.
+    expose:
+      - "8000"
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+      --proxy-headers --forwarded-allow-ips "*"
+
+  caddy:
+    image: caddy:2-alpine
+    mem_limit: 40m
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

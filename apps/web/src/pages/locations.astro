@@ -1,0 +1,34 @@
+---
+import Base from '../layouts/Base.astro';
+import LocationList from '../components/booking/LocationList.tsx';
+
+const title = 'Our Branches — Cinematic Celebration Bangalore';
+const description =
+  'Find a Cinematic Celebration private theatre branch near you in Bangalore and book your celebration slot online.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'LocalBusiness',
+  name: 'Cinematic Celebration',
+  description,
+  url: 'https://cinematiccelebration.in/locations',
+  areaServed: 'Bangalore',
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'Bangalore',
+    addressRegion: 'Karnataka',
+    addressCountry: 'IN',
+  },
+};
+---
+
+<Base title={title} description={description} jsonLd={jsonLd}>
+  <h1 class="text-3xl font-bold">Our branches</h1>
+  <p class="mt-2 text-gray-600">
+    Choose a location to see plans and book your slot.
+  </p>
+  <div class="mt-8">
+    <!-- Runtime fetch: static output can't know branches at build time. -->
+    <LocationList client:visible />
+  </div>
+</Base>

@@ -1,0 +1,19 @@
+---
+import Base from '../layouts/Base.astro';
+import BookingStatus from '../components/booking/BookingStatus.tsx';
+
+const title = 'Track Your Booking — Cinematic Celebration';
+const description =
+  'Check the status and payment details of your Cinematic Celebration booking using your booking token.';
+---
+
+<Base title={title} description={description}>
+  <h1 class="text-3xl font-bold">Your booking</h1>
+  <p class="mt-2 text-gray-600">
+    Status and payment details are looked up by your booking token.
+  </p>
+  <div class="mt-8">
+    <!-- Reads ?token= from the URL and fetches status at runtime. -->
+    <BookingStatus client:load />
+  </div>
+</Base>

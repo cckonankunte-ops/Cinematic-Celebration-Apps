@@ -1,0 +1,84 @@
+---
+/**
+ * Base HTML shell for the customer site.
+ *
+ * Provides unique per-page SEO (title, meta description, Open Graph) and an
+ * optional JSON-LD structured-data block. The customer site IS indexable
+ * (robots allow); the admin panel is the noindex surface, not this one.
+ */
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Optional structured data object; serialized into a JSON-LD script tag. */
+  jsonLd?: Record<string, unknown>;
+  /** Open Graph image URL (absolute). */
+  ogImage?: string;
+}
+
+const { title, description, jsonLd, ogImage } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+const image = ogImage ?? new URL('/og-default.png', Astro.site).toString();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonical} />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={image} />
+    <meta property="og:site_name" content="Cinematic Celebration" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={image} />
+
+    <slot name="head" />
+
+    {
+      jsonLd && (
+        <script
+          type="application/ld+json"
+          set:html={JSON.stringify(jsonLd)}
+        />
+      )
+    }
+  </head>
+  <body class="min-h-screen bg-white text-gray-900 antialiased">
+    <header class="border-b border-gray-200">
+      <nav class="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+        <a href="/" class="text-lg font-bold text-brand">Cinematic Celebration</a>
+        <div class="flex gap-4 text-sm">
+          <a href="/locations" class="hover:text-brand">Locations</a>
+          <a href="/booking-status" class="hover:text-brand">My Booking</a>
+          <a href="/contact" class="hover:text-brand">Contact</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="mx-auto max-w-5xl px-4 py-8">
+      <slot />
+    </main>
+
+    <footer class="border-t border-gray-200">
+      <div class="mx-auto max-w-5xl px-4 py-6 text-sm text-gray-500">
+        &copy; {new Date().getFullYear()} Cinematic Celebration, Bangalore.
+      </div>
+    </footer>
+  </body>
+</html>

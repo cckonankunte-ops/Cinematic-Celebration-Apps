@@ -1,0 +1,9 @@
+# Cinematic Celebration cron schedule (host crontab).
+# Install with: crontab deploy/cron/crontab   (adjust the repo path first).
+# Jobs run INSIDE the running containers via `docker compose exec -T`.
+
+# Expire unpaid pending bookings every minute (idempotent).
+* * * * * cd /opt/cinematic/New_Application/deploy && docker compose exec -T api python -m app.jobs.expire_pending >> /var/log/cc/expire.log 2>&1
+
+# Nightly database backup at 02:00 IST (20:30 UTC).
+30 20 * * * cd /opt/cinematic/New_Application/deploy && ./backup/backup.sh >> /var/log/cc/backup.log 2>&1

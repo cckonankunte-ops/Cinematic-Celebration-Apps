@@ -1,0 +1,22 @@
+# build output
+dist/
+.output/
+
+# astro generated types
+.astro/
+
+# dependencies
+node_modules/
+
+# env (never commit real values)
+.env
+.env.*
+!.env.example
+
+# logs & os
+*.log
+.DS_Store
+
+# editors
+.vscode/
+.idea/
