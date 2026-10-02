@@ -26,6 +26,15 @@ from app.models.slot import Slot
 from app.models.special_decor_item import SpecialDecorItem
 from app.models.user import User
 from app.models.user_role import UserRole
+from app.schemas.catalog_admin import (
+    CakeAdminRead,
+    ComboAdminRead,
+    GalleryImageRead,
+    PlanAdminRead,
+    SlotAdminRead,
+    SpecialDecorAdminRead,
+    UserAdminRead,
+)
 
 _FAR_FUTURE = date(2099, 12, 31)
 
@@ -359,9 +368,7 @@ def remove_gallery_image(db: Session, plan_id: int, image_id: int) -> None:
 
 
 # --- Read-model mappers (admin views include is_active + validity window) ---
-def to_plan_admin_read(plan: Plan) -> "PlanAdminRead":
-    from app.schemas.catalog_admin import PlanAdminRead
-
+def to_plan_admin_read(plan: Plan) -> PlanAdminRead:
     return PlanAdminRead(
         id=plan.id,
         location_id=plan.location_id,
@@ -382,9 +389,7 @@ def to_plan_admin_read(plan: Plan) -> "PlanAdminRead":
     )
 
 
-def to_slot_admin_read(slot: Slot) -> "SlotAdminRead":
-    from app.schemas.catalog_admin import SlotAdminRead
-
+def to_slot_admin_read(slot: Slot) -> SlotAdminRead:
     return SlotAdminRead(
         id=slot.id,
         plan_id=slot.plan_id,
@@ -397,9 +402,7 @@ def to_slot_admin_read(slot: Slot) -> "SlotAdminRead":
     )
 
 
-def to_cake_admin_read(cake: Cake) -> "CakeAdminRead":
-    from app.schemas.catalog_admin import CakeAdminRead
-
+def to_cake_admin_read(cake: Cake) -> CakeAdminRead:
     return CakeAdminRead(
         id=cake.id,
         location_id=cake.location_id,
@@ -413,9 +416,7 @@ def to_cake_admin_read(cake: Cake) -> "CakeAdminRead":
     )
 
 
-def to_decor_admin_read(decor: SpecialDecorItem) -> "SpecialDecorAdminRead":
-    from app.schemas.catalog_admin import SpecialDecorAdminRead
-
+def to_decor_admin_read(decor: SpecialDecorItem) -> SpecialDecorAdminRead:
     return SpecialDecorAdminRead(
         id=decor.id,
         location_id=decor.location_id,
@@ -431,9 +432,7 @@ def to_decor_admin_read(decor: SpecialDecorItem) -> "SpecialDecorAdminRead":
     )
 
 
-def to_combo_admin_read(combo: ComboItem) -> "ComboAdminRead":
-    from app.schemas.catalog_admin import ComboAdminRead
-
+def to_combo_admin_read(combo: ComboItem) -> ComboAdminRead:
     return ComboAdminRead(
         id=combo.id,
         location_id=combo.location_id,
@@ -448,9 +447,7 @@ def to_combo_admin_read(combo: ComboItem) -> "ComboAdminRead":
     )
 
 
-def to_user_admin_read(db: Session, user: User) -> "UserAdminRead":
-    from app.schemas.catalog_admin import UserAdminRead
-
+def to_user_admin_read(db: Session, user: User) -> UserAdminRead:
     return UserAdminRead(
         id=user.id,
         username=user.username,
@@ -462,9 +459,7 @@ def to_user_admin_read(db: Session, user: User) -> "UserAdminRead":
 
 def to_gallery_image_read(
     image: PlanGalleryImage, upload_url: str | None = None
-) -> "GalleryImageRead":
-    from app.schemas.catalog_admin import GalleryImageRead
-
+) -> GalleryImageRead:
     return GalleryImageRead(
         id=image.id,
         plan_id=image.plan_id,

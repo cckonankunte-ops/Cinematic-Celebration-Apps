@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -53,7 +53,7 @@ def test_decode_rejects_tampered_token() -> None:
 
 
 def test_decode_rejects_expired_token() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expired = jwt.encode(
         {
             "sub": "1",

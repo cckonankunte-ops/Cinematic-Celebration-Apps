@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 
 from app.core.security import CurrentUser
 from app.models.booking import Booking
-from app.models.slot import Slot
 from app.services import sheets as sheets_service
 from tests.factories import future_date, make_location, make_plan, make_slot
 

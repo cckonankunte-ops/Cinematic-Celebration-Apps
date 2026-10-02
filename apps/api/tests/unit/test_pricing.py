@@ -144,7 +144,8 @@ def test_extra_guests_charged_per_head() -> None:
 
 
 def test_zero_addons() -> None:
-    req = ValidatedRequest(plan=_plan(price_paise=250000, people_allowed=4, extra_guest_paise=0), people=4)
+    plan = _plan(price_paise=250000, people_allowed=4, extra_guest_paise=0)
+    req = ValidatedRequest(plan=plan, people=4)
     bd = compute_booking_price(req, is_customer=True)
     assert bd.addon_lines == []
     assert bd.total_paise == 250000

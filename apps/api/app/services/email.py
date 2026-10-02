@@ -8,7 +8,7 @@ body, and sends it via integrations.email.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -58,7 +58,7 @@ def send_confirmation(booking_id: int) -> None:
             html=html,
             bcc=settings.BUSINESS_EMAIL,
         )
-        booking.confirmation_sent_at = datetime.now(timezone.utc)
+        booking.confirmation_sent_at = datetime.now(UTC)
         db.commit()
         log.info("confirmation_sent", booking_id=booking_id)
     finally:

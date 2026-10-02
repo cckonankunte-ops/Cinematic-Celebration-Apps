@@ -21,7 +21,8 @@ def export(output_path: str | None = None) -> Path:
     """Write the OpenAPI JSON and return the path."""
     app = create_app()
     schema = app.openapi()
-    out = Path(output_path) if output_path else Path(__file__).resolve().parent.parent / "openapi.json"
+    default_path = Path(__file__).resolve().parent.parent / "openapi.json"
+    out = Path(output_path) if output_path else default_path
     out.write_text(json.dumps(schema, indent=2, sort_keys=True), encoding="utf-8")
     return out
 

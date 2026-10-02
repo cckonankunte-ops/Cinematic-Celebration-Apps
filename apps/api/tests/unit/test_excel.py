@@ -6,7 +6,7 @@ openpyxl, and assert the header row plus a Day Summary footer where expected.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from openpyxl import load_workbook
 
@@ -20,7 +20,7 @@ from app.schemas.analytics import (
 from app.schemas.sheets import CakesheetRow, TimesheetRow
 from app.services import excel as excel_service
 
-_NOW = datetime(2025, 1, 1, 10, 30, tzinfo=timezone.utc)
+_NOW = datetime(2025, 1, 1, 10, 30, tzinfo=UTC)
 
 
 def _timesheet_rows() -> list[TimesheetRow]:

@@ -11,7 +11,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from sqlalchemy.orm import Session
 
-from app.core.errors import ForbiddenError, LocationAccessDeniedError
+from app.core.errors import LocationAccessDeniedError
 from app.core.security import CurrentUser, assert_location_access, get_current_user
 from tests.factories import make_location, make_user
 

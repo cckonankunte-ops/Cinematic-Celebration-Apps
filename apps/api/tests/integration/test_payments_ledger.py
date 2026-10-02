@@ -44,7 +44,10 @@ def _seed_booking(db: Session):
     db.commit()
     actor = make_user(db, "admin", location_id=None)
     db.commit()
-    return booking, CurrentUser(id=actor.id, username=actor.username, role="admin", location_id=None)
+    actor_cu = CurrentUser(
+        id=actor.id, username=actor.username, role="admin", location_id=None
+    )
+    return booking, actor_cu
 
 
 @settings(max_examples=25, suppress_health_check=[HealthCheck.function_scoped_fixture])
@@ -58,7 +61,9 @@ def test_recorded_payments_sum_matches(db: Session, amounts: list[int]) -> None:
     booking, actor = _seed_booking(db)
     running = 0
     for amt in amounts:
-        payments.record_payment(db, booking.id, PaymentCreate(method="upi", amount_paise=amt), actor)
+        payments.record_payment(
+            db, booking.id, PaymentCreate(method="upi", amount_paise=amt), actor
+        )
         running += amt
         assert payments.amount_paid_paise(db, booking.id) == running
 

@@ -46,7 +46,8 @@ router = APIRouter(
 # --- Plans ---
 @router.get("/plans", response_model=list[PlanAdminRead])
 def list_plans(location_id: int, db: Session = Depends(get_db)) -> list[PlanAdminRead]:
-    return [catalog_admin.to_plan_admin_read(p) for p in catalog_admin.list_plans_admin(db, location_id)]
+    plans = catalog_admin.list_plans_admin(db, location_id)
+    return [catalog_admin.to_plan_admin_read(p) for p in plans]
 
 
 @router.post("/plans", response_model=PlanAdminRead, status_code=201)
@@ -94,7 +95,8 @@ def remove_plan_gallery_image(
 # --- Slots ---
 @router.get("/slots", response_model=list[SlotAdminRead])
 def list_slots(plan_id: int, db: Session = Depends(get_db)) -> list[SlotAdminRead]:
-    return [catalog_admin.to_slot_admin_read(s) for s in catalog_admin.list_slots_admin(db, plan_id)]
+    slots = catalog_admin.list_slots_admin(db, plan_id)
+    return [catalog_admin.to_slot_admin_read(s) for s in slots]
 
 
 @router.post("/slots", response_model=SlotAdminRead, status_code=201)
@@ -116,7 +118,8 @@ def deactivate_slot(slot_id: int, db: Session = Depends(get_db)) -> SlotAdminRea
 # --- Cakes ---
 @router.get("/cakes", response_model=list[CakeAdminRead])
 def list_cakes(location_id: int, db: Session = Depends(get_db)) -> list[CakeAdminRead]:
-    return [catalog_admin.to_cake_admin_read(c) for c in catalog_admin.list_cakes_admin(db, location_id)]
+    cakes = catalog_admin.list_cakes_admin(db, location_id)
+    return [catalog_admin.to_cake_admin_read(c) for c in cakes]
 
 
 @router.post("/cakes", response_model=CakeAdminRead, status_code=201)
