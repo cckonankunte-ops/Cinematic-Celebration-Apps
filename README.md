@@ -25,9 +25,12 @@ New_Application/
 
 ## Prerequisites
 
-- Python 3.12
-- Node.js (LTS) + npm
-- Docker + Docker Compose
+- Python 3.12 (specifically — not 3.13+)
+- Node.js 20 LTS (or 18 LTS) + npm
+- Docker + Docker Compose (provides PostgreSQL; no separate Postgres install needed)
 - Git
 
-Status: scaffolding not yet started. Follow the task plan in the spec to build out each app.
+See **`docs/PREREQUISITES.md`** for exact versions, Windows (winget) install
+commands, download links, and how to verify each tool. Then follow
+**`docs/VERIFICATION.md`** to install dependencies and run every app + the
+Docker Compose stack.
