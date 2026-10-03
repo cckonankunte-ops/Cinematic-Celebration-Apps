@@ -26,10 +26,16 @@ npm install
 [ -f .env ] || cp .env.example .env
 cd ../..
 
+echo "=== Wiring .env URLs (Codespace-aware) ==="
+bash .devcontainer/wire-env.sh || true
+
 echo ""
 echo "Setup complete."
 echo "Next:"
 echo "  1. Put your Neon connection string in apps/api/.env (DATABASE_URL=...)."
+echo "     Keep the CORS_ALLOWED_ORIGINS line that wire-env.sh set."
 echo "  2. Backend:  cd apps/api && . .venv/bin/activate && alembic upgrade head && uvicorn app.main:app --reload --port 8000"
-echo "  3. Admin:    cd apps/admin && npm run dev"
+echo "  3. Admin:    cd apps/admin && npm run gen:api && npm run dev"
 echo "  4. Web:      cd apps/web && npm run dev"
+echo "  5. In the Ports tab, set port 8000 visibility to PUBLIC so the browser"
+echo "     frontends can call the API."

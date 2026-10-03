@@ -25,12 +25,17 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
 def _set_auth_cookie(response: Response, token: str) -> None:
+    # SameSite=None requires Secure=True; the config defaults are safe for
+    # same-domain production, and can be set to none/true for cross-subdomain
+    # dev (e.g. GitHub Codespaces).
+    samesite = settings.COOKIE_SAMESITE.lower()
+    secure = settings.COOKIE_SECURE or samesite == "none"
     response.set_cookie(
         key=ACCESS_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=settings.ENVIRONMENT != "local",
-        samesite="lax",
+        secure=secure,
+        samesite=samesite,  # type: ignore[arg-type]
         path="/",
         max_age=settings.JWT_EXPIRY_HOURS * 3600,
     )

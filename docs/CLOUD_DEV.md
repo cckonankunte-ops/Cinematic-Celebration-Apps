@@ -58,10 +58,26 @@ npm run dev                            # serves on 4321
 ```
 
 Codespaces auto-forwards ports 8000 / 5173 / 4321. Open the **Ports** tab and
-click the globe icon to view each app in your browser. Make the API port
-**public** (right-click → Port Visibility → Public) and set the frontends'
-`VITE_API_BASE_URL` / `PUBLIC_API_BASE_URL` in their `.env` to the forwarded API
-URL so the browser can reach it.
+click the globe icon to view each app in your browser.
+
+**The frontend/API URLs and CORS are wired automatically.** The setup script
+runs `.devcontainer/wire-env.sh`, which detects the Codespace's forwarded URLs
+and fills them into `apps/admin/.env`, `apps/web/.env`, and the
+`CORS_ALLOWED_ORIGINS` + cookie settings in `apps/api/.env`. If you ever rebuild
+or the URLs change, just re-run it:
+
+```bash
+bash .devcontainer/wire-env.sh
+```
+
+**One manual step in the Ports tab:** set port **8000** (API) visibility to
+**Public** (right-click the port → Port Visibility → Public) so the browser
+frontends can call it. Ports 5173 and 4321 can stay private (you open them in
+your own browser).
+
+Because the admin and API live on different `*.app.github.dev` subdomains,
+`wire-env.sh` sets the auth cookie to `SameSite=None; Secure` automatically in
+Codespaces so admin login works.
 
 ## Run the tests
 

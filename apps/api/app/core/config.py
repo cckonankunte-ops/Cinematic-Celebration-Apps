@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_HOURS: int = 8
 
+    # --- Auth cookie policy ---
+    # Default (lax/secure) is correct for same-registrable-domain production.
+    # For cross-subdomain setups (e.g. GitHub Codespaces: *.app.github.dev),
+    # set COOKIE_SAMESITE=none and COOKIE_SECURE=true so the admin login cookie
+    # is sent on cross-site XHR. SameSite=None REQUIRES Secure=true.
+    COOKIE_SAMESITE: str = "lax"  # lax | strict | none
+    COOKIE_SECURE: bool = False
+
     # --- CORS (explicit allowlist; never "*") ---
     # Comma-separated list of allowed origins for the admin panel and customer site.
     CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:4321"
