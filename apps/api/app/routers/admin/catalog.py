@@ -10,7 +10,7 @@ writes, so every endpoint is protected by default.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -85,11 +85,16 @@ def add_plan_gallery_image(
     return catalog_admin.to_gallery_image_read(image, upload_url=upload["upload_url"])
 
 
-@router.delete("/plans/{plan_id}/gallery/{image_id}", status_code=204)
+@router.delete(
+    "/plans/{plan_id}/gallery/{image_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 def remove_plan_gallery_image(
     plan_id: int, image_id: int, db: Session = Depends(get_db)
-) -> None:
+) -> Response:
     catalog_admin.remove_gallery_image(db, plan_id, image_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # --- Slots ---
