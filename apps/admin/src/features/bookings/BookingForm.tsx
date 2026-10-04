@@ -62,9 +62,12 @@ export function BookingForm({
     },
   });
 
-  const planId = watch('plan_id');
+  const rawPlanId = watch('plan_id');
+  // valueAsNumber on an empty <select> yields NaN, not null. Normalize to null
+  // so the slots query stays disabled until a real plan is chosen.
+  const planId = Number.isFinite(rawPlanId) ? rawPlanId : null;
   const plans = usePlans(locationId);
-  const slots = useSlots(planId ?? null);
+  const slots = useSlots(planId);
   const cakes = useCakes(locationId);
   const decor = useSpecialDecor(locationId);
   const combos = useCombos(locationId);
