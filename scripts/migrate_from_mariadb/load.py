@@ -259,6 +259,18 @@ def run(config: MigrationConfig) -> dict[str, int]:  # pragma: no cover - live D
             counts["booking_events"] = len(events)
             print(f"loaded {len(events):>6} rows into booking_events")
 
+            # Rows were inserted with explicit ids (OVERRIDING SYSTEM VALUE), so
+            # the identity sequences were never advanced. Reset each table's id
+            # sequence to MAX(id) so the first NEW insert gets MAX+1 instead of
+            # colliding on the primary key.
+            for table in (*_LOAD_ORDER, "booking_events"):
+                cur.execute(
+                    "SELECT setval(pg_get_serial_sequence(%s, 'id'), "
+                    "COALESCE((SELECT MAX(id) FROM " + table + "), 1), true)",
+                    (table,),
+                )
+            print("reset identity sequences to MAX(id) for all tables")
+
         conn.commit()
 
     if skipped_booking_ids:
