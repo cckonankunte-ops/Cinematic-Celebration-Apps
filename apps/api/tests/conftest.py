@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from testcontainers.postgres import PostgresContainer
 
 from app.core.db import Base, get_db
+from app.core.ratelimit import limiter
 from app.main import create_app
 
 # Import all models so Base.metadata is fully populated (task 2 adds them).
@@ -56,6 +57,24 @@ def db(pg_engine: Engine) -> Generator[Session, None, None]:
             session.execute(table.delete())
         session.commit()
         session.close()
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter() -> Generator[None, None, None]:
+    """Clear slowapi's in-memory counters before each test.
+
+    The ``limiter`` is a module-level singleton with in-process storage, so its
+    per-key counters otherwise leak across tests in the same session. Once the
+    cumulative number of logins (or public booking posts) exceeds a route's
+    limit, later tests get spurious 429s (and the follow-up admin calls get 401
+    because no auth cookie was set). Resetting between tests keeps each test's
+    rate-limit budget independent.
+    """
+    try:
+        limiter.reset()
+    except Exception:  # pragma: no cover - storage may not support reset
+        pass
+    yield
 
 
 @pytest.fixture

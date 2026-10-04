@@ -36,9 +36,16 @@ def test_reference_falls_back_to_loc_when_no_alnum() -> None:
 def test_references_are_unique_over_many_calls() -> None:
     loc = _location()
     on = datetime(2025, 6, 1).date()
-    refs = {generate_reference(loc, on) for _ in range(500)}
-    # The 4-hex suffix gives 65536 values; 500 draws should be distinct in practice.
-    assert len(refs) == 500
+    count = 500
+    refs = {generate_reference(loc, on) for _ in range(count)}
+    # The 4-hex suffix gives 65536 values, so by the birthday paradox a few
+    # collisions in 500 draws are expected (asserting strict 500/500 was flaky).
+    # The service's reference-collision retry handles real duplicates at insert
+    # time; here we only need to confirm the suffix is high-entropy, so allow a
+    # small tolerance while still catching a broken (constant/low-entropy) suffix.
+    assert len(refs) >= count - 5
+    # Every reference still matches the documented format.
+    assert all(_REFERENCE_RE.match(r) for r in refs)
 
 
 def test_expire_cutoff_uses_pending_hold_minutes() -> None:

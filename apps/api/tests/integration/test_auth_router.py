@@ -30,8 +30,19 @@ def test_origin_check_rejects_disallowed_write_origin() -> None:
         check_origin(_request("POST", "https://evil.example.com"))
 
 
-def test_origin_check_allows_write_from_allowlisted_origin() -> None:
-    # Default allowlist includes http://localhost:5173 (see Settings).
+def test_origin_check_allows_write_from_allowlisted_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Pin the allowlist for this test so it does not depend on the ambient
+    # CORS_ALLOWED_ORIGINS env var (which varies by environment, e.g. a
+    # Codespace may override it and drop localhost:5173).
+    from app.core import security as security_module
+
+    monkeypatch.setattr(
+        security_module.settings,
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:5173,http://localhost:4321",
+    )
     check_origin(_request("POST", "http://localhost:5173"))  # no raise
 
 
