@@ -40,6 +40,11 @@ def test_concurrent_booking_only_one_wins(pg_engine: Engine) -> None:
         bind=pg_engine, autoflush=False, expire_on_commit=False, future=True
     )
 
+    # _seed_slot creates ONE location, ONE plan and ONE slot, so both racers below
+    # reuse the same location_id, plan_id, slot_id and booking_date — i.e. the
+    # identical full (location, plan, slot, date) 4-column key. The race therefore
+    # still exercises a genuine conflict under the fixed uq_bookings_active_slot
+    # index (bugfix booking-uniqueness-per-plan, Req 3.2).
     setup = maker()
     try:
         location_id, plan_id, slot_id = _seed_slot(setup)
