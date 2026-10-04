@@ -73,6 +73,22 @@ export function BookingForm({
   const combos = useCombos(locationId);
   const occasions = useOccasions(locationId);
 
+  // Keep the submitted location_id in sync with the selected location and clear
+  // every location-scoped selection when the location changes. Otherwise a
+  // stale plan/slot/cake/decor from a previously viewed location gets submitted
+  // against the new location_id, which the server rejects as ITEM_INVALID.
+  useEffect(() => {
+    setValue('location_id', locationId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RHF reset to empty
+    const clear = undefined as any;
+    setValue('plan_id', clear);
+    setValue('slot_id', clear);
+    setValue('cake_id', clear);
+    setValue('occasion_id', clear);
+    setValue('special_decor_ids', []);
+    setValue('combo_ids', []);
+  }, [locationId, setValue]);
+
   // Reset the slot when the plan changes so a stale slot can't be submitted.
   // The field is cleared to NaN (empty number input) rather than a real id.
   useEffect(() => {
