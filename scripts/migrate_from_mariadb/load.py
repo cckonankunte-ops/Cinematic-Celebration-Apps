@@ -215,9 +215,9 @@ def run(config: MigrationConfig) -> dict[str, int]:  # pragma: no cover - live D
 
     Bookings are inserted individually under savepoints: any booking that would
     violate the active-slot unique index (duplicate pending/accepted booking for
-    the same location+slot+date among historical data) is SKIPPED and reported,
-    rather than failing the whole migration. Skipped booking ids are excluded
-    from booking_items, payments, and booking_events.
+    the same location+plan+slot+date among historical data) is SKIPPED and
+    reported, rather than failing the whole migration. Skipped booking ids are
+    excluded from booking_items, payments, and booking_events.
     """
     import psycopg
     from psycopg.errors import UniqueViolation
@@ -235,16 +235,36 @@ def run(config: MigrationConfig) -> dict[str, int]:  # pragma: no cover - live D
 
                 if table == "bookings":
                     loaded = 0
+                    # In-memory pre-filter keyed on the full 4-column active-slot
+                    # tuple (location, plan, slot, date). Only active rows
+                    # (pending|accepted) hold a slot and match the partial index
+                    # predicate, so only those keys are tracked and pre-skipped.
+                    # The DB 4-column index remains the backstop for true dupes.
+                    loaded_active_keys: set[tuple] = set()
                     for row in records["bookings"]:
+                        is_active = row.get("status") in ("pending", "accepted")
+                        active_key = (
+                            row.get("location_id"),
+                            row.get("plan_id"),
+                            row.get("slot_id"),
+                            row.get("booking_date"),
+                        )
+                        if is_active and active_key in loaded_active_keys:
+                            # True same-key active duplicate: skip before insert.
+                            skipped_booking_ids.add(int(row["id"]))
+                            continue
                         try:
                             with conn.transaction():
                                 cur.execute(sql, [row.get(c) for c in columns])
                             loaded += 1
+                            if is_active:
+                                loaded_active_keys.add(active_key)
                         except UniqueViolation:
                             skipped_booking_ids.add(int(row["id"]))
                     counts["bookings"] = loaded
                     print(f"loaded {loaded:>6} rows into bookings "
-                          f"({len(skipped_booking_ids)} skipped as duplicate active slot)")
+                          f"({len(skipped_booking_ids)} skipped as duplicate "
+                          f"active (location, plan, slot, date))")
                     continue
 
                 if table in ("booking_items", "payments"):
@@ -287,7 +307,8 @@ def run(config: MigrationConfig) -> dict[str, int]:  # pragma: no cover - live D
         conn.commit()
 
     if skipped_booking_ids:
-        print("\nSkipped booking ids (duplicate active slot) for manual review:")
+        print("\nSkipped booking ids (duplicate active (location, plan, slot, "
+              "date)) for manual review:")
         print(", ".join(str(i) for i in sorted(skipped_booking_ids)))
     return counts
 

@@ -1,8 +1,10 @@
 """Booking model and the double-booking partial unique index.
 
-One plan = one physical room, so a (location, slot, date) can be held by only one
-active (pending|accepted) booking. This is enforced by the partial unique index
-``uq_bookings_active_slot`` declared below.
+A slot is a shared time window, not a physical room; a plan is the separate themed
+room. Uniqueness is therefore per (location, plan, slot, date): only one active
+(pending|accepted) booking may exist for a given location + plan + slot + date, and
+different plans may share the same slot and date. This is enforced by the partial
+unique index ``uq_bookings_active_slot`` declared below.
 
 No payment columns live here (payments are a ledger). No add-on columns live here
 (add-ons are booking_items rows). No coupon_code. Amount due / paid are derived.
@@ -90,10 +92,11 @@ class Booking(Base, TimestampMixin):
     )
 
     __table_args__ = (
-        # Double-booking prevention: only one active booking per slot/date.
+        # Double-booking prevention: one active booking per (location, plan, slot, date).
         Index(
             "uq_bookings_active_slot",
             "location_id",
+            "plan_id",
             "slot_id",
             "booking_date",
             unique=True,
