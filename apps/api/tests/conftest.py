@@ -93,8 +93,14 @@ def client(db: Session) -> Generator[TestClient, None, None]:
 
     original_secure = settings.COOKIE_SECURE
     original_samesite = settings.COOKIE_SAMESITE
+    original_cors = settings.CORS_ALLOWED_ORIGINS
     settings.COOKIE_SECURE = False
     settings.COOKIE_SAMESITE = "lax"
+    # Pin the CORS allowlist so the Origin-check on write requests is
+    # deterministic. Tests send Origin: http://localhost:5173, but the ambient
+    # CORS_ALLOWED_ORIGINS env var (e.g. in a Codespace) may not include it,
+    # which would make every write request 403 ORIGIN_NOT_ALLOWED.
+    settings.CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:4321"
 
     app = create_app()
 
@@ -109,3 +115,4 @@ def client(db: Session) -> Generator[TestClient, None, None]:
         app.dependency_overrides.clear()
         settings.COOKIE_SECURE = original_secure
         settings.COOKIE_SAMESITE = original_samesite
+        settings.CORS_ALLOWED_ORIGINS = original_cors
