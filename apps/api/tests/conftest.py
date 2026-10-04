@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from testcontainers.postgres import PostgresContainer
 
 from app.core.db import Base, get_db
+from app.core.ratelimit import limiter
 from app.main import create_app
 
 # Import all models so Base.metadata is fully populated (task 2 adds them).
@@ -58,15 +59,60 @@ def db(pg_engine: Engine) -> Generator[Session, None, None]:
         session.close()
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter() -> Generator[None, None, None]:
+    """Clear slowapi's in-memory counters before each test.
+
+    The ``limiter`` is a module-level singleton with in-process storage, so its
+    per-key counters otherwise leak across tests in the same session. Once the
+    cumulative number of logins (or public booking posts) exceeds a route's
+    limit, later tests get spurious 429s (and the follow-up admin calls get 401
+    because no auth cookie was set). Resetting between tests keeps each test's
+    rate-limit budget independent.
+    """
+    try:
+        limiter.reset()
+    except Exception:  # pragma: no cover - storage may not support reset
+        pass
+    yield
+
+
 @pytest.fixture
 def client(db: Session) -> Generator[TestClient, None, None]:
-    """FastAPI TestClient using the test DB session."""
+    """FastAPI TestClient using the test DB session.
+
+    The auth cookie is forced to a non-Secure, SameSite=Lax policy for the test
+    app. The ambient environment (e.g. a GitHub Codespace) may set
+    COOKIE_SECURE=true / COOKIE_SAMESITE=none for cross-subdomain production,
+    but TestClient speaks plain ``http://testserver``, so a Secure cookie set at
+    login would never be sent back on the following request (login returns 200
+    yet the next admin call gets 401). Pinning the policy keeps auth flows
+    deterministic across environments without touching production behavior.
+    """
+    from app.core.config import settings
+
+    original_secure = settings.COOKIE_SECURE
+    original_samesite = settings.COOKIE_SAMESITE
+    original_cors = settings.CORS_ALLOWED_ORIGINS
+    settings.COOKIE_SECURE = False
+    settings.COOKIE_SAMESITE = "lax"
+    # Pin the CORS allowlist so the Origin-check on write requests is
+    # deterministic. Tests send Origin: http://localhost:5173, but the ambient
+    # CORS_ALLOWED_ORIGINS env var (e.g. in a Codespace) may not include it,
+    # which would make every write request 403 ORIGIN_NOT_ALLOWED.
+    settings.CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:4321"
+
     app = create_app()
 
     def _override_get_db() -> Generator[Session, None, None]:
         yield db
 
     app.dependency_overrides[get_db] = _override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        app.dependency_overrides.clear()
+        settings.COOKIE_SECURE = original_secure
+        settings.COOKIE_SAMESITE = original_samesite
+        settings.CORS_ALLOWED_ORIGINS = original_cors
