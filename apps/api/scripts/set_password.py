@@ -1,8 +1,8 @@
 """One-off admin helper: list users or set a user's password.
 
 Reuses the app's own argon2 hashing (app.core.security.hash_password) so the
-resulting hash is always compatible with login verification. Clears the
-must_reset_password flag so the account can be used immediately.
+resulting hash is always compatible with login verification, and marks the
+account active so it can be used immediately.
 
 Run from apps/api with the venv active and DATABASE_URL configured in .env:
 
@@ -30,17 +30,16 @@ def list_users() -> None:
         rows = db.execute(
             text(
                 "SELECT u.id, u.username, r.name AS role, u.location_id, "
-                "u.is_active, u.must_reset_password "
+                "u.is_active "
                 "FROM users u JOIN user_roles r ON u.role_id = r.id "
                 "ORDER BY u.id"
             )
         ).all()
-    print(f"{'id':>3}  {'username':<24} {'role':<8} {'loc':<4} active reset")
+    print(f"{'id':>3}  {'username':<24} {'role':<8} {'loc':<4} active")
     for r in rows:
         print(
             f"{r.id:>3}  {r.username:<24} {r.role:<8} "
-            f"{str(r.location_id or '-'):<4} {str(r.is_active):<6} "
-            f"{r.must_reset_password}"
+            f"{str(r.location_id or '-'):<4} {r.is_active}"
         )
 
 
