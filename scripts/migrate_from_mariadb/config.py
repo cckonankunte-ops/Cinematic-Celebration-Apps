@@ -72,10 +72,16 @@ class PostgresConfig:
 
     @property
     def conninfo(self) -> str:
-        """Return a libpq connection string for psycopg."""
+        """Return a libpq connection string for psycopg.
+
+        Accepts NEW_DATABASE_URL in either the plain libpq URL form
+        (``postgresql://...``) or the SQLAlchemy form
+        (``postgresql+psycopg://...``). psycopg.connect() does not understand
+        the ``+psycopg`` dialect suffix, so it is stripped here.
+        """
         override = os.environ.get("NEW_DATABASE_URL")
         if override:
-            return override
+            return override.replace("postgresql+psycopg://", "postgresql://", 1)
         return (
             f"host={self.host} port={self.port} user={self.user} "
             f"password={self.password} dbname={self.database}"
