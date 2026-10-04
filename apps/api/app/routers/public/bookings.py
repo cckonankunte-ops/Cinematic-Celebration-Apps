@@ -8,7 +8,7 @@ calls.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Body, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/api/v1/public", tags=["public-bookings"])
 @limiter.limit("5/minute")
 def create_booking(
     request: Request,
-    body: BookingCreate,
+    body: BookingCreate = Body(...),
     db: Session = Depends(get_db),
 ) -> CustomerBookingResult:
     """Create a pending customer booking request (holds the slot)."""

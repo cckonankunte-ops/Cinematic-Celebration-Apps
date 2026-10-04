@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Body, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -21,7 +21,7 @@ _SUCCESS_MESSAGE = "Thanks you for contacting us! We will get back to you soon"
 @limiter.limit("5/minute")
 def submit_contact(
     request: Request,
-    body: ContactCreate,
+    body: ContactCreate = Body(...),
     db: Session = Depends(get_db),
 ) -> ContactResult:
     """Save a contact lead and return a success message."""

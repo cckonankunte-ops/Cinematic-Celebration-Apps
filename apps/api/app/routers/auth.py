@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Body, Depends, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -46,7 +46,7 @@ def _set_auth_cookie(response: Response, token: str) -> None:
 def login(
     request: Request,
     response: Response,
-    body: LoginRequest,
+    body: LoginRequest = Body(...),
     db: Session = Depends(get_db),
 ) -> CurrentUserRead:
     """Validate credentials and set an httpOnly auth cookie."""
