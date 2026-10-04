@@ -198,25 +198,59 @@ def _booking_events(bookings: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def run(config: MigrationConfig) -> dict[str, int]:  # pragma: no cover - live DB
-    """Insert all records into PostgreSQL in dependency order; return counts."""
+    """Insert all records into PostgreSQL in dependency order; return counts.
+
+    Bookings are inserted individually under savepoints: any booking that would
+    violate the active-slot unique index (duplicate pending/accepted booking for
+    the same location+slot+date among historical data) is SKIPPED and reported,
+    rather than failing the whole migration. Skipped booking ids are excluded
+    from booking_items, payments, and booking_events.
+    """
     import psycopg
+    from psycopg.errors import UniqueViolation
 
     records = build_records(config)
     _resolve_role_ids(records)
     counts: dict[str, int] = {}
+    skipped_booking_ids: set[int] = set()
 
     with psycopg.connect(config.target.conninfo) as conn:
         with conn.cursor() as cur:
             for table in _LOAD_ORDER:
                 columns = _INSERT_COLUMNS[table]
-                rows = records[table]
                 sql = _insert_sql(table, columns)
+
+                if table == "bookings":
+                    loaded = 0
+                    for row in records["bookings"]:
+                        try:
+                            with conn.transaction():
+                                cur.execute(sql, [row.get(c) for c in columns])
+                            loaded += 1
+                        except UniqueViolation:
+                            skipped_booking_ids.add(int(row["id"]))
+                    counts["bookings"] = loaded
+                    print(f"loaded {loaded:>6} rows into bookings "
+                          f"({len(skipped_booking_ids)} skipped as duplicate active slot)")
+                    continue
+
+                if table in ("booking_items", "payments"):
+                    rows = [
+                        r for r in records[table]
+                        if int(r["booking_id"]) not in skipped_booking_ids
+                    ]
+                else:
+                    rows = records[table]
+
                 for row in rows:
                     cur.execute(sql, [row.get(c) for c in columns])
                 counts[table] = len(rows)
                 print(f"loaded {len(rows):>6} rows into {table}")
 
-            events = _booking_events(records["bookings"])
+            events = [
+                e for e in _booking_events(records["bookings"])
+                if e["booking_id"] not in skipped_booking_ids
+            ]
             cur.executemany(
                 "INSERT INTO booking_events (booking_id, event_type, created_at) "
                 "VALUES (%s, %s, %s)",
@@ -224,7 +258,12 @@ def run(config: MigrationConfig) -> dict[str, int]:  # pragma: no cover - live D
             )
             counts["booking_events"] = len(events)
             print(f"loaded {len(events):>6} rows into booking_events")
+
         conn.commit()
+
+    if skipped_booking_ids:
+        print("\nSkipped booking ids (duplicate active slot) for manual review:")
+        print(", ".join(str(i) for i in sorted(skipped_booking_ids)))
     return counts
 
 

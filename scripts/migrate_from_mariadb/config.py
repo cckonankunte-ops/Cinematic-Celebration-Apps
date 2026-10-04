@@ -123,12 +123,15 @@ def load_config() -> MigrationConfig:
     variables are only required by upload_images.py; they default to empty so
     the other steps can run without R2 credentials present.
     """
+    # Source MariaDB vars are only needed by extract.py (live-server mode).
+    # In dump-file mode (dump_to_json.py -> load.py) they are unused, so they
+    # default to empty and never block the load step.
     source = MariaDBConfig(
-        host=_env("OLD_DB_HOST", "127.0.0.1"),
-        port=int(_env("OLD_DB_PORT", "3306")),
-        user=_env("OLD_DB_USER"),
-        password=_env("OLD_DB_PASSWORD"),
-        database=_env("OLD_DB_NAME", "cine_celebration"),
+        host=os.environ.get("OLD_DB_HOST", "127.0.0.1"),
+        port=int(os.environ.get("OLD_DB_PORT", "3306")),
+        user=os.environ.get("OLD_DB_USER", ""),
+        password=os.environ.get("OLD_DB_PASSWORD", ""),
+        database=os.environ.get("OLD_DB_NAME", "cine_celebration"),
     )
     target = PostgresConfig(
         host=_env("NEW_DB_HOST", "127.0.0.1"),
