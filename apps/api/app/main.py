@@ -31,9 +31,40 @@ from app.routers.public import plans as public_plans
 log = get_logger("app.main")
 
 
+def _rebuild_schemas() -> None:
+    """Resolve Pydantic forward references.
+
+    Every module uses ``from __future__ import annotations``, so all type hints
+    are strings. Pydantic v2 needs the models rebuilt (with the module globals
+    in scope) before FastAPI can generate the OpenAPI schema, otherwise it
+    raises "class-not-fully-defined". We import each schema module and rebuild
+    every BaseModel subclass it defines.
+    """
+    import importlib
+    import inspect
+
+    from pydantic import BaseModel
+
+    schema_modules = [
+        "app.schemas.user",
+        "app.schemas.catalog",
+        "app.schemas.catalog_admin",
+        "app.schemas.booking",
+        "app.schemas.payment",
+        "app.schemas.sheets",
+        "app.schemas.analytics",
+    ]
+    for module_name in schema_modules:
+        module = importlib.import_module(module_name)
+        for _, obj in inspect.getmembers(module, inspect.isclass):
+            if issubclass(obj, BaseModel) and obj.__module__ == module_name:
+                obj.model_rebuild()
+
+
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     configure_logging()
+    _rebuild_schemas()
 
     app = FastAPI(
         title="Cinematic Celebration API",
