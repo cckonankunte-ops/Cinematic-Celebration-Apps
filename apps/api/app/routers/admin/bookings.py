@@ -6,8 +6,6 @@ to their assigned location. The confirmation email on accept is scheduled via
 BackgroundTasks (which opens its own session after the response).
 """
 
-from __future__ import annotations
-
 from datetime import date
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status

@@ -6,8 +6,6 @@ Origin check. The ``date`` query param is aliased to avoid shadowing
 ``datetime.date``. Export endpoints stream a server-generated ``.xlsx``.
 """
 
-from __future__ import annotations
-
 from datetime import date as _date
 
 from fastapi import APIRouter, Depends, Query

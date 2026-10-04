@@ -1,7 +1,5 @@
 """Public plan detail, slots, availability, and gallery endpoints."""
 
-from __future__ import annotations
-
 from datetime import date
 
 from fastapi import APIRouter, Depends

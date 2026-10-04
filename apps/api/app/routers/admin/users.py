@@ -5,8 +5,6 @@ hard-deleted (deactivate sets is_active=False) so historical crm/recorded_by
 references survive. Password hashes are never returned.
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 

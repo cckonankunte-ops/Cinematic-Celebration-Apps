@@ -6,8 +6,6 @@ rate-limited to deter abuse; the status lookup is read-only with no external
 calls.
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Body, Depends, Request, status
 from sqlalchemy.orm import Session
 

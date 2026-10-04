@@ -1,7 +1,5 @@
 """Public contact form endpoint."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Body, Depends, Request, status
 from sqlalchemy.orm import Session
 

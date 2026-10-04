@@ -8,8 +8,6 @@ Router-level dependencies enforce the admin role and the Origin allowlist on
 writes, so every endpoint is protected by default.
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 

@@ -1,7 +1,5 @@
 """Authentication endpoints: login, logout, me."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Body, Depends, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session

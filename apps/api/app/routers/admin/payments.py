@@ -4,8 +4,6 @@ Thin router over the payments service. Location access is enforced in the
 service layer so staff only touch bookings for their assigned location.
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
