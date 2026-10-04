@@ -78,12 +78,25 @@ def build_records(config: MigrationConfig) -> dict[str, list[dict[str, Any]]]:
         for u in _read(data_dir, "users")
     ]
 
+    # Valid id sets for nulling out dangling FK references in old booking rows
+    # (e.g. booking.crm points at a staff user that was never migrated).
+    valid_user_ids = {int(u["id"]) for u in users}
+    valid_occasion_ids = {
+        int(r["id"]) for r in _read(data_dir, "occasion")
+    }
+
     bookings: list[dict[str, Any]] = []
     booking_items: list[dict[str, Any]] = []
     payments: list[dict[str, Any]] = []
     used_refs: set[str] = set()
     for b in _read(data_dir, "booking"):
         booking = T.transform_booking(b, used_references=used_refs)
+        # Drop references to rows that don't exist in the target DB so FK
+        # constraints don't reject otherwise-valid historical bookings.
+        if booking.get("crm_user_id") not in valid_user_ids:
+            booking["crm_user_id"] = None
+        if booking.get("occasion_id") not in valid_occasion_ids:
+            booking["occasion_id"] = None
         bookings.append(booking)
         for item in T.build_booking_items(
             b, cake_lookup=cake_lookup, decor_lookup=decor_lookup, combo_lookup=combo_lookup
