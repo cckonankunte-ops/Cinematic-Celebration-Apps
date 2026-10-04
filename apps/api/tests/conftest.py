@@ -79,13 +79,33 @@ def reset_rate_limiter() -> Generator[None, None, None]:
 
 @pytest.fixture
 def client(db: Session) -> Generator[TestClient, None, None]:
-    """FastAPI TestClient using the test DB session."""
+    """FastAPI TestClient using the test DB session.
+
+    The auth cookie is forced to a non-Secure, SameSite=Lax policy for the test
+    app. The ambient environment (e.g. a GitHub Codespace) may set
+    COOKIE_SECURE=true / COOKIE_SAMESITE=none for cross-subdomain production,
+    but TestClient speaks plain ``http://testserver``, so a Secure cookie set at
+    login would never be sent back on the following request (login returns 200
+    yet the next admin call gets 401). Pinning the policy keeps auth flows
+    deterministic across environments without touching production behavior.
+    """
+    from app.core.config import settings
+
+    original_secure = settings.COOKIE_SECURE
+    original_samesite = settings.COOKIE_SAMESITE
+    settings.COOKIE_SECURE = False
+    settings.COOKIE_SAMESITE = "lax"
+
     app = create_app()
 
     def _override_get_db() -> Generator[Session, None, None]:
         yield db
 
     app.dependency_overrides[get_db] = _override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        app.dependency_overrides.clear()
+        settings.COOKIE_SECURE = original_secure
+        settings.COOKIE_SAMESITE = original_samesite
