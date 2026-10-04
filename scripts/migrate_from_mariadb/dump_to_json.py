@@ -121,6 +121,39 @@ def _split_columns(col_segment: str) -> list[str]:
     return [c.strip().strip("`") for c in col_segment.split(",")]
 
 
+def _find_statement_end(sql_text: str, start: int) -> int:
+    """Return the index of the terminating ';' for an INSERT, ignoring ';'
+    that appear inside single-quoted string values.
+
+    Values in these dumps contain semicolons, parentheses, and raw characters,
+    so a naive ``find(';')`` truncates the statement mid-row and loses every
+    row after it. This scans character by character, tracking whether we are
+    inside a quoted string (honoring '' and backslash escapes), and only
+    treats a ';' outside a string as the statement terminator.
+    """
+    i, n = start, len(sql_text)
+    in_string = False
+    while i < n:
+        ch = sql_text[i]
+        if in_string:
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == "'":
+                if i + 1 < n and sql_text[i + 1] == "'":
+                    i += 2
+                    continue
+                in_string = False
+            i += 1
+            continue
+        if ch == "'":
+            in_string = True
+        elif ch == ";":
+            return i
+        i += 1
+    return n
+
+
 def parse_dump(sql_text: str) -> dict[str, list[dict[str, Any]]]:
     """Parse all wanted INSERT statements into {table: [row dicts]}."""
     out: dict[str, list[dict[str, Any]]] = {t: [] for t in WANTED_TABLES}
@@ -138,9 +171,10 @@ def parse_dump(sql_text: str) -> dict[str, list[dict[str, Any]]]:
         paren_open = sql_text.find("(", name_end)
         paren_close = sql_text.find(")", paren_open)
         columns = _split_columns(sql_text[paren_open + 1 : paren_close])
-        # VALUES ... up to the terminating ';'
+        # VALUES ... up to the terminating ';' (quote-aware: values may contain
+        # ';' which must not be mistaken for the statement end).
         values_kw = sql_text.find("VALUES", paren_close)
-        stmt_end = sql_text.find(";", values_kw)
+        stmt_end = _find_statement_end(sql_text, values_kw)
         values_body = sql_text[values_kw + len("VALUES") : stmt_end]
         pos = stmt_end + 1
         if table not in WANTED_TABLES:
