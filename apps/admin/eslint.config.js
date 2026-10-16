@@ -25,6 +25,12 @@ export default [
     rules: {
       ...tsPlugin.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      // TypeScript already reports genuinely undefined identifiers, and it is
+      // aware of DOM/browser globals (fetch, document, URLSearchParams, …) and
+      // the JSX namespace via its lib config. ESLint's core `no-undef` is both
+      // redundant and incorrect on typed .ts/.tsx files (it has no type info),
+      // so it is disabled here per the typescript-eslint recommendation.
+      'no-undef': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
