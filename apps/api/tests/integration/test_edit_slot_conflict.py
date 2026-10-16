@@ -20,13 +20,23 @@ from app.core.errors import SlotUnavailableError
 from app.core.security import CurrentUser
 from app.schemas.booking import AdminBookingCreate, BookingUpdate
 from app.services import booking as booking_service
-from tests.factories import future_date, make_location, make_plan, make_slot
+from tests.factories import (
+    future_date,
+    make_location,
+    make_plan,
+    make_slot,
+    make_user,
+)
 
 pytestmark = pytest.mark.integration
 
 
-def _admin() -> CurrentUser:
-    return CurrentUser(id=1, username="admin", role="admin", location_id=None)
+def _admin(db: Session) -> CurrentUser:
+    """Seed a real admin user (so FKs like crm_user_id resolve) and wrap it."""
+    user = make_user(db, "admin", location_id=None)
+    return CurrentUser(
+        id=user.id, username=user.username, role="admin", location_id=None
+    )
 
 
 def _admin_create(location_id: int, plan_id: int, slot_id: int, when) -> AdminBookingCreate:
@@ -46,7 +56,7 @@ def _admin_create(location_id: int, plan_id: int, slot_id: int, when) -> AdminBo
 
 def test_edit_does_not_conflict_with_itself(db: Session) -> None:
     """Editing a booking (change people) does NOT collide with its own active row."""
-    admin = _admin()
+    admin = _admin(db)
     loc = make_location(db)
     plan = make_plan(db, loc.id, max_people_allowed=10)
     slot_a = make_slot(db, plan.id, description="9-12", sort_order=1)
@@ -79,7 +89,7 @@ def test_edit_does_not_conflict_with_itself(db: Session) -> None:
 
 def test_second_active_booking_on_same_slot_rejected(db: Session) -> None:
     """A second active insert on an identical (loc, plan, slot, date) key -> 409."""
-    admin = _admin()
+    admin = _admin(db)
     loc = make_location(db)
     plan = make_plan(db, loc.id, max_people_allowed=10)
     slot_a = make_slot(db, plan.id)

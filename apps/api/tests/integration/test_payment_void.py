@@ -28,17 +28,31 @@ from app.core.security import CurrentUser
 from app.models.booking_event import BookingEvent
 from app.schemas.payment import PaymentCreate
 from app.services import payments as payments_service
-from tests.factories import make_booking, make_location, make_plan, make_slot
+from tests.factories import (
+    make_booking,
+    make_location,
+    make_plan,
+    make_slot,
+    make_user,
+)
 
 pytestmark = pytest.mark.integration
 
 
-def _admin() -> CurrentUser:
-    return CurrentUser(id=1, username="admin", role="admin", location_id=None)
+def _admin(db: Session) -> CurrentUser:
+    """Seed a real admin user so recorded_by_user_id FK resolves."""
+    user = make_user(db, "admin", location_id=None)
+    return CurrentUser(
+        id=user.id, username=user.username, role="admin", location_id=None
+    )
 
 
-def _staff(location_id: int) -> CurrentUser:
-    return CurrentUser(id=2, username="staff", role="staff", location_id=location_id)
+def _staff(db: Session, location_id: int) -> CurrentUser:
+    """Seed a real staff user at the given location."""
+    user = make_user(db, "staff", location_id=location_id)
+    return CurrentUser(
+        id=user.id, username=user.username, role="staff", location_id=location_id
+    )
 
 
 def _seed_booking(db: Session, *, total_paise: int = 400000):
@@ -56,7 +70,7 @@ def _seed_booking(db: Session, *, total_paise: int = 400000):
 def test_multiple_partial_payments_sum_and_due(db: Session) -> None:
     """Partial payments sum into amount_paid; due = total - paid."""
     _loc, booking = _seed_booking(db, total_paise=400000)
-    admin = _admin()
+    admin = _admin(db)
 
     payments_service.record_payment(
         db, booking.id, PaymentCreate(method="upi", amount_paise=50000), admin
@@ -73,7 +87,7 @@ def test_multiple_partial_payments_sum_and_due(db: Session) -> None:
 def test_overpayment_yields_negative_due(db: Session) -> None:
     """Recording more than the total yields a negative (overpaid) due."""
     _loc, booking = _seed_booking(db, total_paise=400000)
-    admin = _admin()
+    admin = _admin(db)
 
     payments_service.record_payment(
         db, booking.id, PaymentCreate(method="cash", amount_paise=500000), admin
@@ -86,7 +100,7 @@ def test_overpayment_yields_negative_due(db: Session) -> None:
 def test_void_by_staff_forbidden_no_reversal(db: Session) -> None:
     """A staff actor cannot void: ForbiddenError and no reversing row added."""
     loc, booking = _seed_booking(db)
-    admin = _admin()
+    admin = _admin(db)
     payment = payments_service.record_payment(
         db, booking.id, PaymentCreate(method="upi", amount_paise=50000), admin
     )
@@ -94,7 +108,7 @@ def test_void_by_staff_forbidden_no_reversal(db: Session) -> None:
 
     with pytest.raises(ForbiddenError):
         payments_service.void_payment(
-            db, booking.id, payment.id, reason="mistake", actor=_staff(loc.id)
+            db, booking.id, payment.id, reason="mistake", actor=_staff(db, loc.id)
         )
 
     after = payments_service.list_payments(db, booking.id)
@@ -105,7 +119,7 @@ def test_void_by_admin_inserts_reversal_and_audit(db: Session) -> None:
     """Admin void appends a reversal, nets the payment to zero, keeps original,
     and writes exactly one payment_voided event."""
     _loc, booking = _seed_booking(db)
-    admin = _admin()
+    admin = _admin(db)
     payment = payments_service.record_payment(
         db, booking.id, PaymentCreate(method="upi", amount_paise=50000), admin
     )
@@ -135,7 +149,7 @@ def test_void_by_admin_inserts_reversal_and_audit(db: Session) -> None:
 def test_void_same_payment_twice_rejected(db: Session) -> None:
     """Voiding a payment a second time raises PaymentAlreadyVoidedError; no add."""
     _loc, booking = _seed_booking(db)
-    admin = _admin()
+    admin = _admin(db)
     payment = payments_service.record_payment(
         db, booking.id, PaymentCreate(method="upi", amount_paise=50000), admin
     )
@@ -156,7 +170,7 @@ def test_void_same_payment_twice_rejected(db: Session) -> None:
 def test_void_a_reversal_row_rejected(db: Session) -> None:
     """Voiding a Reversing_Entry itself raises PaymentNotVoidableError."""
     _loc, booking = _seed_booking(db)
-    admin = _admin()
+    admin = _admin(db)
     payment = payments_service.record_payment(
         db, booking.id, PaymentCreate(method="upi", amount_paise=50000), admin
     )
@@ -174,7 +188,7 @@ def test_void_a_reversal_row_rejected(db: Session) -> None:
 def test_void_blank_reason_rejected_no_add(db: Session) -> None:
     """A blank reason raises ValidationFailedError and adds nothing."""
     _loc, booking = _seed_booking(db)
-    admin = _admin()
+    admin = _admin(db)
     payment = payments_service.record_payment(
         db, booking.id, PaymentCreate(method="upi", amount_paise=50000), admin
     )
