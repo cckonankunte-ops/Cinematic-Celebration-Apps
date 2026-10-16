@@ -180,7 +180,7 @@ def void_payment(
     # 6. Insert the Reversing_Entry.
     reversal = Payment(
         booking_id=booking_id,
-        method=payment.method,  # mirror original method (self-describing, passes ck_payments_method)
+        method=payment.method,  # mirror original method (self-describing)
         amount_paise=-payment.amount_paise,  # negative; allowed by relaxed <> 0 check
         recorded_by_user_id=actor.id,
         provider=None,

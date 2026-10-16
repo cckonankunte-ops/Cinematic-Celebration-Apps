@@ -40,7 +40,7 @@ class CouponBase(BaseModel):
     min_order_paise: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
-    def _check(self) -> "CouponBase":
+    def _check(self) -> CouponBase:
         if self.type == "percentage" and not (0 <= self.value <= 100):
             raise ValueError("percentage value must be 0..100")
         return self
