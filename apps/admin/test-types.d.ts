@@ -2,6 +2,5 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
 
-// Mark this file as a module so TS does not treat it as a global script that
-// can be `import`ed (which triggers TS2306 "not a module").
+// Keep this file as a module so its type references do not become globals.
 export {};
