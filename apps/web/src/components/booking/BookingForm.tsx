@@ -1,4 +1,5 @@
 import type { Occasion } from '../../lib/api';
+import { isValidIndianMobile } from '../../lib/phone';
 import type { BookingDraft } from './types';
 
 interface Props {
@@ -10,8 +11,9 @@ interface Props {
 
 /**
  * Step 4: customer contact + party details. Validation mirrors the API
- * (people >= 1 and <= plan.max_people_allowed; name + email required). All
- * money stays server-side; this collects only IDs and text fields.
+ * (people >= 1 and <= plan.max_people_allowed; name required; phone required
+ * and a valid Indian mobile; email optional). All money stays server-side;
+ * this collects only IDs and text fields.
  */
 export default function BookingForm({
   draft,
@@ -19,6 +21,9 @@ export default function BookingForm({
   maxPeople,
   onChange,
 }: Props) {
+  const phoneEntered = draft.phone.trim() !== '';
+  const phoneInvalid = phoneEntered && !isValidIndianMobile(draft.phone);
+
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="flex flex-col gap-1">
@@ -33,10 +38,9 @@ export default function BookingForm({
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Email *</span>
+        <span className="text-sm font-medium">Email</span>
         <input
           type="email"
-          required
           value={draft.email}
           onChange={(e) => onChange({ email: e.target.value })}
           className="rounded border border-gray-300 px-3 py-2"
@@ -44,13 +48,20 @@ export default function BookingForm({
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Phone</span>
+        <span className="text-sm font-medium">Phone *</span>
         <input
           type="tel"
+          required
           value={draft.phone}
           onChange={(e) => onChange({ phone: e.target.value })}
+          aria-invalid={phoneInvalid}
           className="rounded border border-gray-300 px-3 py-2"
         />
+        {phoneInvalid && (
+          <span className="text-xs text-red-600">
+            Enter a valid Indian mobile number
+          </span>
+        )}
       </label>
 
       <label className="flex flex-col gap-1">

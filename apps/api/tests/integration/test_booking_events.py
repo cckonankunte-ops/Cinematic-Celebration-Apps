@@ -81,6 +81,7 @@ def test_event_count_equals_state_changes(db: Session, ops: list[str]) -> None:
             booking_date=future_date(),
             booking_name="Audit Test",
             email="audit@example.com",
+            phone="9876543210",
             people=4,
         ),
         actor,

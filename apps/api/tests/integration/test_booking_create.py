@@ -55,6 +55,7 @@ def test_references_and_tokens_are_unique(db: Session, count: int) -> None:
                 booking_date=base + timedelta(days=i),
                 booking_name=f"Customer {i}",
                 email=f"c{i}@example.com",
+                phone="9876543210",
                 people=4,
             ),
         )

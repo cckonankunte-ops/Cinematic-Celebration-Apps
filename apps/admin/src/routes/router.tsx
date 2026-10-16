@@ -10,6 +10,7 @@ import { TimesheetPage } from '@/features/timesheet/TimesheetPage';
 import { CakesheetPage } from '@/features/cakesheet/CakesheetPage';
 import { AnalyticsPage } from '@/features/analytics/AnalyticsPage';
 import { CatalogPage } from '@/features/catalog/CatalogPage';
+import { CouponsPage } from '@/features/coupons/CouponsPage';
 
 /**
  * Route tree. `/login` is public; everything else is wrapped in
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/bookings" replace /> },
       { path: 'bookings', element: <BookingListPage /> },
       { path: 'bookings/new', element: <BookingFormPage /> },
+      { path: 'bookings/:bookingId/edit', element: <BookingFormPage /> },
       { path: 'timesheet', element: <TimesheetPage /> },
       { path: 'cakesheet', element: <CakesheetPage /> },
       {
@@ -52,6 +54,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute requiredRole="admin">
             <CatalogPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'coupons',
+        element: (
+          <ProtectedRoute requiredRole="admin">
+            <CouponsPage />
           </ProtectedRoute>
         ),
       },

@@ -14,7 +14,12 @@ import {
 
 import { api } from '@/api/client';
 import type { BookingCreateValues } from './booking-schema';
-import type { BookingListItem, BookingRead, PaymentRead } from './types';
+import type {
+  BookingListItem,
+  BookingRead,
+  PaymentRead,
+  PriceBreakdownRead,
+} from './types';
 
 /** Body for recording a payment (amount already converted to paise). */
 export interface RecordPaymentBody {
@@ -22,6 +27,32 @@ export interface RecordPaymentBody {
   amount_paise: number;
   received_at?: string;
   note?: string;
+}
+
+/**
+ * Request shape for the admin price preview. Mirrors the server's preview body:
+ * ids + quantities only, money fields in paise. `booking_id` is sent in edit
+ * mode so the coupon usage check excludes this booking's own redemption. The
+ * server is authoritative on all money; this is only for the live summary.
+ */
+export interface AdminPreviewBody {
+  location_id: number;
+  plan_id: number;
+  slot_id: number;
+  booking_date: string;
+  people: number;
+  cake_id?: number;
+  cake_weight_half_kg: number;
+  special_decor: { id: number; quantity: number }[];
+  combos: { id: number }[];
+  led_name?: string;
+  occasion_id?: number;
+  coupon_code?: string;
+  booking_id?: number;
+  discount_paise: number;
+  food_paise: number;
+  other_paise: number;
+  cleaning_paise: number;
 }
 
 function buildListQuery(
@@ -131,6 +162,43 @@ export function useRecordPayment(
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['booking', id] });
       void qc.invalidateQueries({ queryKey: ['booking', id, 'payments'] });
+      void qc.invalidateQueries({ queryKey: ['bookings'] });
+    },
+  });
+}
+
+/**
+ * Imperative price preview as a mutation (not a query) so the Edit/create form
+ * can debounce-call it on field changes without creating a query key per
+ * keystroke. Returns the server-authoritative `PriceBreakdownRead`.
+ */
+export function usePreviewBooking(): UseMutationResult<
+  PriceBreakdownRead,
+  unknown,
+  AdminPreviewBody
+> {
+  return useMutation<PriceBreakdownRead, unknown, AdminPreviewBody>({
+    mutationFn: (body) =>
+      api.post<PriceBreakdownRead>('/api/v1/admin/bookings/preview', body),
+  });
+}
+
+/**
+ * Admin-only void of a payment. Posts a reason and gets back the booking's full
+ * ledger (original + reversing entry). The void is server-authoritative; on
+ * success we invalidate this booking's detail + payments and the bookings list
+ * so every derived amount refetches.
+ */
+export function useVoidPayment(
+  bookingId: number,
+): UseMutationResult<PaymentRead[], unknown, { paymentId: number; reason: string }> {
+  const qc = useQueryClient();
+  return useMutation<PaymentRead[], unknown, { paymentId: number; reason: string }>({
+    mutationFn: ({ paymentId, reason }) =>
+      api.post<PaymentRead[]>(`/api/v1/admin/payments/${paymentId}/void`, { reason }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['booking', bookingId] });
+      void qc.invalidateQueries({ queryKey: ['booking', bookingId, 'payments'] });
       void qc.invalidateQueries({ queryKey: ['bookings'] });
     },
   });

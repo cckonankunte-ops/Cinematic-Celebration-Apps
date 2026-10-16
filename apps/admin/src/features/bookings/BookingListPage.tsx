@@ -98,6 +98,7 @@ export function BookingListPage(): JSX.Element {
                   <th className="py-2 pr-4">People</th>
                   <th className="py-2 pr-4">Total</th>
                   <th className="py-2 pr-4">Status</th>
+                  <th className="py-2 pr-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -110,6 +111,16 @@ export function BookingListPage(): JSX.Element {
                     <td className="py-2 pr-4">{formatRupees(b.total_paise)}</td>
                     <td className="py-2 pr-4">
                       <StatusBadge status={b.status} />
+                    </td>
+                    <td className="py-2 pr-4">
+                      {(b.status === 'pending' || b.status === 'accepted') && (
+                        <Link
+                          to={`/bookings/${b.id}/edit`}
+                          className="font-medium text-gray-700 underline hover:text-gray-900"
+                        >
+                          Edit
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.ratelimit import limiter
-from app.schemas.booking import BookingCreate, CustomerBookingResult, PublicBookingStatus
+from app.schemas.booking import (
+    BookingCreate,
+    CustomerBookingResult,
+    PriceBreakdownRead,
+    PublicBookingStatus,
+    PublicPreviewRequest,
+)
 from app.services import booking as booking_service
 from app.services import catalog as catalog_service
 from app.services.payments import derive_amounts_for_booking
@@ -32,6 +38,17 @@ def create_booking(
 ) -> CustomerBookingResult:
     """Create a pending customer booking request (holds the slot)."""
     return booking_service.create_customer_booking(db, body)
+
+
+@router.post("/bookings/preview", response_model=PriceBreakdownRead)
+@limiter.limit("30/minute")
+def preview_booking(
+    request: Request,
+    body: PublicPreviewRequest = Body(...),
+    db: Session = Depends(get_db),
+) -> PriceBreakdownRead:
+    """Compute a server-authoritative price breakdown (no persistence)."""
+    return booking_service.preview_booking(db, body, is_customer=True)
 
 
 @router.get("/bookings/{public_token}", response_model=PublicBookingStatus)

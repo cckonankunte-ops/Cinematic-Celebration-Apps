@@ -15,7 +15,12 @@ from app.models.cake import Cake
 from app.models.combo_item import ComboItem
 from app.models.plan import Plan
 from app.models.special_decor_item import SpecialDecorItem
-from app.services.pricing import ValidatedRequest, compute_booking_price
+from app.services.pricing import (
+    ComboSelection,
+    DecorSelection,
+    ValidatedRequest,
+    compute_booking_price,
+)
 
 _FROM = date(2020, 1, 1)
 _TO = date(2099, 12, 31)
@@ -85,8 +90,11 @@ def test_customer_pricing_formula(
         plan=_plan(price_paise=price, people_allowed=people_allowed, extra_guest_paise=extra_rate),
         people=people,
         cake=_cake(cake_price),
-        special_decor=[_decor(i + 1, p) for i, p in enumerate(decor_prices)],
-        combos=[_combo(i + 1, p) for i, p in enumerate(combo_prices)],
+        special_decor=[
+            DecorSelection(item=_decor(i + 1, p), quantity=1)
+            for i, p in enumerate(decor_prices)
+        ],
+        combos=[ComboSelection(item=_combo(i + 1, p)) for i, p in enumerate(combo_prices)],
     )
     bd = compute_booking_price(
         req, discount_paise=9_999_99, food_paise=food, other_paise=other,
@@ -156,8 +164,8 @@ def test_addon_lines_snapshot_names_and_prices() -> None:
         plan=_plan(price_paise=100000, people_allowed=4, extra_guest_paise=0),
         people=4,
         cake=_cake(60000),
-        special_decor=[_decor(1, 20000)],
-        combos=[_combo(1, 30000)],
+        special_decor=[DecorSelection(item=_decor(1, 20000), quantity=1)],
+        combos=[ComboSelection(item=_combo(1, 30000))],
     )
     bd = compute_booking_price(req, is_customer=True)
     kinds = {line.kind for line in bd.addon_lines}

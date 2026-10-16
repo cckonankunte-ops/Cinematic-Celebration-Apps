@@ -24,7 +24,7 @@ def write_booking_event(
     """Append one booking_events row within the current transaction.
 
     event_type must be one of: created, accepted, rejected, edited,
-    payment_recorded, expired.
+    payment_recorded, payment_voided, expired.
     """
     event = BookingEvent(
         booking_id=booking_id,

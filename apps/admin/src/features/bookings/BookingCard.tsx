@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { formatDate } from '@/lib/dates';
 import { formatRupees } from '@/lib/money';
@@ -33,6 +34,7 @@ export function BookingCard({ booking }: { booking: BookingListItem }): JSX.Elem
   const paid = booking.amount_paid_paise ?? 0;
   const advance = booking.advance_paise ?? 0;
   const due = booking.amount_due_paise ?? booking.total_paise - paid;
+  const canEdit = booking.status === 'pending' || booking.status === 'accepted';
 
   return (
     <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
@@ -57,13 +59,23 @@ export function BookingCard({ booking }: { booking: BookingListItem }): JSX.Elem
         <dd className="text-right text-gray-900">{formatRupees(due)}</dd>
       </dl>
 
-      <button
-        type="button"
-        onClick={() => setPayOpen(true)}
-        className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-      >
-        Record payment
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setPayOpen(true)}
+          className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Record payment
+        </button>
+        {canEdit && (
+          <Link
+            to={`/bookings/${booking.id}/edit`}
+            className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Edit
+          </Link>
+        )}
+      </div>
 
       <BookingActions
         bookingId={booking.id}

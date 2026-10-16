@@ -267,6 +267,7 @@ def test_slot_conflict_maps_to_slot_unavailable_error(db: Session) -> None:
             booking_date=booking_date,
             booking_name=f"Guest {index}",
             email=f"guest{index}@example.com",
+            phone="9876543210",
             people=4,
         )
 

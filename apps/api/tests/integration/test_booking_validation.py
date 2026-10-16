@@ -22,6 +22,7 @@ from app.core.errors import (
     ItemInvalidError,
     ValidationFailedError,
 )
+from app.schemas.booking import ComboSelectionIn, DecorSelectionIn
 from app.services.booking import validate_booking_request
 from tests.factories import (
     FAR_FUTURE,
@@ -59,13 +60,13 @@ def test_valid_request_passes_and_returns_rows(db: Session) -> None:
         booking_date=_valid_date(),
         people=4,
         cake_id=cake.id,
-        special_decor_ids=[decor.id],
-        combo_ids=[combo.id],
+        special_decor=[DecorSelectionIn(id=decor.id, quantity=1)],
+        combos=[ComboSelectionIn(id=combo.id)],
     )
     assert req.plan.id == plan.id
     assert req.cake is not None and req.cake.id == cake.id
-    assert [d.id for d in req.special_decor] == [decor.id]
-    assert [c.id for c in req.combos] == [combo.id]
+    assert [d.item.id for d in req.special_decor] == [decor.id]
+    assert [c.item.id for c in req.combos] == [combo.id]
 
 
 def test_duplicate_addon_ids_are_deduped(db: Session) -> None:
@@ -84,11 +85,17 @@ def test_duplicate_addon_ids_are_deduped(db: Session) -> None:
         booking_date=_valid_date(),
         people=2,
         cake_id=None,
-        special_decor_ids=[decor.id, decor.id, decor.id],
-        combo_ids=[combo.id, combo.id],
+        special_decor=[
+            DecorSelectionIn(id=decor.id, quantity=1),
+            DecorSelectionIn(id=decor.id, quantity=1),
+            DecorSelectionIn(id=decor.id, quantity=1),
+        ],
+        combos=[ComboSelectionIn(id=combo.id), ComboSelectionIn(id=combo.id)],
     )
-    assert [d.id for d in req.special_decor] == [decor.id]
-    assert [c.id for c in req.combos] == [combo.id]
+    # A repeated decor id is deduped to ONE selection whose quantity is the sum.
+    assert [d.item.id for d in req.special_decor] == [decor.id]
+    assert req.special_decor[0].quantity == 3
+    assert [c.item.id for c in req.combos] == [combo.id]
 
 
 def test_past_date_rejected(db: Session) -> None:
@@ -105,8 +112,8 @@ def test_past_date_rejected(db: Session) -> None:
             booking_date=date.today() - timedelta(days=1),
             people=2,
             cake_id=None,
-            special_decor_ids=[],
-            combo_ids=[],
+            special_decor=[],
+            combos=[],
         )
 
 
@@ -126,8 +133,8 @@ def test_people_over_max_rejected(db: Session, people: int) -> None:
             booking_date=_valid_date(),
             people=people,
             cake_id=None,
-            special_decor_ids=[],
-            combo_ids=[],
+            special_decor=[],
+            combos=[],
         )
 
 
@@ -147,8 +154,8 @@ def test_cross_location_cake_rejected(db: Session) -> None:
             booking_date=_valid_date(),
             people=2,
             cake_id=foreign_cake.id,
-            special_decor_ids=[],
-            combo_ids=[],
+            special_decor=[],
+            combos=[],
         )
 
 
@@ -169,8 +176,8 @@ def test_cross_location_decor_and_combo_rejected(db: Session) -> None:
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
-            special_decor_ids=[foreign_decor.id],
-            combo_ids=[],
+            special_decor=[DecorSelectionIn(id=foreign_decor.id, quantity=1)],
+            combos=[],
         )
     with pytest.raises(ItemInvalidError):
         validate_booking_request(
@@ -181,8 +188,8 @@ def test_cross_location_decor_and_combo_rejected(db: Session) -> None:
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
-            special_decor_ids=[],
-            combo_ids=[foreign_combo.id],
+            special_decor=[],
+            combos=[ComboSelectionIn(id=foreign_combo.id)],
         )
 
 
@@ -201,8 +208,8 @@ def test_slot_from_different_plan_rejected(db: Session) -> None:
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
-            special_decor_ids=[],
-            combo_ids=[],
+            special_decor=[],
+            combos=[],
         )
 
 
@@ -221,8 +228,8 @@ def test_unknown_ids_rejected(db: Session) -> None:
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
-            special_decor_ids=[],
-            combo_ids=[],
+            special_decor=[],
+            combos=[],
         )
     # Unknown cake.
     with pytest.raises(ItemInvalidError):
@@ -234,8 +241,8 @@ def test_unknown_ids_rejected(db: Session) -> None:
             booking_date=_valid_date(),
             people=2,
             cake_id=999999,
-            special_decor_ids=[],
-            combo_ids=[],
+            special_decor=[],
+            combos=[],
         )
 
 
@@ -253,8 +260,8 @@ def test_inactive_plan_rejected(db: Session) -> None:
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
-            special_decor_ids=[],
-            combo_ids=[],
+            special_decor=[],
+            combos=[],
         )
 
 
@@ -275,8 +282,8 @@ def test_out_of_window_plan_rejected(db: Session) -> None:
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
-            special_decor_ids=[],
-            combo_ids=[],
+            special_decor=[],
+            combos=[],
         )
 
 
@@ -300,6 +307,6 @@ def test_out_of_window_slot_rejected(db: Session) -> None:
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
-            special_decor_ids=[],
-            combo_ids=[],
+            special_decor=[],
+            combos=[],
         )

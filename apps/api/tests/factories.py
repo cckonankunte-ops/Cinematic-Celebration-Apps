@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password
 from app.models.cake import Cake
 from app.models.combo_item import ComboItem
+from app.models.coupon import Coupon
 from app.models.location import Location
 from app.models.occasion import Occasion
 from app.models.plan import Plan
@@ -158,7 +159,14 @@ def make_decor(
     return decor
 
 
-def make_combo(db: Session, location_id: int, *, price_paise: int = 30000) -> ComboItem:
+def make_combo(
+    db: Session,
+    location_id: int,
+    *,
+    price_paise: int = 30000,
+    cake_baseline_paise: int | None = None,
+    led_baseline_paise: int | None = None,
+) -> ComboItem:
     combo = ComboItem(
         location_id=location_id,
         name="Party combo",
@@ -167,10 +175,51 @@ def make_combo(db: Session, location_id: int, *, price_paise: int = 30000) -> Co
         object_key=f"combo/{secrets.token_hex(3)}.jpg",
         effective_from=FAR_PAST,
         effective_to=FAR_FUTURE,
+        cake_baseline_paise=cake_baseline_paise,
+        led_baseline_paise=led_baseline_paise,
     )
     db.add(combo)
     db.flush()
     return combo
+
+
+def make_coupon(
+    db: Session,
+    location_id: int,
+    *,
+    code: str = "SAVE10",
+    type: str = "flat",
+    value: int = 10000,
+    cap_paise: int | None = None,
+    percentage_base: str = "total",
+    components: dict | None = None,
+    effective_from: date = FAR_PAST,
+    effective_to: date = FAR_FUTURE,
+    is_active: bool = True,
+    one_time: bool = False,
+    total_usage_limit: int | None = None,
+    per_customer_limit: int | None = None,
+    min_order_paise: int | None = None,
+) -> Coupon:
+    coupon = Coupon(
+        location_id=location_id,
+        code=code,
+        type=type,
+        value=value,
+        cap_paise=cap_paise,
+        percentage_base=percentage_base,
+        components=components,
+        effective_from=effective_from,
+        effective_to=effective_to,
+        is_active=is_active,
+        one_time=one_time,
+        total_usage_limit=total_usage_limit,
+        per_customer_limit=per_customer_limit,
+        min_order_paise=min_order_paise,
+    )
+    db.add(coupon)
+    db.flush()
+    return coupon
 
 
 def make_occasion(db: Session, location_id: int, name: str = "Birthday") -> Occasion:
@@ -195,6 +244,7 @@ def make_booking(
     advance_paise: int = 50000,
     booking_date: date | None = None,
     people: int = 4,
+    phone: str = "9876543210",
 ):
     """Create a minimal valid booking row for tests."""
     from app.models.booking import Booking
@@ -208,6 +258,7 @@ def make_booking(
         booking_date=booking_date or future_date(),
         booking_name="Test Customer",
         email="t@example.com",
+        phone=phone,
         people=people,
         plan_price_paise=total_paise,
         subtotal_paise=total_paise,

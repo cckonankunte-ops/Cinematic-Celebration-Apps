@@ -58,6 +58,30 @@ class ValidationFailedError(AppError):
     message = "The request failed validation."
 
 
+class CouponInvalidError(AppError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "COUPON_INVALID"
+    message = "The coupon code is not valid."
+
+
+class CouponNotApplicableError(AppError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "COUPON_NOT_APPLICABLE"
+    message = "The coupon cannot be applied to this booking."
+
+
+class PaymentNotVoidableError(AppError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "PAYMENT_NOT_VOIDABLE"
+    message = "This payment entry cannot be voided."
+
+
+class PaymentAlreadyVoidedError(AppError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "PAYMENT_ALREADY_VOIDED"
+    message = "This payment has already been voided."
+
+
 class InvalidCredentialsError(AppError):
     status_code = status.HTTP_401_UNAUTHORIZED
     code = "INVALID_CREDENTIALS"

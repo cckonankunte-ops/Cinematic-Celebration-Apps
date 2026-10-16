@@ -168,6 +168,17 @@ export interface Occasion {
   name: string;
 }
 
+/** A decor selection: an item id plus how many of it to add. */
+export interface DecorSelection {
+  id: number;
+  quantity: number;
+}
+
+/** A combo selection: just the item id (no quantity — combos are singular). */
+export interface ComboSelection {
+  id: number;
+}
+
 /** Request body for POST /public/bookings (IDs + details only — no money). */
 export interface BookingCreate {
   location_id: number;
@@ -175,16 +186,73 @@ export interface BookingCreate {
   slot_id: number;
   booking_date: string;
   booking_name: string;
-  email: string;
-  phone?: string;
+  /** Email is now OPTIONAL on the public contract. */
+  email?: string;
+  /** Phone is now REQUIRED (valid Indian mobile, validated server-side). */
+  phone: string;
   special_person_name?: string;
   name_on_cake?: string;
   message?: string;
   people: number;
   occasion_id?: number;
   cake_id?: number;
-  special_decor_ids: number[];
-  combo_ids: number[];
+  /** Cake weight in half-kg units (int >= 1). */
+  cake_weight_half_kg?: number;
+  led_name?: string;
+  coupon_code?: string;
+  special_decor: DecorSelection[];
+  combos: ComboSelection[];
+}
+
+/**
+ * Request body for POST /public/bookings/preview. Mirrors the priced inputs of
+ * a booking but accepts NO money fields — the server forces discount 0 for the
+ * public preview and returns the authoritative breakdown.
+ */
+export interface PublicPreviewRequest {
+  location_id: number;
+  plan_id: number;
+  slot_id: number;
+  booking_date: string;
+  people: number;
+  cake_id?: number;
+  cake_weight_half_kg?: number;
+  special_decor: DecorSelection[];
+  combos: ComboSelection[];
+  led_name?: string;
+  occasion_id?: number;
+  coupon_code?: string;
+}
+
+/** One priced add-on/combo/cake line in a price breakdown. */
+export interface AddonLineRead {
+  kind: string;
+  item_id: number;
+  name_snapshot: string;
+  unit_price_paise: number;
+  quantity: number;
+  weight_half_kg: number | null;
+  amount_paise: number;
+}
+
+/**
+ * Authoritative server-computed price breakdown (same shape as the admin
+ * breakdown). All money is integer paise.
+ */
+export interface PriceBreakdownRead {
+  plan_price_paise: number;
+  extra_guest_paise: number;
+  addon_lines: AddonLineRead[];
+  subtotal_paise: number;
+  discount_paise: number;
+  food_paise: number;
+  other_paise: number;
+  cleaning_paise: number;
+  coupon_code: string | null;
+  coupon_discount_paise: number;
+  total_paise: number;
+  amount_paid_paise: number;
+  amount_due_paise: number;
 }
 
 export interface BookingResult {
@@ -259,6 +327,9 @@ export const publicApi = {
   },
   createBooking(body: BookingCreate): Promise<BookingResult> {
     return api.post<BookingResult>(`${PUBLIC}/bookings`, body);
+  },
+  previewBooking(body: PublicPreviewRequest): Promise<PriceBreakdownRead> {
+    return api.post<PriceBreakdownRead>(`${PUBLIC}/bookings/preview`, body);
   },
   getBookingStatus(token: string): Promise<BookingStatus> {
     return api.get<BookingStatus>(`${PUBLIC}/bookings/${encodeURIComponent(token)}`);

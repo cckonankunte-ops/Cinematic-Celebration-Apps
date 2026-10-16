@@ -14,11 +14,23 @@ vi.mock('./catalog-queries', () => ({
   useOccasions: () => ({ data: [{ id: 5, name: 'Birthday' }] }),
 }));
 
+// Mock the preview mutation so the live-summary effect doesn't need a
+// QueryClient or a live API.
+vi.mock('./booking-queries', () => ({
+  usePreviewBooking: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn().mockResolvedValue({}),
+    data: undefined,
+    isPending: false,
+  }),
+}));
+
 describe('BookingForm', () => {
   it('renders cascading plan/slot selects and add-on options', () => {
     render(
       <BookingForm
         locationId={1}
+        submitLabel="Create booking"
         onSubmit={() => {}}
         isSubmitting={false}
         serverError={null}
@@ -36,6 +48,7 @@ describe('BookingForm', () => {
     render(
       <BookingForm
         locationId={1}
+        submitLabel="Create booking"
         onSubmit={onSubmit}
         isSubmitting={false}
         serverError={null}
@@ -51,6 +64,9 @@ describe('BookingForm', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Booking name' }), {
       target: { value: 'Priya S' },
     });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Phone' }), {
+      target: { value: '9876543210' },
+    });
     fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
       target: { value: 'priya@example.com' },
     });
@@ -64,15 +80,49 @@ describe('BookingForm', () => {
         plan_id: 3,
         slot_id: 7,
         booking_name: 'Priya S',
+        phone: '9876543210',
         email: 'priya@example.com',
+        special_decor: [],
+        combos: [],
       }),
     );
+  });
+
+  it('blocks submit when the phone is empty', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <BookingForm
+        locationId={1}
+        submitLabel="Create booking"
+        onSubmit={onSubmit}
+        isSubmitting={false}
+        serverError={null}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Plan' }), {
+      target: { value: '3' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Slot' }), {
+      target: { value: '7' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Booking name' }), {
+      target: { value: 'Priya S' },
+    });
+    // Phone deliberately left empty.
+    fireEvent.click(screen.getByRole('button', { name: 'Create booking' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('Phone is required')).toBeInTheDocument(),
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('shows a server error when provided', () => {
     render(
       <BookingForm
         locationId={1}
+        submitLabel="Create booking"
         onSubmit={() => {}}
         isSubmitting={false}
         serverError="Slot not available"

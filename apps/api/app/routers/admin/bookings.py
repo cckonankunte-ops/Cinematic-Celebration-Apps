@@ -17,10 +17,12 @@ from app.models.booking import Booking
 from app.schemas.booking import (
     AcceptBookingRequest,
     AdminBookingCreate,
+    AdminPreviewRequest,
     BookingItemRead,
     BookingListItem,
     BookingRead,
     BookingUpdate,
+    PriceBreakdownRead,
 )
 from app.services import booking as booking_service
 from app.services import email as email_service
@@ -42,9 +44,14 @@ def to_booking_read(db: Session, booking: Booking) -> BookingRead:
             item_id=item.item_id,
             name_snapshot=item.name_snapshot,
             price_paise=item.price_paise,
+            quantity=item.quantity,
+            weight_half_kg=item.weight_half_kg,
         )
         for item in booking_service.list_booking_items(db, booking.id)
     ]
+    payments = payments_service.to_payment_reads(
+        payments_service.list_payments(db, booking.id)
+    )
     return BookingRead(
         id=booking.id,
         booking_reference=booking.booking_reference,
@@ -66,12 +73,16 @@ def to_booking_read(db: Session, booking: Booking) -> BookingRead:
         food_paise=booking.food_paise,
         other_paise=booking.other_paise,
         cleaning_paise=booking.cleaning_paise,
+        led_name=booking.led_name,
+        coupon_code=booking.coupon_code,
+        coupon_discount_paise=booking.coupon_discount_paise,
         total_paise=booking.total_paise,
         advance_paise=booking.advance_paise,
         amount_paid_paise=amounts.amount_paid_paise,
         amount_due_paise=amounts.amount_due_paise,
         is_paid=amounts.is_paid,
         items=items,
+        payments=payments,
         created_at=booking.created_at,
     )
 
@@ -105,6 +116,15 @@ def list_bookings(
         db, actor, location_id=location_id, on=booking_date, status=status_filter
     )
     return [_to_list_item(db, b) for b in bookings]
+
+
+@router.post("/bookings/preview", response_model=PriceBreakdownRead)
+def preview_booking(
+    body: AdminPreviewRequest,
+    db: Session = Depends(get_db),
+    actor: CurrentUser = Depends(require_role("admin", "staff")),
+) -> PriceBreakdownRead:
+    return booking_service.preview_booking(db, body, actor=actor, is_customer=False)
 
 
 @router.post("/bookings", response_model=BookingRead, status_code=status.HTTP_201_CREATED)

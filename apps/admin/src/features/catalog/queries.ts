@@ -16,6 +16,8 @@ import {
 import { api } from '@/api/client';
 import type {
   CakeAdminRead,
+  ComboCreateBody,
+  ComboUpdateBody,
   NamedAddonAdminRead,
   PlanAdminRead,
   PlanCreateBody,
@@ -137,5 +139,36 @@ export function useCombos(
         `/api/v1/admin/combos?location_id=${locationId as number}`,
       ),
     enabled: locationId !== null,
+  });
+}
+
+/**
+ * Create a combo. Combos may carry optional cake/LED baselines (paise) that the
+ * pricing engine floors combo deltas against; a null baseline means the combo
+ * does not absorb that component.
+ */
+export function useCreateCombo(
+  locationId: number | null,
+): UseMutationResult<NamedAddonAdminRead, unknown, ComboCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, ComboCreateBody>({
+    mutationFn: (body) => api.post<NamedAddonAdminRead>('/api/v1/admin/combos', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'combos', locationId] });
+    },
+  });
+}
+
+export function useUpdateCombo(
+  locationId: number | null,
+  comboId: number,
+): UseMutationResult<NamedAddonAdminRead, unknown, ComboUpdateBody> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, ComboUpdateBody>({
+    mutationFn: (body) =>
+      api.patch<NamedAddonAdminRead>(`/api/v1/admin/combos/${comboId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'combos', locationId] });
+    },
   });
 }

@@ -71,6 +71,7 @@ def test_staff_cannot_create_booking_for_other_location(
             "booking_date": "2099-01-01",
             "booking_name": "X",
             "email": "x@example.com",
+            "phone": "9876543210",
             "people": 4,
         },
     )

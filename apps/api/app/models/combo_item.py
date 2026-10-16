@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, String, Text, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -27,3 +36,18 @@ class ComboItem(Base, TimestampMixin):
         Date, nullable=False, server_default=text("'2099-12-31'")
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Optional baselines: NULL means the combo does not include that component.
+    cake_baseline_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    led_baseline_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "cake_baseline_paise IS NULL OR cake_baseline_paise >= 0",
+            name="ck_combo_items_cake_baseline_nonneg",
+        ),
+        CheckConstraint(
+            "led_baseline_paise IS NULL OR led_baseline_paise >= 0",
+            name="ck_combo_items_led_baseline_nonneg",
+        ),
+    )

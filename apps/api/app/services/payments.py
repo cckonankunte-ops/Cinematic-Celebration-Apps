@@ -12,11 +12,17 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.errors import NotFoundError
+from app.core.errors import (
+    ForbiddenError,
+    NotFoundError,
+    PaymentAlreadyVoidedError,
+    PaymentNotVoidableError,
+    ValidationFailedError,
+)
 from app.core.security import CurrentUser, assert_location_access
 from app.models.booking import Booking
 from app.models.payment import Payment
-from app.schemas.payment import DerivedAmounts, PaymentCreate
+from app.schemas.payment import DerivedAmounts, PaymentCreate, PaymentRead
 from app.services.events import write_booking_event
 
 
@@ -89,3 +95,120 @@ def list_payments(db: Session, booking_id: int) -> list[Payment]:
             .order_by(Payment.received_at, Payment.id)
         ).scalars()
     )
+
+
+def to_payment_reads(payments: list[Payment]) -> list[PaymentRead]:
+    """Build PaymentRead list with derived is_voided / voided_by_payment_id.
+
+    A normal payment is 'voided' when some other row's reverses_payment_id ==
+    its id. A Reversing_Entry itself is never marked voided.
+    """
+    reversed_by: dict[int, int] = {}
+    for p in payments:
+        if p.reverses_payment_id is not None:
+            reversed_by[p.reverses_payment_id] = p.id
+    out: list[PaymentRead] = []
+    for p in payments:
+        out.append(
+            PaymentRead(
+                id=p.id,
+                booking_id=p.booking_id,
+                method=p.method,
+                amount_paise=p.amount_paise,
+                received_at=p.received_at,
+                recorded_by_user_id=p.recorded_by_user_id,
+                provider=p.provider,
+                provider_ref=p.provider_ref,
+                note=p.note,
+                reverses_payment_id=p.reverses_payment_id,
+                is_voided=p.id in reversed_by,
+                voided_by_payment_id=reversed_by.get(p.id),
+            )
+        )
+    return out
+
+
+def void_payment(
+    db: Session,
+    booking_id: int,
+    payment_id: int,
+    *,
+    reason: str,
+    actor: CurrentUser,
+) -> list[Payment]:
+    """Void a payment by inserting a reversing ledger entry. ADMIN-ONLY.
+
+    Appends a negative-amount Reversing_Entry referencing the original and writes
+    a payment_voided audit event in ONE transaction; the original row is never
+    mutated or deleted. Returns the booking's full ledger oldest-first.
+
+    Raises:
+      ForbiddenError (403)              — actor is not an admin.
+      NotFoundError (404)               — booking or payment missing / not in booking.
+      PaymentNotVoidableError (422)     — target is itself a Reversing_Entry.
+      PaymentAlreadyVoidedError (422)   — target already has a reversing entry.
+      ValidationFailedError (422)       — blank/missing reason.
+    """
+    # 1. Admin-only, before any lookup.
+    if actor.role != "admin":
+        raise ForbiddenError()
+
+    # 2. Load + ownership.
+    payment = db.get(Payment, payment_id)
+    if payment is None or payment.booking_id != booking_id:
+        raise NotFoundError("Payment not found.")
+    booking = db.get(Booking, booking_id)
+    if booking is None:
+        raise NotFoundError("Booking not found.")
+    assert_location_access(actor, booking.location_id)
+
+    # 3. Not a reversal.
+    if payment.reverses_payment_id is not None:
+        raise PaymentNotVoidableError()
+
+    # 4. Not already voided.
+    exists = db.execute(
+        select(Payment.id).where(Payment.reverses_payment_id == payment_id)
+    ).first()
+    if exists is not None:
+        raise PaymentAlreadyVoidedError()
+
+    # 5. Reason required.
+    if reason is None or not reason.strip():
+        raise ValidationFailedError("A reason is required to void a payment.")
+
+    # 6. Insert the Reversing_Entry.
+    reversal = Payment(
+        booking_id=booking_id,
+        method=payment.method,  # mirror original method (self-describing, passes ck_payments_method)
+        amount_paise=-payment.amount_paise,  # negative; allowed by relaxed <> 0 check
+        recorded_by_user_id=actor.id,
+        provider=None,
+        provider_ref=None,
+        note=reason,
+        reverses_payment_id=payment.id,
+    )
+    db.add(reversal)
+    db.flush()  # assign reversal.id
+
+    # 7. Audit.
+    write_booking_event(
+        db,
+        booking_id,
+        "payment_voided",
+        actor_user_id=actor.id,
+        old_value={
+            "payment_id": payment.id,
+            "amount_paise": payment.amount_paise,
+            "method": payment.method,
+        },
+        new_value={
+            "reversing_payment_id": reversal.id,
+            "reason": reason,
+            "actor_user_id": actor.id,
+        },
+    )
+
+    # 8. Commit and return the full ledger.
+    db.commit()
+    return list_payments(db, booking_id)

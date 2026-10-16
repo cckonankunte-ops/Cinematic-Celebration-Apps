@@ -1,7 +1,7 @@
 """Append-only booking audit trail.
 
 Exactly one row is written in the same transaction as every booking state change
-(created, accepted, rejected, edited, payment_recorded, expired).
+(created, accepted, rejected, edited, payment_recorded, payment_voided, expired).
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ BOOKING_EVENT_TYPES = (
     "rejected",
     "edited",
     "payment_recorded",
+    "payment_voided",
     "expired",
 )
 
@@ -50,7 +51,7 @@ class BookingEvent(Base):
     __table_args__ = (
         CheckConstraint(
             "event_type IN ('created','accepted','rejected','edited',"
-            "'payment_recorded','expired')",
+            "'payment_recorded','payment_voided','expired')",
             name="ck_booking_events_type",
         ),
     )
