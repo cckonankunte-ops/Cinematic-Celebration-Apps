@@ -128,7 +128,9 @@ def test_admin_discount_clamped_and_gated(
     bd = compute_booking_price(req, discount_paise=requested_discount, is_customer=False)
     expected = min(requested_discount, max_discount) if give_discount else 0
     assert bd.discount_paise == expected
-    assert bd.total_paise == price - expected
+    # Total is clamped at 0: a discount larger than the subtotal cannot drive
+    # the total negative (same max(0, ...) clamp that bounds coupon discounts).
+    assert bd.total_paise == max(0, price - expected)
 
 
 def test_no_extra_guest_when_under_allowance() -> None:
