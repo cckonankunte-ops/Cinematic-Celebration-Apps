@@ -4,9 +4,12 @@ import { render, screen } from '@testing-library/react';
 import { PaymentHistory } from './PaymentHistory';
 import type { PaymentRead } from './types';
 
-// Mock the void mutation so the component renders without a QueryClient.
+// Mock the booking-queries hooks so the component (and the PaymentDialog it
+// renders) can mount without a QueryClient. PaymentHistory uses useVoidPayment;
+// the nested PaymentDialog imports useRecordPayment, so both must be stubbed.
 vi.mock('./booking-queries', () => ({
   useVoidPayment: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRecordPayment: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 // `useAuth` is swapped per-test to toggle admin vs staff.
