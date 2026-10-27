@@ -139,6 +139,15 @@ export interface Slot {
   sort_order: number;
 }
 
+/**
+ * A slot annotated with whether it can still be booked for a location/date.
+ * `is_available` is false when an active booking already holds it; the UI
+ * renders those greyed-out and non-selectable. Returned by `availableSlots`.
+ */
+export interface SlotAvailability extends Slot {
+  is_available: boolean;
+}
+
 export interface Cake {
   id: number;
   description: string;
@@ -305,11 +314,14 @@ export const publicApi = {
     planId: number,
     locationId: number,
     bookingDate: string,
-  ): Promise<Slot[]> {
-    return api.post<Slot[]>(`${PUBLIC}/plans/${planId}/available-slots`, {
-      location_id: locationId,
-      booking_date: bookingDate,
-    });
+  ): Promise<SlotAvailability[]> {
+    return api.post<SlotAvailability[]>(
+      `${PUBLIC}/plans/${planId}/available-slots`,
+      {
+        location_id: locationId,
+        booking_date: bookingDate,
+      },
+    );
   },
   gallery(planId: number): Promise<string[]> {
     return api.get<string[]>(`${PUBLIC}/plans/${planId}/gallery`);

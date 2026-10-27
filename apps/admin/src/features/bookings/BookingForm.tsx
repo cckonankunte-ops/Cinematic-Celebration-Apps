@@ -28,7 +28,7 @@ import {
   useCombos,
   useOccasions,
   usePlans,
-  useSlots,
+  useSlotAvailability,
   useSpecialDecor,
 } from './catalog-queries';
 import type { PriceBreakdownRead } from './types';
@@ -95,9 +95,15 @@ export function BookingForm({
   // valueAsNumber on an empty <select> yields NaN, not null. Normalize to null
   // so the slots query stays disabled until a real plan is chosen.
   const planId = Number.isFinite(rawPlanId) ? rawPlanId : null;
+  const bookingDate = watch('booking_date');
+  // In edit mode the booking is pinned to its own location; in create mode the
+  // selected location drives availability. `locationId` already reflects this.
+  const currentSlotId = watch('slot_id');
 
   const plans = usePlans(locationId);
-  const slots = useSlots(planId);
+  // Availability is scoped to plan + location + date so held slots are flagged
+  // and rendered greyed-out / non-selectable.
+  const slots = useSlotAvailability(planId, locationId, bookingDate ?? null);
   const cakes = useCakes(locationId);
   const decor = useSpecialDecor(locationId);
   const combos = useCombos(locationId);
@@ -251,11 +257,18 @@ export function BookingForm({
             {...register('slot_id', { valueAsNumber: true })}
           >
             <option value="">Select a slot…</option>
-            {slots.data?.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.description}
-              </option>
-            ))}
+            {slots.data?.map((s) => {
+              // A held slot is non-selectable, EXCEPT the booking's own slot in
+              // edit mode (it holds itself) so the pre-filled value stays valid.
+              const isCurrent = currentSlotId === s.id;
+              const blocked = !s.is_available && !isCurrent;
+              return (
+                <option key={s.id} value={s.id} disabled={blocked}>
+                  {s.description}
+                  {blocked ? ' — already booked' : ''}
+                </option>
+              );
+            })}
           </select>
           {errors.slot_id && <p className="text-xs text-red-600">{errors.slot_id.message}</p>}
         </label>

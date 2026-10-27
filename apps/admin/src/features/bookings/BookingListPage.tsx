@@ -87,31 +87,61 @@ export function BookingListPage(): JSX.Element {
             ))}
           </div>
 
-          {/* md+: table summary with expandable cards */}
+          {/* md+: full column table matching the legacy bookings grid */}
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse whitespace-nowrap text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-gray-500">
+                  <th className="py-2 pr-4">Status</th>
                   <th className="py-2 pr-4">Reference</th>
                   <th className="py-2 pr-4">Name</th>
+                  <th className="py-2 pr-4">Plan</th>
                   <th className="py-2 pr-4">Date</th>
-                  <th className="py-2 pr-4">People</th>
-                  <th className="py-2 pr-4">Total</th>
-                  <th className="py-2 pr-4">Status</th>
+                  <th className="py-2 pr-4">Slot</th>
+                  <th className="py-2 pr-4">Guests</th>
+                  <th className="py-2 pr-4 text-right">Amount paid</th>
+                  <th className="py-2 pr-4 text-right">Amount due</th>
+                  <th className="py-2 pr-4 text-right">Discount</th>
+                  <th className="py-2 pr-4 text-right">Total</th>
+                  <th className="py-2 pr-4">Special decor</th>
+                  <th className="py-2 pr-4">Cakes</th>
+                  <th className="py-2 pr-4">Occasion</th>
+                  <th className="py-2 pr-4">Special person</th>
+                  <th className="py-2 pr-4">Created</th>
                   <th className="py-2 pr-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((b) => (
                   <tr key={b.id} className="border-b border-gray-100 align-top">
-                    <td className="py-2 pr-4 font-mono text-xs">{b.booking_reference}</td>
-                    <td className="py-2 pr-4">{b.booking_name}</td>
-                    <td className="py-2 pr-4">{formatDate(b.booking_date)}</td>
-                    <td className="py-2 pr-4">{b.people}</td>
-                    <td className="py-2 pr-4">{formatRupees(b.total_paise)}</td>
                     <td className="py-2 pr-4">
                       <StatusBadge status={b.status} />
                     </td>
+                    <td className="py-2 pr-4 font-mono text-xs">{b.booking_reference}</td>
+                    <td className="py-2 pr-4">{b.booking_name}</td>
+                    <td className="py-2 pr-4">{b.plan_title}</td>
+                    <td className="py-2 pr-4">{formatDate(b.booking_date)}</td>
+                    <td className="py-2 pr-4">{b.slot_description}</td>
+                    <td className="py-2 pr-4">{b.people}</td>
+                    <td className="py-2 pr-4 text-right">
+                      {formatRupees(b.amount_paid_paise ?? 0)}
+                    </td>
+                    <td className="py-2 pr-4 text-right">
+                      {formatRupees(b.amount_due_paise ?? 0)}
+                    </td>
+                    <td className="py-2 pr-4 text-right">
+                      {formatRupees(b.discount_paise)}
+                    </td>
+                    <td className="py-2 pr-4 text-right">{formatRupees(b.total_paise)}</td>
+                    <td className="py-2 pr-4 whitespace-normal">
+                      {b.special_decor.length > 0 ? b.special_decor.join(', ') : '—'}
+                    </td>
+                    <td className="py-2 pr-4 whitespace-normal">
+                      {b.cakes.length > 0 ? b.cakes.join(', ') : '—'}
+                    </td>
+                    <td className="py-2 pr-4">{b.occasion_name ?? '—'}</td>
+                    <td className="py-2 pr-4">{b.special_person_name ?? '—'}</td>
+                    <td className="py-2 pr-4">{formatDate(b.created_at)}</td>
                     <td className="py-2 pr-4">
                       {(b.status === 'pending' || b.status === 'accepted') && (
                         <Link
@@ -126,11 +156,6 @@ export function BookingListPage(): JSX.Element {
                 ))}
               </tbody>
             </table>
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              {data.map((b) => (
-                <BookingCard key={`card-${b.id}`} booking={b} />
-              ))}
-            </div>
           </div>
         </>
       )}

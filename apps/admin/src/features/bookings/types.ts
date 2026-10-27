@@ -68,12 +68,20 @@ export interface BookingListItem {
   status: BookingStatus;
   booking_name: string;
   phone?: string | null;
+  special_person_name?: string | null;
   people: number;
+  plan_title: string;
+  slot_description: string;
+  occasion_name?: string | null;
+  special_decor: string[];
+  cakes: string[];
+  discount_paise: number;
   total_paise: number;
   advance_paise?: number;
   amount_paid_paise?: number;
   amount_due_paise?: number;
   is_paid?: boolean;
+  created_at: string;
 }
 
 /** Mirrors the API `PaymentRead`. */

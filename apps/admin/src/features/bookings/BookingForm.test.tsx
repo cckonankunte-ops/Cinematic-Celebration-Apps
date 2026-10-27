@@ -7,7 +7,9 @@ import { BookingForm } from './BookingForm';
 // live API. Each returns a tiny deterministic option set.
 vi.mock('./catalog-queries', () => ({
   usePlans: () => ({ data: [{ id: 3, title: 'Starlight Package' }] }),
-  useSlots: () => ({ data: [{ id: 7, description: '9 AM - 12 PM' }] }),
+  useSlotAvailability: () => ({
+    data: [{ id: 7, description: '9 AM - 12 PM', is_available: true }],
+  }),
   useCakes: () => ({ data: [{ id: 4, name: 'Chocolate', price_paise: 50000 }] }),
   useSpecialDecor: () => ({ data: [{ id: 1, name: 'Balloons', price_paise: 20000 }] }),
   useCombos: () => ({ data: [{ id: 2, name: 'Snacks', price_paise: 30000 }] }),

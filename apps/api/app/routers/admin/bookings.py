@@ -25,6 +25,7 @@ from app.schemas.booking import (
     PriceBreakdownRead,
 )
 from app.services import booking as booking_service
+from app.services import catalog as catalog_service
 from app.services import email as email_service
 from app.services import payments as payments_service
 
@@ -89,18 +90,34 @@ def to_booking_read(db: Session, booking: Booking) -> BookingRead:
 
 def _to_list_item(db: Session, booking: Booking) -> BookingListItem:
     amounts = payments_service.derive_amounts_for_booking(db, booking)
+    plan_title, slot_description = catalog_service.booking_plan_and_slot_labels(
+        db, booking.plan_id, booking.slot_id
+    )
+    occasion_name = catalog_service.booking_occasion_name(db, booking.occasion_id)
+    items = booking_service.list_booking_items(db, booking.id)
+    special_decor = [i.name_snapshot for i in items if i.kind == "decor"]
+    cakes = [i.name_snapshot for i in items if i.kind == "cake"]
     return BookingListItem(
         id=booking.id,
         booking_reference=booking.booking_reference,
         booking_date=booking.booking_date,
         status=booking.status,
         booking_name=booking.booking_name,
+        phone=booking.phone,
+        special_person_name=booking.special_person_name,
         people=booking.people,
+        plan_title=plan_title,
+        slot_description=slot_description,
+        occasion_name=occasion_name,
+        special_decor=special_decor,
+        cakes=cakes,
+        discount_paise=booking.discount_paise,
         total_paise=booking.total_paise,
         advance_paise=booking.advance_paise,
         amount_paid_paise=amounts.amount_paid_paise,
         amount_due_paise=amounts.amount_due_paise,
         is_paid=amounts.is_paid,
+        created_at=booking.created_at,
     )
 
 

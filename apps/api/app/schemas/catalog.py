@@ -42,6 +42,18 @@ class SlotRead(BaseModel):
     sort_order: int
 
 
+class SlotAvailabilityRead(SlotRead):
+    """A slot plus whether it can still be booked for a given location/date.
+
+    ``is_available`` is False when an active (pending|accepted) booking already
+    holds this slot. The booking UIs render unavailable slots greyed-out and
+    non-selectable; the database partial unique index remains the real guard
+    against double booking.
+    """
+
+    is_available: bool
+
+
 class CakeRead(BaseModel):
     id: int
     description: str
