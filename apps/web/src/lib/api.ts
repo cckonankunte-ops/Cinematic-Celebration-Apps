@@ -233,6 +233,9 @@ export interface AddonLineRead {
   quantity: number;
   weight_half_kg: number | null;
   amount_paise: number;
+  combo_base_paise: number | null;
+  cake_upgrade_paise: number | null;
+  led_upgrade_paise: number | null;
 }
 
 /**
