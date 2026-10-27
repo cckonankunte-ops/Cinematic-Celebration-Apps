@@ -205,7 +205,11 @@ function CreateComboForm({ locationId }: { locationId: number | null }): JSX.Ele
       name: form.name.trim(),
       description: form.description.trim(),
       price_paise: rupeesToPaise(Number(form.priceRupees)),
-      effective_from: todayIsoInIST(),
+      // Make a new combo available immediately. Defaulting to "today" races the
+      // server's UTC clock across the IST boundary (an IST "today" can be one
+      // day ahead of the server's date.today(), hiding the combo until the next
+      // day), so we start the validity window safely in the past.
+      effective_from: '2020-01-01',
       cake_baseline_paise: baseline(form.cakeBaselineRupees),
       led_baseline_paise: baseline(form.ledBaselineRupees),
     };
