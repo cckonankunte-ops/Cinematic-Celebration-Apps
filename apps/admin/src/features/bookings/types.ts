@@ -75,6 +75,7 @@ export interface BookingListItem {
   occasion_name?: string | null;
   special_decor: string[];
   cakes: string[];
+  combos: string[];
   discount_paise: number;
   total_paise: number;
   advance_paise?: number;

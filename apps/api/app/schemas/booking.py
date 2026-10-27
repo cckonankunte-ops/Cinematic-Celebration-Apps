@@ -283,6 +283,7 @@ class BookingListItem(BaseModel):
     occasion_name: str | None = None
     special_decor: list[str] = []
     cakes: list[str] = []
+    combos: list[str] = []
     discount_paise: int
     total_paise: int
     advance_paise: int
