@@ -28,6 +28,11 @@ export interface SlotOption {
   sort_order: number;
 }
 
+/** A slot annotated with whether it can still be booked for a location/date. */
+export interface SlotAvailabilityOption extends SlotOption {
+  is_available: boolean;
+}
+
 export interface CatalogItemOption {
   id: number;
   name: string;
@@ -59,12 +64,27 @@ export function usePlans(locationId: number | null): UseQueryResult<PlanOption[]
   );
 }
 
-export function useSlots(planId: number | null): UseQueryResult<SlotOption[]> {
-  return useCatalog<SlotOption[]>(
-    ['slots', planId],
-    `/api/v1/public/plans/${planId}/slots`,
-    planId !== null,
-  );
+/**
+ * All active slots for a plan on a date, each flagged with `is_available`
+ * (false when an active booking already holds it). Posts to the public
+ * availability endpoint; disabled until plan, location, and date are known.
+ * Booked slots are returned too so the form can grey them out rather than hide
+ * them — the server/DB remains the authoritative double-booking guard.
+ */
+export function useSlotAvailability(
+  planId: number | null,
+  locationId: number | null,
+  bookingDate: string | null,
+): UseQueryResult<SlotAvailabilityOption[]> {
+  return useQuery<SlotAvailabilityOption[]>({
+    queryKey: ['slot-availability', planId, locationId, bookingDate],
+    queryFn: () =>
+      api.post<SlotAvailabilityOption[]>(
+        `/api/v1/public/plans/${planId}/available-slots`,
+        { location_id: locationId, booking_date: bookingDate },
+      ),
+    enabled: planId !== null && locationId !== null && !!bookingDate,
+  });
 }
 
 /** Shapes `CakeRead` ({description}) into the shared `{name}` option. */

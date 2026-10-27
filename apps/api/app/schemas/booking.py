@@ -262,19 +262,34 @@ class BookingRead(BaseModel):
 
 
 class BookingListItem(BaseModel):
-    """Lighter booking row for list views."""
+    """Booking row for the admin list view.
+
+    Carries the main columns staff expect from the legacy bookings grid: the
+    plan/slot/occasion labels, the special-person name, the discount, the
+    special-decor and cake names, and the created-at timestamp — alongside the
+    reference, guest count, and the derived payment amounts.
+    """
 
     id: int
     booking_reference: str
     booking_date: date
     status: str
     booking_name: str
+    phone: str | None = None
+    special_person_name: str | None = None
     people: int
+    plan_title: str
+    slot_description: str
+    occasion_name: str | None = None
+    special_decor: list[str] = []
+    cakes: list[str] = []
+    discount_paise: int
     total_paise: int
     advance_paise: int
     amount_paid_paise: int
     amount_due_paise: int
     is_paid: bool
+    created_at: datetime
 
 
 class AcceptBookingRequest(BaseModel):

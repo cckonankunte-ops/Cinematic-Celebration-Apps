@@ -26,6 +26,7 @@ from app.schemas.catalog import (
     LocationRead,
     OccasionRead,
     PlanRead,
+    SlotAvailabilityRead,
     SlotRead,
     SpecialDecorRead,
 )
@@ -226,6 +227,40 @@ def list_available_slots(
     return [s for s in list_active_slots(db, plan_id, on) if s.id not in held_slot_ids]
 
 
+def list_slots_with_availability(
+    db: Session, plan_id: int, location_id: int, on: date
+) -> list[SlotAvailabilityRead]:
+    """All active slots for a plan on a date, each annotated with availability.
+
+    Unlike ``list_available_slots`` (which drops held slots entirely), this
+    returns every active slot so the booking UIs can render held slots
+    greyed-out and non-selectable. A slot is unavailable when an active
+    (pending|accepted) booking exists for the same (location, slot, date).
+    """
+    from app.models.booking import Booking
+
+    held_slot_ids = set(
+        db.execute(
+            select(Booking.slot_id).where(
+                Booking.location_id == location_id,
+                Booking.booking_date == on,
+                Booking.status.in_(("pending", "accepted")),
+            )
+        ).scalars()
+    )
+    return [
+        SlotAvailabilityRead(
+            id=s.id,
+            plan_id=s.plan_id,
+            description=s.description,
+            show_combos=s.show_combos,
+            sort_order=s.sort_order,
+            is_available=s.id not in held_slot_ids,
+        )
+        for s in list_active_slots(db, plan_id, on)
+    ]
+
+
 def booking_plan_and_slot_labels(
     db: Session, plan_id: int, slot_id: int
 ) -> tuple[str, str]:
@@ -240,3 +275,15 @@ def booking_plan_and_slot_labels(
     plan_title = plan.title if plan is not None else ""
     slot_description = slot.description if slot is not None else ""
     return plan_title, slot_description
+
+
+def booking_occasion_name(db: Session, occasion_id: int | None) -> str | None:
+    """Return the occasion name for a booking, or None when unset/missing.
+
+    Ignores is_active so a historical booking referencing a since-deactivated
+    occasion still shows its label in the list view.
+    """
+    if occasion_id is None:
+        return None
+    occasion = db.get(Occasion, occasion_id)
+    return occasion.name if occasion is not None else None

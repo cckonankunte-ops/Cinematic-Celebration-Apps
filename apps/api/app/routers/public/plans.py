@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.errors import NotFoundError
-from app.schemas.catalog import PlanRead, SlotRead
+from app.schemas.catalog import PlanRead, SlotAvailabilityRead, SlotRead
 from app.services import catalog
 
 router = APIRouter(prefix="/api/v1/public", tags=["public-catalog"])
@@ -32,11 +32,22 @@ def list_slots(plan_id: int, db: Session = Depends(get_db)) -> list[SlotRead]:
     return catalog.list_active_slots(db, plan_id, date.today())
 
 
-@router.post("/plans/{plan_id}/available-slots", response_model=list[SlotRead])
+@router.post(
+    "/plans/{plan_id}/available-slots",
+    response_model=list[SlotAvailabilityRead],
+)
 def available_slots(
     plan_id: int, body: AvailableSlotsRequest, db: Session = Depends(get_db)
-) -> list[SlotRead]:
-    return catalog.list_available_slots(db, plan_id, body.location_id, body.booking_date)
+) -> list[SlotAvailabilityRead]:
+    """All active slots for the plan/date, each flagged with ``is_available``.
+
+    Held (pending|accepted) slots are returned too — flagged unavailable — so
+    the booking UIs can grey them out rather than hide them. The DB partial
+    unique index is still the authoritative guard against double booking.
+    """
+    return catalog.list_slots_with_availability(
+        db, plan_id, body.location_id, body.booking_date
+    )
 
 
 @router.get("/plans/{plan_id}/gallery", response_model=list[str])
