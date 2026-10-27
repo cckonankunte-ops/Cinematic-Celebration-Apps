@@ -90,13 +90,23 @@ export function useBooking(id: number | null): UseQueryResult<BookingRead> {
   });
 }
 
+/**
+ * Create-booking request body. The posted shape drops the UI-only
+ * `advance_rupees` field (see BookingFormPage) and sends the API's
+ * `advance_amount_paise` (paise) + `advance_method` only when an advance was
+ * entered. Everything else mirrors `BookingCreateValues`.
+ */
+export type CreateBookingBody = Omit<BookingCreateValues, 'advance_rupees'> & {
+  advance_amount_paise?: number;
+};
+
 export function useCreateBooking(): UseMutationResult<
   BookingRead,
   unknown,
-  BookingCreateValues
+  CreateBookingBody
 > {
   const qc = useQueryClient();
-  return useMutation<BookingRead, unknown, BookingCreateValues>({
+  return useMutation<BookingRead, unknown, CreateBookingBody>({
     mutationFn: (body) => api.post<BookingRead>('/api/v1/admin/bookings', body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['bookings'] });

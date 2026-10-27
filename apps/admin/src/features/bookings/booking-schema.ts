@@ -83,6 +83,14 @@ export const bookingCreateSchema = z.object({
   food_paise: nonNegativePaise.default(0),
   other_paise: nonNegativePaise.default(0),
   cleaning_paise: nonNegativePaise.default(0),
+  // Optional advance recorded at creation (create flow only). Entered in rupees
+  // in the UI (like PaymentDialog); mapped to `advance_amount_paise` before the
+  // request is sent. Method defaults to cash.
+  advance_rupees: z
+    .number({ invalid_type_error: 'Must be a number' })
+    .positive('Advance must be greater than zero')
+    .optional(),
+  advance_method: z.enum(['cash', 'upi', 'card', 'other']).default('cash'),
 });
 
 /** Input type before Zod applies defaults (what react-hook-form holds). */
