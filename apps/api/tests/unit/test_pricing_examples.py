@@ -236,3 +236,37 @@ def test_example_standalone_decor_line_unit_times_quantity() -> None:
     decor_lines = [line for line in bd.addon_lines if line.kind == "decor"]
     assert len(decor_lines) == 1
     assert decor_lines[0].amount_paise == 60000
+
+
+# ---------------------------------------------------------------------------
+# Combo line component fields (combo_base / cake_upgrade / led_upgrade).
+# ---------------------------------------------------------------------------
+def test_combo_line_exposes_upgrade_components() -> None:
+    """A combo line carries its base + floored cake/LED upgrade deltas.
+
+    Combo price 70000, cake_baseline 40000, led_baseline 20000; cake base 60000
+    at 0.5kg (weighted 60000 -> cake_upgrade 20000) and LED 'ARUNA' (5 letters
+    -> 20000 == baseline, led_upgrade 0). The single combo line should report
+    combo_base_paise=70000, cake_upgrade_paise=20000, led_upgrade_paise=0, and
+    amount_paise=90000 (== base + cake + led).
+    """
+    req = ValidatedRequest(
+        plan=_free_plan(),
+        people=1,
+        cake=_cake(60000),
+        cake_weight_half_kg=1,  # weighted 60000; upgrade max(0, 60000-40000)=20000
+        led_name="ARUNA",  # 5 letters -> 20000 == baseline; upgrade 0
+        combos=[
+            ComboSelection(
+                item=_combo(1, 70000, cake_baseline_paise=40000, led_baseline_paise=20000)
+            )
+        ],
+    )
+    bd = compute_booking_price(req, is_customer=True)
+    combo_lines = [line for line in bd.addon_lines if line.kind == "combo"]
+    assert len(combo_lines) == 1
+    line = combo_lines[0]
+    assert line.combo_base_paise == 70000
+    assert line.cake_upgrade_paise == 20000
+    assert line.led_upgrade_paise == 0
+    assert line.amount_paise == 90000

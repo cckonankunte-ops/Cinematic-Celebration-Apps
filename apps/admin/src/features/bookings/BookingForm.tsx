@@ -552,19 +552,51 @@ function PreviewSummary({ breakdown, error }: PreviewSummaryProps): JSX.Element 
         </div>
       )}
 
-      {breakdown.addon_lines.map((line, idx) => (
-        <div key={`${line.kind}-${line.item_id ?? idx}`} className="flex justify-between">
-          <span>
-            {line.name_snapshot}
-            {line.weight_half_kg !== null
-              ? ` (${line.weight_half_kg / 2} kg)`
-              : line.quantity > 1
-                ? ` ×${line.quantity}`
-                : ''}
-          </span>
-          <span>{formatRupees(line.amount_paise)}</span>
-        </div>
-      ))}
+      {breakdown.addon_lines.map((line, idx) => {
+        const cakeUpgrade = line.cake_upgrade_paise ?? 0;
+        const ledUpgrade = line.led_upgrade_paise ?? 0;
+        const hasUpgrades =
+          line.kind === 'combo' &&
+          line.combo_base_paise !== null &&
+          (cakeUpgrade > 0 || ledUpgrade > 0);
+
+        if (hasUpgrades) {
+          return (
+            <div key={`combo-${line.item_id ?? idx}`} className="space-y-1">
+              <div className="flex justify-between">
+                <span>{line.name_snapshot}</span>
+                <span>{formatRupees(line.combo_base_paise as number)}</span>
+              </div>
+              {cakeUpgrade > 0 && (
+                <div className="flex justify-between pl-4 text-gray-600">
+                  <span>↳ Cake upgrade</span>
+                  <span>{formatRupees(cakeUpgrade)}</span>
+                </div>
+              )}
+              {ledUpgrade > 0 && (
+                <div className="flex justify-between pl-4 text-gray-600">
+                  <span>↳ LED upgrade</span>
+                  <span>{formatRupees(ledUpgrade)}</span>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <div key={`${line.kind}-${line.item_id ?? idx}`} className="flex justify-between">
+            <span>
+              {line.name_snapshot}
+              {line.weight_half_kg !== null
+                ? ` (${line.weight_half_kg / 2} kg)`
+                : line.quantity > 1
+                  ? ` ×${line.quantity}`
+                  : ''}
+            </span>
+            <span>{formatRupees(line.amount_paise)}</span>
+          </div>
+        );
+      })}
 
       <div className="flex justify-between border-t border-gray-200 pt-1">
         <span>Subtotal</span>

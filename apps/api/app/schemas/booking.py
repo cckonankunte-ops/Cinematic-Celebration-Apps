@@ -42,6 +42,9 @@ class AddonLineRead(BaseModel):
     quantity: int
     weight_half_kg: int | None
     amount_paise: int
+    combo_base_paise: int | None = None
+    cake_upgrade_paise: int | None = None
+    led_upgrade_paise: int | None = None
 
 
 class PriceBreakdownRead(BaseModel):

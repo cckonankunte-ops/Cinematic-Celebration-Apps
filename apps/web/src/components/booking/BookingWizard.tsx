@@ -385,18 +385,55 @@ export default function BookingWizard() {
                     <dd>{formatRupees(preview.extra_guest_paise)}</dd>
                   </div>
                 )}
-                {preview.addon_lines.map((line) => (
-                  <div
-                    key={`${line.kind}-${line.item_id}`}
-                    className="flex justify-between"
-                  >
-                    <dt>
-                      {line.name_snapshot}
-                      {line.quantity > 1 ? ` × ${line.quantity}` : ''}
-                    </dt>
-                    <dd>{formatRupees(line.amount_paise)}</dd>
-                  </div>
-                ))}
+                {preview.addon_lines.map((line, idx) => {
+                  const cakeUpgrade = line.cake_upgrade_paise ?? 0;
+                  const ledUpgrade = line.led_upgrade_paise ?? 0;
+                  const hasUpgrades =
+                    line.kind === 'combo' &&
+                    line.combo_base_paise !== null &&
+                    (cakeUpgrade > 0 || ledUpgrade > 0);
+
+                  if (hasUpgrades) {
+                    return (
+                      <div
+                        key={`combo-${line.item_id ?? idx}`}
+                        className="space-y-1"
+                      >
+                        <div className="flex justify-between">
+                          <dt>{line.name_snapshot}</dt>
+                          <dd>
+                            {formatRupees(line.combo_base_paise as number)}
+                          </dd>
+                        </div>
+                        {cakeUpgrade > 0 && (
+                          <div className="flex justify-between pl-4 text-gray-600">
+                            <dt>↳ Cake upgrade</dt>
+                            <dd>{formatRupees(cakeUpgrade)}</dd>
+                          </div>
+                        )}
+                        {ledUpgrade > 0 && (
+                          <div className="flex justify-between pl-4 text-gray-600">
+                            <dt>↳ LED upgrade</dt>
+                            <dd>{formatRupees(ledUpgrade)}</dd>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={`${line.kind}-${line.item_id ?? idx}`}
+                      className="flex justify-between"
+                    >
+                      <dt>
+                        {line.name_snapshot}
+                        {line.quantity > 1 ? ` × ${line.quantity}` : ''}
+                      </dt>
+                      <dd>{formatRupees(line.amount_paise)}</dd>
+                    </div>
+                  );
+                })}
                 <div className="flex justify-between">
                   <dt>Subtotal</dt>
                   <dd>{formatRupees(preview.subtotal_paise)}</dd>

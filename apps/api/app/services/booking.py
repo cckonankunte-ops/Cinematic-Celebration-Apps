@@ -811,6 +811,9 @@ def _breakdown_to_read(
                 quantity=line.quantity,
                 weight_half_kg=line.weight_half_kg,
                 amount_paise=line.amount_paise,
+                combo_base_paise=line.combo_base_paise,
+                cake_upgrade_paise=line.cake_upgrade_paise,
+                led_upgrade_paise=line.led_upgrade_paise,
             )
             for line in breakdown.addon_lines
         ],

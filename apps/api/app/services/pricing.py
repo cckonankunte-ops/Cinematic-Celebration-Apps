@@ -79,6 +79,13 @@ class AddonLine:
     unit_price_paise: int  # per-unit price snapshot
     quantity: int  # 1 for cake/combo/led; >= 1 for decor
     weight_half_kg: int | None  # set only for the cake line (half-kg units)
+    # Combo transparency (set only for kind='combo'): the line's amount is the
+    # combo base plus floored cake/LED upgrade deltas. Exposing the parts lets
+    # the UI show the base price and each upgrade as its own sub-line instead of
+    # one opaque combined figure. None for non-combo lines.
+    combo_base_paise: int | None = None
+    cake_upgrade_paise: int | None = None
+    led_upgrade_paise: int | None = None
 
     @property
     def amount_paise(self) -> int:
@@ -246,11 +253,17 @@ def compute_booking_price(
     #       + max(0, chosen_cake_weighted − cake_baseline)  [if cake baseline]
     #       + max(0, led_charge − led_baseline)             [if led baseline]
     for c in req.combos:
-        combo_amount = c.item.price_paise
-        if c.item.cake_baseline_paise is not None:
-            combo_amount += max(0, cake_weighted - c.item.cake_baseline_paise)
-        if c.item.led_baseline_paise is not None:
-            combo_amount += max(0, led_charge - c.item.led_baseline_paise)
+        cake_upgrade = (
+            max(0, cake_weighted - c.item.cake_baseline_paise)
+            if c.item.cake_baseline_paise is not None
+            else 0
+        )
+        led_upgrade = (
+            max(0, led_charge - c.item.led_baseline_paise)
+            if c.item.led_baseline_paise is not None
+            else 0
+        )
+        combo_amount = c.item.price_paise + cake_upgrade + led_upgrade
         lines.append(
             AddonLine(
                 kind="combo",
@@ -259,6 +272,9 @@ def compute_booking_price(
                 unit_price_paise=combo_amount,
                 quantity=1,
                 weight_half_kg=None,
+                combo_base_paise=c.item.price_paise,
+                cake_upgrade_paise=cake_upgrade,
+                led_upgrade_paise=led_upgrade,
             )
         )
 
