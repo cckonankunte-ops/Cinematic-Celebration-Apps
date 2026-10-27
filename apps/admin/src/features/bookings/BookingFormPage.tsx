@@ -10,11 +10,16 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
-import { formatRupees } from '@/lib/money';
+import { formatRupees, rupeesToPaise } from '@/lib/money';
 import { useLocation } from '@/features/location/useLocation';
 import { BookingForm } from './BookingForm';
 import { PaymentHistory } from './PaymentHistory';
-import { useBooking, useCreateBooking, useUpdateBooking } from './booking-queries';
+import {
+  useBooking,
+  useCreateBooking,
+  useUpdateBooking,
+  type CreateBookingBody,
+} from './booking-queries';
 import type { BookingCreateInput, BookingCreateValues } from './booking-schema';
 import type { BookingRead } from './types';
 
@@ -91,7 +96,19 @@ function CreateBooking({ locationId }: { locationId: number }): JSX.Element {
   const onSubmit = async (values: BookingCreateValues): Promise<void> => {
     setServerError(null);
     try {
-      const booking = await createBooking.mutateAsync(values);
+      // The form holds a UI-only rupee advance; the API wants paise. Strip
+      // `advance_rupees` and send `advance_amount_paise`/`advance_method` only
+      // when an advance was actually entered. Overpayment is allowed server-side.
+      const { advance_rupees, advance_method, ...rest } = values;
+      const body: CreateBookingBody =
+        advance_rupees !== undefined
+          ? {
+              ...rest,
+              advance_method,
+              advance_amount_paise: rupeesToPaise(advance_rupees),
+            }
+          : rest;
+      const booking = await createBooking.mutateAsync(body);
       setCreated(booking);
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Failed to create booking.');
@@ -135,7 +152,10 @@ function EditBooking({ bookingId }: { bookingId: number }): JSX.Element {
   const onSubmit = async (values: BookingCreateValues): Promise<void> => {
     setServerError(null);
     try {
-      await updateBooking.mutateAsync(values);
+      // Advance-on-create is a create-only concern; never send advance fields
+      // on edit (the edit flow uses PaymentHistory/record-payment instead).
+      const { advance_rupees: _ar, advance_method: _am, ...rest } = values;
+      await updateBooking.mutateAsync(rest);
       navigate('/bookings');
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Failed to save changes.');

@@ -11,6 +11,7 @@ must normalize to a valid Indian mobile; email is optional.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -174,6 +175,11 @@ class AdminBookingCreate(BookingCreate):
     food_paise: int = Field(default=0, ge=0)
     other_paise: int = Field(default=0, ge=0)
     cleaning_paise: int = Field(default=0, ge=0)
+    # Optional advance recorded as the first ledger payment in the SAME
+    # transaction as the booking insert. Overpayment is allowed (may exceed the
+    # total); when None, no payment is recorded.
+    advance_amount_paise: int | None = Field(default=None, gt=0)
+    advance_method: Literal["cash", "upi", "card", "other"] | None = None
 
 
 class BookingUpdate(BaseModel):

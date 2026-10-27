@@ -497,6 +497,40 @@ export function BookingForm({
         )}
       </div>
 
+      {!isEdit && (
+        <fieldset className="grid gap-4 md:grid-cols-2">
+          <legend className="text-sm font-medium text-gray-700">
+            Advance paid now (optional)
+          </legend>
+          <label className="space-y-1 text-sm">
+            <span className="font-medium text-gray-700">Advance (₹)</span>
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              aria-label="Advance in rupees"
+              placeholder="Advance in ₹, optional (e.g. 500)"
+              className={inputClass}
+              {...register('advance_rupees', { valueAsNumber: true })}
+            />
+          </label>
+
+          <label className="space-y-1 text-sm">
+            <span className="font-medium text-gray-700">Method</span>
+            <select
+              aria-label="Advance method"
+              className={inputClass}
+              {...register('advance_method')}
+            >
+              <option value="cash">Cash</option>
+              <option value="upi">UPI</option>
+              <option value="card">Card</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+        </fieldset>
+      )}
+
       <PreviewSummary breakdown={breakdown} error={previewError} />
 
       {serverError && <p className="text-sm text-red-600">{serverError}</p>}

@@ -39,6 +39,7 @@ from app.models.contact_lead import ContactLead
 from app.models.coupon import Coupon
 from app.models.coupon_redemption import CouponRedemption
 from app.models.location import Location
+from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.slot import Slot
 from app.models.special_decor_item import SpecialDecorItem
@@ -587,6 +588,34 @@ def create_admin_booking(
                     "people": data.people,
                 },
             )
+            # Optional advance recorded at creation. Insert the ledger row +
+            # audit event directly in THIS open transaction (do NOT call
+            # payments_service.record_payment — it commits mid-transaction). A
+            # later IntegrityError rolls this back atomically with the booking.
+            # Overpayment is allowed, so there is no total check.
+            if data.advance_amount_paise is not None:
+                method = data.advance_method or "cash"
+                db.add(
+                    Payment(
+                        booking_id=booking.id,
+                        method=method,
+                        amount_paise=data.advance_amount_paise,
+                        recorded_by_user_id=actor.id,
+                        provider=None,
+                        provider_ref=None,
+                        note="Advance recorded at booking creation",
+                    )
+                )
+                write_booking_event(
+                    db,
+                    booking.id,
+                    "payment_recorded",
+                    actor_user_id=actor.id,
+                    new_value={
+                        "method": method,
+                        "amount_paise": data.advance_amount_paise,
+                    },
+                )
             db.commit()
             db.refresh(booking)
             return booking
