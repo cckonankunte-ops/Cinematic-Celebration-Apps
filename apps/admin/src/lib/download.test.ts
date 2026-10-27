@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { exportUrl } from './download';
 
-// VITE_API_BASE_URL is unset in tests, so exportUrl falls back to the default
-// localhost base defined in the module.
-const BASE = 'http://localhost:8000';
+// Mirror the module's own base-URL resolution instead of hardcoding localhost:
+// a wired Codespace sets VITE_API_BASE_URL in apps/admin/.env, which vitest
+// loads, so a hardcoded base would make these exact-match assertions brittle.
+const BASE = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(
+  /\/+$/,
+  '',
+);
 
 describe('exportUrl', () => {
   it('builds an absolute URL with encoded query params', () => {

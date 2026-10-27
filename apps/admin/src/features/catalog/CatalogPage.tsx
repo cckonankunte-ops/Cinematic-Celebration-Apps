@@ -11,7 +11,7 @@
 import { useState } from 'react';
 
 import { todayIsoInIST } from '@/lib/dates';
-import { formatRupees } from '@/lib/money';
+import { formatRupees, rupeesToPaise } from '@/lib/money';
 import { useAuth } from '@/features/auth/useAuth';
 import { useLocation } from '@/features/location/useLocation';
 import { CreatePlanForm } from './CreatePlanForm';
@@ -19,12 +19,13 @@ import { GalleryUpload } from './GalleryUpload';
 import {
   useCakes,
   useCombos,
+  useCreateCombo,
   useDeactivateCake,
   useDeactivatePlan,
   usePlans,
   useSpecialDecor,
 } from './queries';
-import type { NamedAddonAdminRead } from './types';
+import type { ComboCreateBody, NamedAddonAdminRead } from './types';
 
 function ActiveTag({ active }: { active: boolean }): JSX.Element {
   return (
@@ -162,8 +163,111 @@ export function CatalogPage(): JSX.Element {
           </ul>
         </div>
         <AddonList title="Special decor" rows={decor.data} />
-        <AddonList title="Combos" rows={combos.data} />
+        <div className="space-y-3">
+          <AddonList title="Combos" rows={combos.data} />
+          <CreateComboForm locationId={selectedLocationId} />
+        </div>
       </div>
     </section>
+  );
+}
+
+const EMPTY_COMBO = {
+  name: '',
+  description: '',
+  priceRupees: '',
+  cakeBaselineRupees: '',
+  ledBaselineRupees: '',
+};
+
+/**
+ * Compact create-combo form. In addition to the base price, a combo may carry
+ * an optional cake baseline and/or LED baseline (entered in rupees, sent as
+ * paise). A blank baseline is sent as null (the combo does not absorb that
+ * component). Money is converted to integer paise before posting.
+ */
+function CreateComboForm({ locationId }: { locationId: number | null }): JSX.Element {
+  const [form, setForm] = useState({ ...EMPTY_COMBO });
+  const createCombo = useCreateCombo(locationId);
+
+  const update = (key: keyof typeof EMPTY_COMBO) => (value: string) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const onSubmit = (e: React.FormEvent): void => {
+    e.preventDefault();
+    if (locationId === null) {
+      return;
+    }
+    const baseline = (raw: string): number | null =>
+      raw.trim() === '' ? null : rupeesToPaise(Number(raw));
+    const body: ComboCreateBody = {
+      location_id: locationId,
+      name: form.name.trim(),
+      description: form.description.trim(),
+      price_paise: rupeesToPaise(Number(form.priceRupees)),
+      effective_from: todayIsoInIST(),
+      cake_baseline_paise: baseline(form.cakeBaselineRupees),
+      led_baseline_paise: baseline(form.ledBaselineRupees),
+    };
+    createCombo.mutate(body, { onSuccess: () => setForm({ ...EMPTY_COMBO }) });
+  };
+
+  const field = 'rounded border border-gray-300 px-2 py-1 text-sm';
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-2 rounded border border-gray-200 bg-white p-3">
+      <h4 className="text-sm font-semibold text-gray-700">New combo</h4>
+      <div className="grid gap-2">
+        <input
+          className={field}
+          placeholder="Name"
+          required
+          value={form.name}
+          onChange={(e) => update('name')(e.target.value)}
+        />
+        <input
+          className={field}
+          placeholder="Description"
+          value={form.description}
+          onChange={(e) => update('description')(e.target.value)}
+        />
+        <input
+          className={field}
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="Price (₹)"
+          required
+          value={form.priceRupees}
+          onChange={(e) => update('priceRupees')(e.target.value)}
+        />
+        <input
+          className={field}
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="Cake baseline (₹, optional)"
+          value={form.cakeBaselineRupees}
+          onChange={(e) => update('cakeBaselineRupees')(e.target.value)}
+        />
+        <input
+          className={field}
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="LED baseline (₹, optional)"
+          value={form.ledBaselineRupees}
+          onChange={(e) => update('ledBaselineRupees')(e.target.value)}
+        />
+      </div>
+      {createCombo.isError && <p className="text-xs text-red-600">Could not create combo.</p>}
+      <button
+        type="submit"
+        disabled={locationId === null || createCombo.isPending}
+        className="rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+      >
+        {createCombo.isPending ? 'Creating…' : 'Create combo'}
+      </button>
+    </form>
   );
 }

@@ -441,6 +441,8 @@ def to_combo_admin_read(combo: ComboItem) -> ComboAdminRead:
         price_paise=combo.price_paise,
         object_key=combo.object_key,
         image_url=public_url(combo.object_key),
+        cake_baseline_paise=combo.cake_baseline_paise,
+        led_baseline_paise=combo.led_baseline_paise,
         effective_from=combo.effective_from,
         effective_to=combo.effective_to,
         is_active=combo.is_active,

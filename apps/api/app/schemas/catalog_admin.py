@@ -173,6 +173,8 @@ class ComboCreate(BaseModel):
     description: str = Field(min_length=1)
     price_paise: int = Field(ge=0)
     object_key: str = Field(min_length=1)
+    cake_baseline_paise: int | None = Field(default=None, ge=0)
+    led_baseline_paise: int | None = Field(default=None, ge=0)
     effective_from: date
     effective_to: date | None = None
 
@@ -182,6 +184,8 @@ class ComboUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=1)
     price_paise: int | None = Field(default=None, ge=0)
     object_key: str | None = Field(default=None, min_length=1)
+    cake_baseline_paise: int | None = Field(default=None, ge=0)
+    led_baseline_paise: int | None = Field(default=None, ge=0)
     effective_from: date | None = None
     effective_to: date | None = None
     is_active: bool | None = None
@@ -195,6 +199,8 @@ class ComboAdminRead(BaseModel):
     price_paise: int
     object_key: str
     image_url: str
+    cake_baseline_paise: int | None
+    led_baseline_paise: int | None
     effective_from: date
     effective_to: date
     is_active: bool

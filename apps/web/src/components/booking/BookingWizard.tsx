@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ApiError,
   publicApi,
   type BookingResult,
   type Location,
   type Plan,
+  type PriceBreakdownRead,
+  type PublicPreviewRequest,
   type Slot,
 } from '../../lib/api';
 import { formatRupees, todayIsoInIST } from '../../lib/formatters';
+import { isValidIndianMobile } from '../../lib/phone';
 import AddonSelector from './AddonSelector';
 import BookingForm from './BookingForm';
 import SlotPicker from './SlotPicker';
@@ -33,6 +36,8 @@ export default function BookingWizard() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<BookingResult | null>(null);
+  const [preview, setPreview] = useState<PriceBreakdownRead | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // Resolve the location by slug, then load its catalog (plans + add-ons).
   useEffect(() => {
@@ -91,27 +96,82 @@ export default function BookingWizard() {
   const toggleId = (list: number[], id: number): number[] =>
     list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
-  // A compact client-side estimate for the review step. The authoritative
-  // total is always computed by the server when the booking is created.
-  const estimate = useMemo(() => {
-    if (!draft.plan || !catalog) {
-      return 0;
+  // Build the preview request body from the current draft (priced inputs only,
+  // never money). Returns null when the draft isn't ready to price.
+  const buildPreviewRequest = (): PublicPreviewRequest | null => {
+    if (!location || !draft.plan || draft.slotId === null) {
+      return null;
     }
-    const extraGuests = Math.max(0, draft.people - draft.plan.people_allowed);
-    let total =
-      draft.plan.price_paise + extraGuests * draft.plan.extra_guest_paise;
-    if (draft.cakeId !== null) {
-      const cake = catalog.cakes.find((c) => c.id === draft.cakeId);
-      total += cake?.price_paise ?? 0;
+    return {
+      location_id: location.id,
+      plan_id: draft.plan.id,
+      slot_id: draft.slotId,
+      booking_date: draft.bookingDate,
+      people: draft.people,
+      cake_id: draft.cakeId ?? undefined,
+      cake_weight_half_kg: draft.cakeWeightHalfKg,
+      special_decor: draft.specialDecor,
+      combos: draft.comboIds.map((id) => ({ id })),
+      led_name: draft.ledName || undefined,
+      occasion_id: draft.occasionId ?? undefined,
+      coupon_code: draft.couponCode || undefined,
+    };
+  };
+
+  // Serialized priced inputs: fetching the authoritative server preview is
+  // keyed on this so we only re-price when something that affects the price
+  // actually changes.
+  const pricedInputs = JSON.stringify({
+    plan: draft.plan?.id ?? null,
+    slot: draft.slotId,
+    date: draft.bookingDate,
+    people: draft.people,
+    cake: draft.cakeId,
+    weight: draft.cakeWeightHalfKg,
+    decor: draft.specialDecor,
+    combos: draft.comboIds,
+    led: draft.ledName,
+    coupon: draft.couponCode,
+  });
+
+  // Fetch the authoritative price breakdown from the server when the review
+  // step is active (and whenever a priced input changes while there). Preview
+  // errors (e.g. an invalid coupon) surface inline without blocking editing.
+  useEffect(() => {
+    if (step !== 5) {
+      return;
     }
-    for (const id of draft.specialDecorIds) {
-      total += catalog.specialDecor.find((d) => d.id === id)?.price_paise ?? 0;
+    const body = buildPreviewRequest();
+    if (!body) {
+      return;
     }
-    for (const id of draft.comboIds) {
-      total += catalog.combos.find((c) => c.id === id)?.price_paise ?? 0;
-    }
-    return total;
-  }, [draft, catalog]);
+    let active = true;
+    publicApi
+      .previewBooking(body)
+      .then((breakdown) => {
+        if (!active) {
+          return;
+        }
+        setPreview(breakdown);
+        setPreviewError(null);
+      })
+      .catch((err) => {
+        if (!active) {
+          return;
+        }
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : 'Could not calculate the price. Please try again.';
+        setPreviewError(message);
+      });
+    return () => {
+      active = false;
+    };
+    // `pricedInputs` captures every input that affects the price; `step` gates
+    // the fetch to the review step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, pricedInputs]);
 
   async function submit() {
     if (!location || !draft.plan || draft.slotId === null) {
@@ -126,16 +186,19 @@ export default function BookingWizard() {
         slot_id: draft.slotId,
         booking_date: draft.bookingDate,
         booking_name: draft.bookingName,
-        email: draft.email,
-        phone: draft.phone || undefined,
+        email: draft.email || undefined,
+        phone: draft.phone,
         special_person_name: draft.specialPersonName || undefined,
         name_on_cake: draft.nameOnCake || undefined,
         message: draft.message || undefined,
         people: draft.people,
         occasion_id: draft.occasionId ?? undefined,
         cake_id: draft.cakeId ?? undefined,
-        special_decor_ids: draft.specialDecorIds,
-        combo_ids: draft.comboIds,
+        cake_weight_half_kg: draft.cakeWeightHalfKg,
+        led_name: draft.ledName || undefined,
+        coupon_code: draft.couponCode || undefined,
+        special_decor: draft.specialDecor,
+        combos: draft.comboIds.map((id) => ({ id })),
       });
       setResult(res);
     } catch (err) {
@@ -184,7 +247,7 @@ export default function BookingWizard() {
   const canNextFromSlot = draft.slotId !== null;
   const canSubmit =
     draft.bookingName.trim() !== '' &&
-    draft.email.trim() !== '' &&
+    isValidIndianMobile(draft.phone) &&
     draft.people >= 1 &&
     draft.plan !== null &&
     draft.people <= draft.plan.max_people_allowed;
@@ -262,15 +325,21 @@ export default function BookingWizard() {
             combos={catalog.combos}
             showCombos={draft.showCombos}
             cakeId={draft.cakeId}
-            specialDecorIds={draft.specialDecorIds}
+            cakeWeightHalfKg={draft.cakeWeightHalfKg}
+            decor={draft.specialDecor}
             comboIds={draft.comboIds}
+            ledName={draft.ledName}
+            couponCode={draft.couponCode}
             onCakeChange={(cakeId) => patch({ cakeId })}
-            onToggleDecor={(id) =>
-              patch({ specialDecorIds: toggleId(draft.specialDecorIds, id) })
+            onCakeWeightChange={(cakeWeightHalfKg) =>
+              patch({ cakeWeightHalfKg })
             }
+            onChangeDecor={(specialDecor) => patch({ specialDecor })}
             onToggleCombo={(id) =>
               patch({ comboIds: toggleId(draft.comboIds, id) })
             }
+            onLedNameChange={(ledName) => patch({ ledName })}
+            onCouponChange={(couponCode) => patch({ couponCode })}
           />
         </section>
       )}
@@ -292,8 +361,8 @@ export default function BookingWizard() {
           <h2 className="text-lg font-semibold">Review &amp; request</h2>
           <p className="rounded bg-amber-50 p-3 text-sm text-amber-800">
             This is a booking <strong>request</strong>. The final price and
-            advance are confirmed by our team. The estimate below is indicative;
-            the server calculates the authoritative total.
+            advance are confirmed by our team. The total below is the
+            authoritative amount calculated by the server.
           </p>
           <dl className="space-y-1 text-sm">
             <div className="flex justify-between">
@@ -304,11 +373,48 @@ export default function BookingWizard() {
               <dt>People</dt>
               <dd>{draft.people}</dd>
             </div>
-            <div className="flex justify-between font-semibold">
-              <dt>Estimated total</dt>
-              <dd>{formatRupees(estimate)}</dd>
-            </div>
+            {preview && (
+              <>
+                <div className="flex justify-between">
+                  <dt>Plan price</dt>
+                  <dd>{formatRupees(preview.plan_price_paise)}</dd>
+                </div>
+                {preview.extra_guest_paise > 0 && (
+                  <div className="flex justify-between">
+                    <dt>Extra guests</dt>
+                    <dd>{formatRupees(preview.extra_guest_paise)}</dd>
+                  </div>
+                )}
+                {preview.addon_lines.map((line) => (
+                  <div
+                    key={`${line.kind}-${line.item_id}`}
+                    className="flex justify-between"
+                  >
+                    <dt>
+                      {line.name_snapshot}
+                      {line.quantity > 1 ? ` × ${line.quantity}` : ''}
+                    </dt>
+                    <dd>{formatRupees(line.amount_paise)}</dd>
+                  </div>
+                ))}
+                <div className="flex justify-between">
+                  <dt>Subtotal</dt>
+                  <dd>{formatRupees(preview.subtotal_paise)}</dd>
+                </div>
+                {preview.coupon_code && (
+                  <div className="flex justify-between text-green-700">
+                    <dt>Coupon ({preview.coupon_code})</dt>
+                    <dd>-{formatRupees(preview.coupon_discount_paise)}</dd>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold">
+                  <dt>Total</dt>
+                  <dd>{formatRupees(preview.total_paise)}</dd>
+                </div>
+              </>
+            )}
           </dl>
+          {previewError && <p className="text-amber-700">{previewError}</p>}
           {submitError && <p className="text-red-600">{submitError}</p>}
         </section>
       )}

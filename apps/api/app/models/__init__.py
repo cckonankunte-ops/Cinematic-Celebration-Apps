@@ -10,6 +10,8 @@ from app.models.booking_item import BookingItem
 from app.models.cake import Cake
 from app.models.combo_item import ComboItem
 from app.models.contact_lead import ContactLead
+from app.models.coupon import Coupon
+from app.models.coupon_redemption import CouponRedemption
 from app.models.location import Location
 from app.models.occasion import Occasion
 from app.models.payment import Payment
@@ -26,6 +28,8 @@ __all__ = [
     "Cake",
     "ComboItem",
     "ContactLead",
+    "Coupon",
+    "CouponRedemption",
     "Location",
     "Occasion",
     "Payment",

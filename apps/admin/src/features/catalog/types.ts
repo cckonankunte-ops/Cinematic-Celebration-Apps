@@ -74,6 +74,9 @@ export interface CakeAdminRead extends AddonAdminRead {
 export interface NamedAddonAdminRead extends AddonAdminRead {
   name: string;
   description: string;
+  /** Combo-only: optional cake/LED baselines (paise). Null/absent otherwise. */
+  cake_baseline_paise?: number | null;
+  led_baseline_paise?: number | null;
 }
 
 export interface GalleryImageRead {
@@ -89,3 +92,21 @@ export interface GalleryUploadBody {
   filename: string;
   sort_order: number;
 }
+
+/**
+ * Create body for a combo add-on. Combos may optionally carry a cake and/or LED
+ * baseline (integer paise) that the pricing engine floors combo deltas against.
+ * A null baseline means the combo does not absorb that component.
+ */
+export interface ComboCreateBody {
+  location_id: number;
+  name: string;
+  description: string;
+  price_paise: number;
+  effective_from: string;
+  cake_baseline_paise?: number | null;
+  led_baseline_paise?: number | null;
+}
+
+/** PATCH body for a combo: every field optional (partial update). */
+export type ComboUpdateBody = Partial<Omit<ComboCreateBody, 'location_id'>>;

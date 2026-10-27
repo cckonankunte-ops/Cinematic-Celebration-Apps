@@ -13,11 +13,20 @@ export interface BookingDraft {
   slotId: number | null;
   showCombos: boolean;
   cakeId: number | null;
-  specialDecorIds: number[];
+  /** Cake weight in half-kg units (1 = 0.5kg). Defaults to 1. */
+  cakeWeightHalfKg: number;
+  /** Decor selections as `{ id, quantity }`; quantity is always >= 1. */
+  specialDecor: Array<{ id: number; quantity: number }>;
   comboIds: number[];
   bookingName: string;
+  /** Email is optional on the public contract. */
   email: string;
+  /** Phone is required (valid Indian mobile). */
   phone: string;
+  /** Free-text LED name (₹40 per letter, priced server-side). */
+  ledName: string;
+  /** Optional coupon code; the server validates and computes the discount. */
+  couponCode: string;
   people: number;
   occasionId: number | null;
   specialPersonName: string;
@@ -40,11 +49,14 @@ export function emptyDraft(bookingDate: string): BookingDraft {
     slotId: null,
     showCombos: true,
     cakeId: null,
-    specialDecorIds: [],
+    cakeWeightHalfKg: 1,
+    specialDecor: [],
     comboIds: [],
     bookingName: '',
     email: '',
     phone: '',
+    ledName: '',
+    couponCode: '',
     people: 1,
     occasionId: null,
     specialPersonName: '',

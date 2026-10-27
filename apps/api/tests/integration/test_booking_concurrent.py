@@ -70,6 +70,7 @@ def test_concurrent_booking_only_one_wins(pg_engine: Engine) -> None:
                     booking_date=booking_date,
                     booking_name=f"Racer {index}",
                     email=f"racer{index}@example.com",
+                    phone="9876543210",
                     people=4,
                 ),
             )

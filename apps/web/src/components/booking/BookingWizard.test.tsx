@@ -41,6 +41,21 @@ describe('BookingWizard', () => {
     vi.spyOn(publicApi, 'listSpecialDecor').mockResolvedValue([]);
     vi.spyOn(publicApi, 'listCombos').mockResolvedValue([]);
     vi.spyOn(publicApi, 'listOccasions').mockResolvedValue([]);
+    vi.spyOn(publicApi, 'previewBooking').mockResolvedValue({
+      plan_price_paise: 450000,
+      extra_guest_paise: 0,
+      addon_lines: [],
+      subtotal_paise: 450000,
+      discount_paise: 0,
+      food_paise: 0,
+      other_paise: 0,
+      cleaning_paise: 0,
+      coupon_code: null,
+      coupon_discount_paise: 0,
+      total_paise: 450000,
+      amount_paid_paise: 0,
+      amount_due_paise: 450000,
+    });
 
     render(<BookingWizard />);
 

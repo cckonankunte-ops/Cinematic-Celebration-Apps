@@ -37,8 +37,8 @@ def _booking_payload(location_id: int, plan_id: int, slot_id: int) -> dict:
         "email": "priya@example.com",
         "phone": "9876543210",
         "people": 4,
-        "special_decor_ids": [],
-        "combo_ids": [],
+        "special_decor": [],
+        "combos": [],
     }
 
 

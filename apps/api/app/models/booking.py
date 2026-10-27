@@ -58,11 +58,15 @@ class Booking(Base, TimestampMixin):
 
     # customer info
     booking_name: Mapped[str] = mapped_column(String, nullable=False)
-    email: Mapped[str] = mapped_column(String, nullable=False)
+    # Email is optional (phone-required is enforced at the schema/service layer);
+    # phone stays nullable at the DB level for legacy rows.
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
     phone: Mapped[str | None] = mapped_column(String, nullable=True)
     special_person_name: Mapped[str | None] = mapped_column(String, nullable=True)
     name_on_cake: Mapped[str | None] = mapped_column(String, nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # LED text ordered on the booking (e.g. "ARUNA"); may be empty/absent.
+    led_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     people: Mapped[int] = mapped_column(Integer, nullable=False)
     occasion_id: Mapped[int | None] = mapped_column(
         ForeignKey("occasions.id", ondelete="SET NULL"), nullable=True
@@ -78,6 +82,12 @@ class Booking(Base, TimestampMixin):
     cleaning_paise: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     total_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
     advance_paise: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    # Applied-coupon snapshot. coupon_discount_paise is independent of
+    # discount_paise (the admin manual discount); both reduce the total.
+    coupon_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    coupon_discount_paise: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
 
     # status + lifecycle
     status: Mapped[str] = mapped_column(

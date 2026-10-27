@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,7 @@ from app.core.errors import (
     SlotUnavailableError,
     ValidationFailedError,
 )
+from app.core.phone import normalize_indian_mobile
 from app.core.security import CurrentUser, assert_location_access
 from app.integrations.payments import get_payment_provider
 from app.models.booking import Booking
@@ -35,20 +36,37 @@ from app.models.booking_item import BookingItem
 from app.models.cake import Cake
 from app.models.combo_item import ComboItem
 from app.models.contact_lead import ContactLead
+from app.models.coupon import Coupon
+from app.models.coupon_redemption import CouponRedemption
 from app.models.location import Location
 from app.models.plan import Plan
 from app.models.slot import Slot
 from app.models.special_decor_item import SpecialDecorItem
 from app.schemas.booking import (
+    AddonLineRead,
     AdminBookingCreate,
+    AdminPreviewRequest,
     BookingCreate,
     BookingUpdate,
+    ComboSelectionIn,
     ContactCreate,
     CustomerBookingResult,
+    DecorSelectionIn,
+    PriceBreakdownRead,
+    PublicPreviewRequest,
 )
+from app.services import coupon as coupon_service
 from app.services import payments as payments_service
 from app.services.events import write_booking_event
-from app.services.pricing import AddonLine, ValidatedRequest, compute_booking_price
+from app.services.pricing import (
+    AddonLine,
+    ComboSelection,
+    DecorSelection,
+    PriceBreakdown,
+    ValidatedCoupon,
+    ValidatedRequest,
+    compute_booking_price,
+)
 
 _IST = ZoneInfo("Asia/Kolkata")
 _MAX_REFERENCE_ATTEMPTS = 5
@@ -141,14 +159,20 @@ def validate_booking_request(
     booking_date: date,
     people: int,
     cake_id: int | None,
-    special_decor_ids: list[int],
-    combo_ids: list[int],
+    special_decor: list[DecorSelectionIn],
+    combos: list[ComboSelectionIn],
+    cake_weight_half_kg: int = 1,
+    led_name: str | None = None,
 ) -> ValidatedRequest:
     """Validate a booking request and return loaded, de-duplicated catalog rows.
 
-    Raises ItemInvalidError (422 ITEM_INVALID) for unknown/invalid items,
+    Raises ItemInvalidError (422 ITEM_INVALID) for unknown/invalid items (and
+    for selecting more than one cake-baseline or LED-baseline combo),
     BookingDateInPastError (422) for past dates, and ValidationFailedError
-    (422 VALIDATION_ERROR) when the guest count is out of range.
+    (422 VALIDATION_ERROR) when the guest count or cake weight is out of range.
+
+    Nothing is persisted here; all checks raise before building the
+    ValidatedRequest, so a failed validation leaves the session untouched.
     """
     if booking_date < _today_ist():
         raise BookingDateInPastError()
@@ -161,19 +185,48 @@ def validate_booking_request(
             "The number of people exceeds the maximum allowed for this plan."
         )
 
+    # Defensive check (the schema also enforces ge=1): cake weight is a positive
+    # multiple of 0.5 kg expressed in half-kg integer units.
+    if cake_weight_half_kg < 1:
+        raise ValidationFailedError("Cake weight must be a positive multiple of 0.5kg.")
+
     cake = _load_valid_cake(db, location_id, cake_id, booking_date) if cake_id else None
 
-    decor_ids = _dedupe(special_decor_ids)
-    combo_id_list = _dedupe(combo_ids)
-    decor = [_load_valid_decor(db, location_id, d, booking_date) for d in decor_ids]
-    combos = [_load_valid_combo(db, location_id, c, booking_date) for c in combo_id_list]
+    # Decor: dedupe by id (first-seen order) and SUM quantities for repeated ids.
+    decor_quantities: dict[int, int] = {}
+    decor_order: list[int] = []
+    for sel in special_decor:
+        if sel.id not in decor_quantities:
+            decor_quantities[sel.id] = 0
+            decor_order.append(sel.id)
+        decor_quantities[sel.id] += sel.quantity
+    decor_selections = [
+        DecorSelection(
+            item=_load_valid_decor(db, location_id, decor_id, booking_date),
+            quantity=decor_quantities[decor_id],
+        )
+        for decor_id in decor_order
+    ]
+
+    # Combos: dedupe ids (combo quantity is always 1).
+    combo_ids = _dedupe([sel.id for sel in combos])
+    combo_items = [_load_valid_combo(db, location_id, c, booking_date) for c in combo_ids]
+
+    # Multiple-baseline rule (R7.5): at most one combo may absorb the cake, and
+    # at most one may absorb LED — otherwise the delta pricing is ambiguous.
+    if sum(1 for c in combo_items if c.cake_baseline_paise is not None) > 1:
+        raise ItemInvalidError("Only one combo may include a cake.")
+    if sum(1 for c in combo_items if c.led_baseline_paise is not None) > 1:
+        raise ItemInvalidError("Only one combo may include LED.")
 
     return ValidatedRequest(
         plan=plan,
         people=people,
         cake=cake,
-        special_decor=decor,
-        combos=combos,
+        cake_weight_half_kg=cake_weight_half_kg,
+        special_decor=decor_selections,
+        combos=[ComboSelection(item=c) for c in combo_items],
+        led_name=led_name,
     )
 
 
@@ -200,16 +253,67 @@ def _classify_integrity_error(exc: IntegrityError) -> _ConstraintCheck:
 
 
 def _add_booking_items(db: Session, booking_id: int, lines: list[AddonLine]) -> None:
+    """Persist add-on lines, carrying quantity + cake weight snapshots.
+
+    price_paise stores the FULL line amount (so existing readers keep working),
+    while quantity/weight_half_kg are persisted for round-tripping the edit form.
+    The standalone LED line (kind='led', item_id=None) is NOT persisted: the
+    booking_items kind CHECK only allows cake|decor|combo, so LED text lives on
+    bookings.led_name instead.
+    """
     for line in lines:
+        if line.kind == "led":
+            continue
         db.add(
             BookingItem(
                 booking_id=booking_id,
                 kind=line.kind,
                 item_id=line.item_id,
                 name_snapshot=line.name_snapshot,
-                price_paise=line.price_paise,
+                price_paise=line.amount_paise,
+                quantity=line.quantity,
+                weight_half_kg=line.weight_half_kg,
             )
         )
+
+
+def _resolve_coupon(
+    db: Session,
+    *,
+    coupon_code: str | None,
+    location_id: int,
+    pre_coupon_total: int,
+    phone: str | None,
+    booking_id: int | None,
+    booking_date: date | None,
+) -> tuple[ValidatedCoupon | None, Coupon | None]:
+    """Resolve + validate a coupon code (no writes).
+
+    Returns (ValidatedCoupon, Coupon row) on success, or (None, None) when no
+    coupon code was supplied. ``customer_key`` is the booking's Normalized_Phone
+    (the phone is already validated as normalizable at the schema layer); when a
+    preview carries no phone, the key is "" and simply matches no prior usage.
+    Raises CouponInvalidError / CouponNotApplicableError (422) on invalid codes
+    or violated usage limits.
+    """
+    code = (coupon_code or "").strip()
+    if not code:
+        return None, None
+
+    customer_key = normalize_indian_mobile(phone or "") or ""
+    coupon_row = coupon_service.resolve_coupon_row(
+        db, location_id=location_id, code=code
+    )
+    validated = coupon_service.resolve_and_validate(
+        db,
+        code,
+        location_id=location_id,
+        pre_coupon_total=pre_coupon_total,
+        customer_key=customer_key,
+        booking_id=booking_id,
+        on=booking_date,
+    )
+    return validated, coupon_row
 
 
 def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBookingResult:
@@ -229,10 +333,25 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
         booking_date=data.booking_date,
         people=data.people,
         cake_id=data.cake_id,
-        special_decor_ids=data.special_decor_ids,
-        combo_ids=data.combo_ids,
+        special_decor=data.special_decor,
+        combos=data.combos,
+        cake_weight_half_kg=data.cake_weight_half_kg,
+        led_name=data.led_name,
     )
-    price = compute_booking_price(req, is_customer=True)
+    # Two-pass coupon: price once with no coupon to get the pre-coupon total
+    # (the min-order check reads it), validate the coupon against that total,
+    # then re-price with the validated coupon for the final breakdown.
+    pass1 = compute_booking_price(req, is_customer=True, coupon=None)
+    validated, coupon_row = _resolve_coupon(
+        db,
+        coupon_code=data.coupon_code,
+        location_id=data.location_id,
+        pre_coupon_total=pass1.total_paise,
+        phone=data.phone,
+        booking_id=None,
+        booking_date=data.booking_date,
+    )
+    price = compute_booking_price(req, is_customer=True, coupon=validated)
 
     location = db.get(Location, data.location_id)
     if location is None:
@@ -257,6 +376,7 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
             special_person_name=data.special_person_name,
             name_on_cake=data.name_on_cake,
             message=data.message,
+            led_name=data.led_name,
             people=data.people,
             occasion_id=data.occasion_id,
             plan_price_paise=price.plan_price_paise,
@@ -266,6 +386,8 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
             food_paise=price.food_paise,
             other_paise=price.other_paise,
             cleaning_paise=price.cleaning_paise,
+            coupon_code=price.coupon_code,
+            coupon_discount_paise=price.coupon_discount_paise,
             total_paise=price.total_paise,
             advance_paise=req.plan.advance_paise,
             status="pending",
@@ -274,6 +396,14 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
         try:
             db.flush()
             _add_booking_items(db, booking.id, price.addon_lines)
+            if validated is not None and coupon_row is not None:
+                coupon_service.record_redemption(
+                    db,
+                    coupon_row,
+                    booking_id=booking.id,
+                    customer_key=normalize_indian_mobile(data.phone or "") or "",
+                    discount_paise=price.coupon_discount_paise,
+                )
             write_booking_event(
                 db,
                 booking.id,
@@ -363,8 +493,29 @@ def create_admin_booking(
         booking_date=data.booking_date,
         people=data.people,
         cake_id=data.cake_id,
-        special_decor_ids=data.special_decor_ids,
-        combo_ids=data.combo_ids,
+        special_decor=data.special_decor,
+        combos=data.combos,
+        cake_weight_half_kg=data.cake_weight_half_kg,
+        led_name=data.led_name,
+    )
+    # Two-pass coupon (see create_customer_booking) with admin money fields.
+    pass1 = compute_booking_price(
+        req,
+        discount_paise=data.discount_paise,
+        food_paise=data.food_paise,
+        other_paise=data.other_paise,
+        cleaning_paise=data.cleaning_paise,
+        is_customer=False,
+        coupon=None,
+    )
+    validated, coupon_row = _resolve_coupon(
+        db,
+        coupon_code=data.coupon_code,
+        location_id=data.location_id,
+        pre_coupon_total=pass1.total_paise,
+        phone=data.phone,
+        booking_id=None,
+        booking_date=data.booking_date,
     )
     price = compute_booking_price(
         req,
@@ -373,6 +524,7 @@ def create_admin_booking(
         other_paise=data.other_paise,
         cleaning_paise=data.cleaning_paise,
         is_customer=False,
+        coupon=validated,
     )
 
     location = db.get(Location, data.location_id)
@@ -395,6 +547,7 @@ def create_admin_booking(
             special_person_name=data.special_person_name,
             name_on_cake=data.name_on_cake,
             message=data.message,
+            led_name=data.led_name,
             people=data.people,
             occasion_id=data.occasion_id,
             plan_price_paise=price.plan_price_paise,
@@ -404,6 +557,8 @@ def create_admin_booking(
             food_paise=price.food_paise,
             other_paise=price.other_paise,
             cleaning_paise=price.cleaning_paise,
+            coupon_code=price.coupon_code,
+            coupon_discount_paise=price.coupon_discount_paise,
             total_paise=price.total_paise,
             advance_paise=req.plan.advance_paise,
             status="accepted",
@@ -413,6 +568,14 @@ def create_admin_booking(
         try:
             db.flush()
             _add_booking_items(db, booking.id, price.addon_lines)
+            if validated is not None and coupon_row is not None:
+                coupon_service.record_redemption(
+                    db,
+                    coupon_row,
+                    booking_id=booking.id,
+                    customer_key=normalize_indian_mobile(data.phone or "") or "",
+                    discount_paise=price.coupon_discount_paise,
+                )
             write_booking_event(
                 db,
                 booking.id,
@@ -458,6 +621,11 @@ def update_booking(
     single transaction.
     """
     booking = _load_booking_for_actor(db, booking_id, actor)
+
+    # Editable-status gate (R7.6): only pending/accepted bookings may be edited.
+    if booking.status not in ("pending", "accepted"):
+        raise ValidationFailedError("Only pending or accepted bookings can be edited.")
+
     old_snapshot = _money_snapshot(booking)
 
     people = data.people if data.people is not None else booking.people
@@ -466,11 +634,22 @@ def update_booking(
     other = data.other_paise if data.other_paise is not None else booking.other_paise
     cleaning = data.cleaning_paise if data.cleaning_paise is not None else booking.cleaning_paise
 
+    # PATCH None=unchanged conventions.
+    #   led_name: None -> reuse booking.led_name; "" -> clear.
+    led_name = booking.led_name if data.led_name is None else data.led_name
+    #   coupon_code: None -> reuse booking.coupon_code; "" -> remove the coupon.
+    coupon_code = booking.coupon_code if data.coupon_code is None else data.coupon_code
+    #   effective phone used for the coupon customer_key.
+    effective_phone = data.phone if data.phone is not None else booking.phone
+
     reprice = (
         data.people is not None
         or data.cake_id is not None
-        or data.special_decor_ids is not None
-        or data.combo_ids is not None
+        or data.special_decor is not None
+        or data.combos is not None
+        or data.cake_weight_half_kg is not None
+        or data.led_name is not None
+        or data.coupon_code is not None
         or data.discount_paise is not None
         or data.food_paise is not None
         or data.other_paise is not None
@@ -478,27 +657,39 @@ def update_booking(
     )
 
     if reprice:
+        # Rebuild current selections from existing booking_items so omitted list
+        # fields keep their current value (quantities + cake weight included).
         current_items = db.execute(
             select(BookingItem).where(BookingItem.booking_id == booking.id)
         ).scalars()
         current_cake_id: int | None = None
-        current_decor_ids: list[int] = []
-        current_combo_ids: list[int] = []
+        current_cake_weight: int | None = None
+        current_decor: list[DecorSelectionIn] = []
+        current_combos: list[ComboSelectionIn] = []
         for item in current_items:
             if item.item_id is None:
                 continue
             if item.kind == "cake":
                 current_cake_id = item.item_id
+                current_cake_weight = item.weight_half_kg
             elif item.kind == "decor":
-                current_decor_ids.append(item.item_id)
+                current_decor.append(
+                    DecorSelectionIn(id=item.item_id, quantity=item.quantity)
+                )
             elif item.kind == "combo":
-                current_combo_ids.append(item.item_id)
+                current_combos.append(ComboSelectionIn(id=item.item_id))
 
         cake_id = data.cake_id if data.cake_id is not None else current_cake_id
-        decor_ids = (
-            data.special_decor_ids if data.special_decor_ids is not None else current_decor_ids
+        special_decor = (
+            data.special_decor if data.special_decor is not None else current_decor
         )
-        combo_ids = data.combo_ids if data.combo_ids is not None else current_combo_ids
+        combos = data.combos if data.combos is not None else current_combos
+        # Cake weight: None -> reuse the current cake line weight (or 1).
+        cake_weight_half_kg = (
+            data.cake_weight_half_kg
+            if data.cake_weight_half_kg is not None
+            else (current_cake_weight or 1)
+        )
 
         req = validate_booking_request(
             db,
@@ -508,8 +699,29 @@ def update_booking(
             booking_date=booking.booking_date,
             people=people,
             cake_id=cake_id,
-            special_decor_ids=decor_ids,
-            combo_ids=combo_ids,
+            special_decor=special_decor,
+            combos=combos,
+            cake_weight_half_kg=cake_weight_half_kg,
+            led_name=led_name,
+        )
+        # Two-pass coupon; booking_id excludes this booking's own prior redemption.
+        pass1 = compute_booking_price(
+            req,
+            discount_paise=discount,
+            food_paise=food,
+            other_paise=other,
+            cleaning_paise=cleaning,
+            is_customer=False,
+            coupon=None,
+        )
+        validated, coupon_row = _resolve_coupon(
+            db,
+            coupon_code=coupon_code,
+            location_id=booking.location_id,
+            pre_coupon_total=pass1.total_paise,
+            phone=effective_phone,
+            booking_id=booking.id,
+            booking_date=booking.booking_date,
         )
         price = compute_booking_price(
             req,
@@ -518,6 +730,7 @@ def update_booking(
             other_paise=other,
             cleaning_paise=cleaning,
             is_customer=False,
+            coupon=validated,
         )
         db.execute(
             BookingItem.__table__.delete().where(BookingItem.booking_id == booking.id)
@@ -525,6 +738,7 @@ def update_booking(
         _add_booking_items(db, booking.id, price.addon_lines)
 
         booking.people = people
+        booking.led_name = led_name
         booking.plan_price_paise = price.plan_price_paise
         booking.extra_guest_paise = price.extra_guest_paise
         booking.subtotal_paise = price.subtotal_paise
@@ -532,7 +746,26 @@ def update_booking(
         booking.food_paise = price.food_paise
         booking.other_paise = price.other_paise
         booking.cleaning_paise = price.cleaning_paise
+        booking.coupon_code = price.coupon_code
+        booking.coupon_discount_paise = price.coupon_discount_paise
         booking.total_paise = price.total_paise
+
+        # Keep the redemption ledger consistent with the final coupon state.
+        if validated is not None and coupon_row is not None:
+            coupon_service.record_redemption(
+                db,
+                coupon_row,
+                booking_id=booking.id,
+                customer_key=normalize_indian_mobile(effective_phone or "") or "",
+                discount_paise=price.coupon_discount_paise,
+            )
+        else:
+            # No coupon applies after the edit: free any prior usage.
+            db.execute(
+                delete(CouponRedemption).where(
+                    CouponRedemption.booking_id == booking.id
+                )
+            )
 
     if data.occasion_id is not None:
         booking.occasion_id = data.occasion_id
@@ -540,6 +773,8 @@ def update_booking(
         booking.booking_name = data.booking_name
     if data.phone is not None:
         booking.phone = data.phone
+    if data.email is not None:
+        booking.email = data.email
     if data.special_person_name is not None:
         booking.special_person_name = data.special_person_name
     if data.name_on_cake is not None:
@@ -558,6 +793,117 @@ def update_booking(
     db.commit()
     db.refresh(booking)
     return booking
+
+
+def _breakdown_to_read(
+    breakdown: PriceBreakdown, *, amount_paid_paise: int
+) -> PriceBreakdownRead:
+    """Map a pure PriceBreakdown to the API read schema with derived amounts."""
+    return PriceBreakdownRead(
+        plan_price_paise=breakdown.plan_price_paise,
+        extra_guest_paise=breakdown.extra_guest_paise,
+        addon_lines=[
+            AddonLineRead(
+                kind=line.kind,
+                item_id=line.item_id,
+                name_snapshot=line.name_snapshot,
+                unit_price_paise=line.unit_price_paise,
+                quantity=line.quantity,
+                weight_half_kg=line.weight_half_kg,
+                amount_paise=line.amount_paise,
+            )
+            for line in breakdown.addon_lines
+        ],
+        subtotal_paise=breakdown.subtotal_paise,
+        discount_paise=breakdown.discount_paise,
+        food_paise=breakdown.food_paise,
+        other_paise=breakdown.other_paise,
+        cleaning_paise=breakdown.cleaning_paise,
+        coupon_code=breakdown.coupon_code,
+        coupon_discount_paise=breakdown.coupon_discount_paise,
+        total_paise=breakdown.total_paise,
+        amount_paid_paise=amount_paid_paise,
+        amount_due_paise=breakdown.total_paise - amount_paid_paise,
+    )
+
+
+def preview_booking(
+    db: Session,
+    data: AdminPreviewRequest | PublicPreviewRequest,
+    *,
+    actor: CurrentUser | None = None,
+    is_customer: bool,
+) -> PriceBreakdownRead:
+    """Compute an authoritative price breakdown without persisting anything.
+
+    Runs the same validation + two-pass coupon flow as the save paths but never
+    writes booking_items or a redemption row. Previews carry no phone, so the
+    coupon customer_key is "" (matching no prior usage); when ``booking_id`` is
+    present the edited booking's own redemption is excluded from limit checks.
+    """
+    is_admin = isinstance(data, AdminPreviewRequest)
+    if is_admin and not is_customer:
+        assert_location_access(actor, data.location_id)
+
+    req = validate_booking_request(
+        db,
+        location_id=data.location_id,
+        plan_id=data.plan_id,
+        slot_id=data.slot_id,
+        booking_date=data.booking_date,
+        people=data.people,
+        cake_id=data.cake_id,
+        special_decor=data.special_decor,
+        combos=data.combos,
+        cake_weight_half_kg=data.cake_weight_half_kg,
+        led_name=data.led_name,
+    )
+
+    if is_admin and not is_customer:
+        discount_paise = data.discount_paise
+        food_paise = data.food_paise
+        other_paise = data.other_paise
+        cleaning_paise = data.cleaning_paise
+    else:
+        discount_paise = food_paise = other_paise = cleaning_paise = 0
+
+    pass1 = compute_booking_price(
+        req,
+        discount_paise=discount_paise,
+        food_paise=food_paise,
+        other_paise=other_paise,
+        cleaning_paise=cleaning_paise,
+        is_customer=is_customer,
+        coupon=None,
+    )
+    booking_id = getattr(data, "booking_id", None)
+    validated, _ = _resolve_coupon(
+        db,
+        coupon_code=data.coupon_code,
+        location_id=data.location_id,
+        pre_coupon_total=pass1.total_paise,
+        phone=None,  # previews carry no phone -> customer_key ""
+        booking_id=booking_id,
+        booking_date=data.booking_date,
+    )
+    price = compute_booking_price(
+        req,
+        discount_paise=discount_paise,
+        food_paise=food_paise,
+        other_paise=other_paise,
+        cleaning_paise=cleaning_paise,
+        is_customer=is_customer,
+        coupon=validated,
+    )
+
+    # Brand-new previews have no booking, so nothing is paid yet; an edit preview
+    # derives the paid amount from the existing booking's ledger.
+    paid = (
+        payments_service.amount_paid_paise(db, booking_id)
+        if booking_id is not None
+        else 0
+    )
+    return _breakdown_to_read(price, amount_paid_paise=paid)
 
 
 def accept_booking(
