@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from tests.factories import (
     future_date,
     make_cake,
+    make_combo,
     make_decor,
     make_location,
     make_occasion,
@@ -35,6 +36,7 @@ def test_list_includes_main_columns(client: TestClient, db: Session) -> None:
     slot = make_slot(db, plan.id, description="9 AM - 12 PM")
     cake = make_cake(db, loc.id)
     decor = make_decor(db, loc.id)
+    combo = make_combo(db, loc.id)
     occasion = make_occasion(db, loc.id, name="Anniversary")
     admin = make_user(db, "admin", location_id=None)
     db.commit()
@@ -61,7 +63,7 @@ def test_list_includes_main_columns(client: TestClient, db: Session) -> None:
             "cake_id": cake.id,
             "cake_weight_half_kg": 2,
             "special_decor": [{"id": decor.id, "quantity": 1}],
-            "combos": [],
+            "combos": [{"id": combo.id}],
             "discount_paise": 10000,
         },
     )
@@ -82,6 +84,7 @@ def test_list_includes_main_columns(client: TestClient, db: Session) -> None:
     assert row["discount_paise"] == 10000
     assert cake.description in row["cakes"]
     assert decor.name in row["special_decor"]
+    assert combo.name in row["combos"]
     assert "created_at" in row and row["created_at"]
     # Derived payment amounts still present.
     assert row["amount_due_paise"] == row["total_paise"] - row["amount_paid_paise"]

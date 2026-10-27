@@ -97,6 +97,7 @@ def _to_list_item(db: Session, booking: Booking) -> BookingListItem:
     items = booking_service.list_booking_items(db, booking.id)
     special_decor = [i.name_snapshot for i in items if i.kind == "decor"]
     cakes = [i.name_snapshot for i in items if i.kind == "cake"]
+    combos = [i.name_snapshot for i in items if i.kind == "combo"]
     return BookingListItem(
         id=booking.id,
         booking_reference=booking.booking_reference,
@@ -111,6 +112,7 @@ def _to_list_item(db: Session, booking: Booking) -> BookingListItem:
         occasion_name=occasion_name,
         special_decor=special_decor,
         cakes=cakes,
+        combos=combos,
         discount_paise=booking.discount_paise,
         total_paise=booking.total_paise,
         advance_paise=booking.advance_paise,

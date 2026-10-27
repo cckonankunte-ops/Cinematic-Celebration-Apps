@@ -105,6 +105,7 @@ export function BookingListPage(): JSX.Element {
                   <th className="py-2 pr-4 text-right">Total</th>
                   <th className="py-2 pr-4">Special decor</th>
                   <th className="py-2 pr-4">Cakes</th>
+                  <th className="py-2 pr-4">Combos</th>
                   <th className="py-2 pr-4">Occasion</th>
                   <th className="py-2 pr-4">Special person</th>
                   <th className="py-2 pr-4">Created</th>
@@ -138,6 +139,9 @@ export function BookingListPage(): JSX.Element {
                     </td>
                     <td className="py-2 pr-4 whitespace-normal">
                       {b.cakes.length > 0 ? b.cakes.join(', ') : '—'}
+                    </td>
+                    <td className="py-2 pr-4 whitespace-normal">
+                      {b.combos.length > 0 ? b.combos.join(', ') : '—'}
                     </td>
                     <td className="py-2 pr-4">{b.occasion_name ?? '—'}</td>
                     <td className="py-2 pr-4">{b.special_person_name ?? '—'}</td>
