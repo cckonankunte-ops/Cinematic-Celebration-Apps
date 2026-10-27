@@ -170,9 +170,13 @@ class SpecialDecorAdminRead(BaseModel):
 class ComboCreate(BaseModel):
     location_id: int
     name: str = Field(min_length=1)
-    description: str = Field(min_length=1)
+    # A combo is defined by name + price + optional cake/LED baselines; it is
+    # not an image tile like cakes/decor. Description and object_key are
+    # optional so a combo can be created without an image, while the DB's
+    # NOT NULL object_key is satisfied by a sensible default.
+    description: str = ""
     price_paise: int = Field(ge=0)
-    object_key: str = Field(min_length=1)
+    object_key: str = "combo"
     cake_baseline_paise: int | None = Field(default=None, ge=0)
     led_baseline_paise: int | None = Field(default=None, ge=0)
     effective_from: date

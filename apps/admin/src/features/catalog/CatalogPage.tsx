@@ -220,14 +220,14 @@ function CreateComboForm({ locationId }: { locationId: number | null }): JSX.Ele
       <div className="grid gap-2">
         <input
           className={field}
-          placeholder="Name"
+          placeholder="Name (e.g. Combo3)"
           required
           value={form.name}
           onChange={(e) => update('name')(e.target.value)}
         />
         <input
           className={field}
-          placeholder="Description"
+          placeholder="What's included (e.g. Double fog, floor balloons, 5 LED, cake)"
           value={form.description}
           onChange={(e) => update('description')(e.target.value)}
         />
@@ -236,7 +236,7 @@ function CreateComboForm({ locationId }: { locationId: number | null }): JSX.Ele
           type="number"
           min={0}
           step="0.01"
-          placeholder="Price (₹)"
+          placeholder="Combo price in ₹ (e.g. 1100 or 1100.50)"
           required
           value={form.priceRupees}
           onChange={(e) => update('priceRupees')(e.target.value)}
@@ -246,7 +246,7 @@ function CreateComboForm({ locationId }: { locationId: number | null }): JSX.Ele
           type="number"
           min={0}
           step="0.01"
-          placeholder="Cake baseline (₹, optional)"
+          placeholder="Cake baseline in ₹, optional (e.g. 400)"
           value={form.cakeBaselineRupees}
           onChange={(e) => update('cakeBaselineRupees')(e.target.value)}
         />
@@ -255,7 +255,7 @@ function CreateComboForm({ locationId }: { locationId: number | null }): JSX.Ele
           type="number"
           min={0}
           step="0.01"
-          placeholder="LED baseline (₹, optional)"
+          placeholder="LED baseline in ₹, optional (e.g. 200)"
           value={form.ledBaselineRupees}
           onChange={(e) => update('ledBaselineRupees')(e.target.value)}
         />
