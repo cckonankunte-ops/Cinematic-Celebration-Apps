@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
-import { formatRupees, rupeesToPaise } from '@/lib/money';
+import { formatRupees, paiseToRupees, rupeesToPaise } from '@/lib/money';
 import { useLocation } from '@/features/location/useLocation';
 import { BookingForm } from './BookingForm';
 import { PaymentHistory } from './PaymentHistory';
@@ -49,10 +49,39 @@ function toInitialValues(booking: BookingRead): Partial<BookingCreateInput> {
       .map((it) => ({ id: it.item_id as number })),
     led_name: booking.led_name ?? undefined,
     coupon_code: booking.coupon_code ?? undefined,
-    discount_paise: booking.discount_paise,
-    food_paise: booking.food_paise,
-    other_paise: booking.other_paise,
-    cleaning_paise: booking.cleaning_paise,
+    // Stored as paise; the form edits rupees.
+    discount_rupees: paiseToRupees(booking.discount_paise),
+    food_rupees: paiseToRupees(booking.food_paise),
+    other_rupees: paiseToRupees(booking.other_paise),
+    cleaning_rupees: paiseToRupees(booking.cleaning_paise),
+  };
+}
+
+/**
+ * Map the form's UI-only rupee money fields to the API's integer-paise fields,
+ * stripping the `*_rupees` and advance inputs (advance is attached separately
+ * on create; never sent on edit). Shared by the create and edit submit paths.
+ */
+function toApiMoney(
+  values: BookingCreateValues,
+): Omit<CreateBookingBody, 'advance_amount_paise' | 'advance_method'> {
+  const {
+    discount_rupees,
+    food_rupees,
+    other_rupees,
+    cleaning_rupees,
+    advance_rupees: _ar,
+    advance_method: _am,
+    ...rest
+  } = values;
+  void _ar;
+  void _am;
+  return {
+    ...rest,
+    discount_paise: rupeesToPaise(discount_rupees),
+    food_paise: rupeesToPaise(food_rupees),
+    other_paise: rupeesToPaise(other_rupees),
+    cleaning_paise: rupeesToPaise(cleaning_rupees),
   };
 }
 
@@ -99,18 +128,18 @@ function CreateBooking({ locationId }: { locationId: number }): JSX.Element {
   const onSubmit = async (values: BookingCreateValues): Promise<void> => {
     setServerError(null);
     try {
-      // The form holds a UI-only rupee advance; the API wants paise. Strip
-      // `advance_rupees` and send `advance_amount_paise`/`advance_method` only
-      // when an advance was actually entered. Overpayment is allowed server-side.
-      const { advance_rupees, advance_method, ...rest } = values;
-      const body: CreateBookingBody =
-        advance_rupees !== undefined
+      // The form holds UI-only rupee money fields; the API wants paise. Map the
+      // rupee fields to their `*_paise` counterparts and send the advance only
+      // when entered. Overpayment is allowed server-side.
+      const body: CreateBookingBody = {
+        ...toApiMoney(values),
+        ...(values.advance_rupees !== undefined
           ? {
-              ...rest,
-              advance_method,
-              advance_amount_paise: rupeesToPaise(advance_rupees),
+              advance_method: values.advance_method,
+              advance_amount_paise: rupeesToPaise(values.advance_rupees),
             }
-          : rest;
+          : {}),
+      };
       const booking = await createBooking.mutateAsync(body);
       setCreated(booking);
     } catch (err) {
@@ -157,8 +186,7 @@ function EditBooking({ bookingId }: { bookingId: number }): JSX.Element {
     try {
       // Advance-on-create is a create-only concern; never send advance fields
       // on edit (the edit flow uses PaymentHistory/record-payment instead).
-      const { advance_rupees: _ar, advance_method: _am, ...rest } = values;
-      await updateBooking.mutateAsync(rest);
+      await updateBooking.mutateAsync(toApiMoney(values));
       navigate('/bookings');
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Failed to save changes.');

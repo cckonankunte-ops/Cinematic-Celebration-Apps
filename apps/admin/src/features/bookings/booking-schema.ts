@@ -12,10 +12,21 @@ const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
 
-const nonNegativePaise = z
-  .number({ invalid_type_error: 'Must be a number' })
-  .int('Must be a whole number of paise')
-  .min(0, 'Cannot be negative');
+/**
+ * A non-negative rupee amount from a number input (whole or decimal). Empty
+ * inputs yield NaN via `valueAsNumber`; those coerce to 0 so an untouched
+ * optional money field defaults cleanly. Mapped to paise before sending.
+ */
+const nonNegativeRupees = z.preprocess(
+  (v) =>
+    v === '' || v === null || (typeof v === 'number' && Number.isNaN(v))
+      ? 0
+      : v,
+  z
+    .number({ invalid_type_error: 'Must be a number' })
+    .min(0, 'Cannot be negative')
+    .default(0),
+);
 
 const optionalText = z
   .string()
@@ -79,10 +90,13 @@ export const bookingCreateSchema = z.object({
     )
     .default([]),
   combos: z.array(z.object({ id: z.number().int().positive() })).default([]),
-  discount_paise: nonNegativePaise.default(0),
-  food_paise: nonNegativePaise.default(0),
-  other_paise: nonNegativePaise.default(0),
-  cleaning_paise: nonNegativePaise.default(0),
+  // Entered in rupees in the UI (whole or 2-decimal, e.g. 20 or 20.5); mapped
+  // to the API's `*_paise` fields via rupeesToPaise before the request is sent.
+  // An untouched/empty input yields NaN via valueAsNumber; coerce NaN/'' to 0.
+  discount_rupees: nonNegativeRupees,
+  food_rupees: nonNegativeRupees,
+  other_rupees: nonNegativeRupees,
+  cleaning_rupees: nonNegativeRupees,
   // Optional advance recorded at creation (create flow only). Entered in rupees
   // in the UI (like PaymentDialog); mapped to `advance_amount_paise` before the
   // request is sent. Method defaults to cash.

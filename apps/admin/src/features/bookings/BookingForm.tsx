@@ -15,7 +15,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 
 import { ApiError } from '@/api/client';
 import { todayIsoInIST } from '@/lib/dates';
-import { formatRupees } from '@/lib/money';
+import { formatRupees, rupeesToPaise } from '@/lib/money';
 import { useDebounce } from '@/hooks/useDebounce';
 import {
   bookingCreateSchema,
@@ -82,10 +82,10 @@ export function BookingForm({
       cake_weight_half_kg: 1,
       special_decor: [],
       combos: [],
-      discount_paise: 0,
-      food_paise: 0,
-      other_paise: 0,
-      cleaning_paise: 0,
+      discount_rupees: 0,
+      food_rupees: 0,
+      other_rupees: 0,
+      cleaning_rupees: 0,
       // Edit pre-fill wins over the create defaults above.
       ...initial,
     },
@@ -175,10 +175,10 @@ export function BookingForm({
       occasion_id: watched.occasion_id,
       led_name: watched.led_name,
       coupon_code: watched.coupon_code,
-      discount_paise: watched.discount_paise,
-      food_paise: watched.food_paise,
-      other_paise: watched.other_paise,
-      cleaning_paise: watched.cleaning_paise,
+      discount_rupees: watched.discount_rupees,
+      food_rupees: watched.food_rupees,
+      other_rupees: watched.other_rupees,
+      cleaning_rupees: watched.cleaning_rupees,
       special_decor: watched.special_decor,
       combos: watched.combos,
     }),
@@ -220,10 +220,11 @@ export function BookingForm({
       occasion_id: optionalId(parsed.occasion_id),
       coupon_code: optionalText(parsed.coupon_code),
       booking_id: bookingId,
-      discount_paise: num(parsed.discount_paise),
-      food_paise: num(parsed.food_paise),
-      other_paise: num(parsed.other_paise),
-      cleaning_paise: num(parsed.cleaning_paise),
+      // UI holds rupees; the preview endpoint expects paise.
+      discount_paise: rupeesToPaise(num(parsed.discount_rupees)),
+      food_paise: rupeesToPaise(num(parsed.food_rupees)),
+      other_paise: rupeesToPaise(num(parsed.other_rupees)),
+      cleaning_paise: rupeesToPaise(num(parsed.cleaning_rupees)),
     };
 
     previewMutate(body, {
@@ -506,21 +507,28 @@ export function BookingForm({
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        {(['discount_paise', 'food_paise', 'other_paise', 'cleaning_paise'] as const).map(
-          (name) => (
-            <label key={name} className="space-y-1 text-sm">
-              <span className="font-medium text-gray-700">
-                {name.replace('_paise', '')} (paise)
-              </span>
-              <input
-                type="number"
-                min={0}
-                className={inputClass}
-                {...register(name, { valueAsNumber: true })}
-              />
-            </label>
-          ),
-        )}
+        {(
+          [
+            'discount_rupees',
+            'food_rupees',
+            'other_rupees',
+            'cleaning_rupees',
+          ] as const
+        ).map((name) => (
+          <label key={name} className="space-y-1 text-sm">
+            <span className="font-medium text-gray-700 capitalize">
+              {name.replace('_rupees', '')} (₹)
+            </span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="e.g. 20 or 20.5"
+              className={inputClass}
+              {...register(name, { valueAsNumber: true })}
+            />
+          </label>
+        ))}
       </div>
 
       {!isEdit && (

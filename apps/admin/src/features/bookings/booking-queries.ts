@@ -96,13 +96,33 @@ export function useBooking(id: number | null): UseQueryResult<BookingRead> {
  * `advance_amount_paise` (paise) + `advance_method` only when an advance was
  * entered. Everything else mirrors `BookingCreateValues`.
  */
-export type CreateBookingBody = Omit<
+/**
+ * The booking body as the API expects it: the UI-only rupee money fields
+ * (`*_rupees`) and the advance inputs are replaced by integer-paise fields.
+ * `BookingFormPage.toApiMoney` performs the rupees -> paise mapping.
+ */
+type ApiBookingBody = Omit<
   BookingCreateValues,
-  'advance_rupees' | 'advance_method'
+  | 'advance_rupees'
+  | 'advance_method'
+  | 'discount_rupees'
+  | 'food_rupees'
+  | 'other_rupees'
+  | 'cleaning_rupees'
 > & {
+  discount_paise: number;
+  food_paise: number;
+  other_paise: number;
+  cleaning_paise: number;
+};
+
+export type CreateBookingBody = ApiBookingBody & {
   advance_amount_paise?: number;
   advance_method?: 'cash' | 'upi' | 'card' | 'other';
 };
+
+/** Edit body: a partial of the API booking body (money already in paise). */
+export type UpdateBookingBody = Partial<ApiBookingBody>;
 
 export function useCreateBooking(): UseMutationResult<
   BookingRead,
@@ -120,9 +140,9 @@ export function useCreateBooking(): UseMutationResult<
 
 export function useUpdateBooking(
   id: number,
-): UseMutationResult<BookingRead, unknown, Partial<BookingCreateValues>> {
+): UseMutationResult<BookingRead, unknown, UpdateBookingBody> {
   const qc = useQueryClient();
-  return useMutation<BookingRead, unknown, Partial<BookingCreateValues>>({
+  return useMutation<BookingRead, unknown, UpdateBookingBody>({
     mutationFn: (body) => api.patch<BookingRead>(`/api/v1/admin/bookings/${id}`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['bookings'] });
