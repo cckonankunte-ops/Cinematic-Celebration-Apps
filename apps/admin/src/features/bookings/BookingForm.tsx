@@ -500,9 +500,14 @@ export function BookingForm({
           <input type="text" className={inputClass} {...register('name_on_cake')} />
         </label>
 
-        <label className="space-y-1 text-sm">
+        <label className="space-y-1 text-sm md:col-span-2">
           <span className="font-medium text-gray-700">Message</span>
-          <input type="text" className={inputClass} {...register('message')} />
+          <textarea
+            rows={5}
+            className={`${inputClass} resize-y`}
+            placeholder="Any detailed notes for this booking…"
+            {...register('message')}
+          />
         </label>
       </div>
 
