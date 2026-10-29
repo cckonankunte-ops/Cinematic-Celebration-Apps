@@ -96,8 +96,12 @@ def _to_list_item(db: Session, booking: Booking) -> BookingListItem:
     occasion_name = catalog_service.booking_occasion_name(db, booking.occasion_id)
     items = booking_service.list_booking_items(db, booking.id)
     special_decor = [i.name_snapshot for i in items if i.kind == "decor"]
-    cakes = [i.name_snapshot for i in items if i.kind == "cake"]
+    cake_items = [i for i in items if i.kind == "cake"]
+    cakes = [i.name_snapshot for i in cake_items]
     combos = [i.name_snapshot for i in items if i.kind == "combo"]
+    # Cake weight comes from the first cake line (a booking carries one cake).
+    cake_weight_half_kg = cake_items[0].weight_half_kg if cake_items else None
+    map_url = catalog_service.location_map_url(db, booking.location_id)
     return BookingListItem(
         id=booking.id,
         booking_reference=booking.booking_reference,
@@ -113,6 +117,10 @@ def _to_list_item(db: Session, booking: Booking) -> BookingListItem:
         special_decor=special_decor,
         cakes=cakes,
         combos=combos,
+        name_on_cake=booking.name_on_cake,
+        cake_weight_half_kg=cake_weight_half_kg,
+        led_name=booking.led_name,
+        map_url=map_url,
         discount_paise=booking.discount_paise,
         total_paise=booking.total_paise,
         advance_paise=booking.advance_paise,

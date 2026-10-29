@@ -17,4 +17,6 @@ class Location(Base, TimestampMixin):
     slug: Mapped[str] = mapped_column(String, nullable=False, unique=True)  # Astro route
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     phone: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Google Maps share link shown to customers (e.g. in the WhatsApp message).
+    map_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

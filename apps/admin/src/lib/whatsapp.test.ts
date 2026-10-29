@@ -1,60 +1,113 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildWhatsappUrl, type BookingLike } from './whatsapp';
+import {
+  buildWhatsappMessage,
+  buildWhatsappUrl,
+  waPhoneDigits,
+  type BookingLike,
+} from './whatsapp';
 
 const booking: BookingLike = {
-  booking_name: 'Priya S',
-  booking_reference: 'CC-HUL-20251225-A1B2',
-  plan_title: 'Starlight Package',
+  booking_name: 'vinutha',
+  booking_reference: 'OCTOBER4GOA1M',
+  plan_title: 'Lavender Dream Theatre',
+  combos: ['Combo2'],
   occasion_name: 'Birthday',
-  booking_date: '2025-12-25',
-  slot_description: '9 AM - 12 PM',
-  cake_name: 'Chocolate Truffle',
-  location_url: 'https://maps.example.com/hulimavu',
+  booking_date: '2026-10-28',
+  special_person_name: 'tarun',
+  cakes: ['Strawberry'],
+  name_on_cake: 'Happy B',
+  cake_weight_half_kg: 1,
+  slot_description: '6:30 PM - 7:30 PM',
+  phone: '9876543210',
+  map_url: 'https://maps.app.goo.gl/yfpJdW4z1t6mpW7w6',
 };
 
 function decodedText(url: string): string {
-  const prefix = 'https://wa.me/?text=';
-  expect(url.startsWith(prefix)).toBe(true);
-  return decodeURIComponent(url.slice(prefix.length));
+  const q = url.indexOf('?text=');
+  expect(q).toBeGreaterThan(-1);
+  return decodeURIComponent(url.slice(q + '?text='.length));
 }
 
-describe('buildWhatsappUrl', () => {
-  it('returns a wa.me URL', () => {
-    expect(buildWhatsappUrl(booking)).toMatch(/^https:\/\/wa\.me\/\?text=/);
+describe('buildWhatsappMessage', () => {
+  it('renders the legacy confirmation format with bold fields', () => {
+    const msg = buildWhatsappMessage(booking);
+    expect(msg).toContain('Your Booking is confirmed🥳');
+    expect(msg).toContain('Booking name: *vinutha*');
+    expect(msg).toContain('Booking Id: *OCTOBER4GOA1M*');
+    expect(msg).toContain('Space: *Lavender Dream Theatre + Combo2 Package*');
+    expect(msg).toContain('Occasion: *Birthday*');
+    expect(msg).toContain('Date: *28 Oct 2026*');
+    expect(msg).toContain('Special person name: *tarun*');
+    expect(msg).toContain('Cake details: *Strawberry | Happy B 1/2 KG*');
+    expect(msg).toContain('Slot: *6:30 PM - 7:30 PM*');
+    expect(msg).toContain(
+      'Location: https://maps.app.goo.gl/yfpJdW4z1t6mpW7w6',
+    );
+    expect(msg).toContain(
+      '*Note: Party Poppers (Blasters) and Spray not allowed from outside.*',
+    );
+    expect(msg).toContain(
+      'Refund Policy: https://cinematiccelebration.in/refund-policy',
+    );
+    expect(msg).toContain('Cinematic Celebration Team');
   });
 
-  it('encodes all booking fields in the message', () => {
-    const text = decodedText(buildWhatsappUrl(booking));
-    expect(text).toContain('Priya S');
-    expect(text).toContain('CC-HUL-20251225-A1B2');
-    expect(text).toContain('Starlight Package');
-    expect(text).toContain('Birthday');
-    expect(text).toContain('9 AM - 12 PM');
-    expect(text).toContain('Chocolate Truffle');
-    expect(text).toContain('https://maps.example.com/hulimavu');
-    // Date is rendered in IST display format.
-    expect(text).toContain('Dec 2025');
+  it('renders whole-kg cake weights without the "/2" form', () => {
+    const msg = buildWhatsappMessage({ ...booking, cake_weight_half_kg: 2 });
+    expect(msg).toContain('Cake details: *Strawberry | Happy B 1 KG*');
+  });
+
+  it('omits optional lines when absent', () => {
+    const minimal: BookingLike = {
+      booking_name: 'Ravi',
+      booking_reference: 'CC-ECY-1',
+      plan_title: 'Basic',
+      booking_date: '2026-01-01',
+      slot_description: '6 PM - 9 PM',
+    };
+    const msg = buildWhatsappMessage(minimal);
+    expect(msg).not.toContain('Occasion:');
+    expect(msg).not.toContain('Special person name:');
+    expect(msg).not.toContain('Cake details:');
+    expect(msg).not.toContain('Location:');
+    // Space line with no combos is just the plan + " Package".
+    expect(msg).toContain('Space: *Basic Package*');
+  });
+});
+
+describe('waPhoneDigits', () => {
+  it('prefixes 91 to a bare 10-digit number', () => {
+    expect(waPhoneDigits('9876543210')).toBe('919876543210');
+  });
+  it('drops a leading national 0', () => {
+    expect(waPhoneDigits('09876543210')).toBe('919876543210');
+  });
+  it('keeps an already-prefixed number', () => {
+    expect(waPhoneDigits('+91 98765 43210')).toBe('919876543210');
+  });
+  it('returns empty for missing phone', () => {
+    expect(waPhoneDigits(null)).toBe('');
+    expect(waPhoneDigits(undefined)).toBe('');
+  });
+});
+
+describe('buildWhatsappUrl', () => {
+  it('targets the customer number when present', () => {
+    expect(buildWhatsappUrl(booking)).toMatch(
+      /^https:\/\/wa\.me\/919876543210\?text=/,
+    );
+  });
+
+  it('falls back to no number when phone is absent', () => {
+    const { phone, ...rest } = booking;
+    void phone;
+    expect(buildWhatsappUrl(rest)).toMatch(/^https:\/\/wa\.me\/\?text=/);
   });
 
   it('URL-encodes spaces and special characters', () => {
     const url = buildWhatsappUrl(booking);
-    // Raw spaces must not appear in the encoded query string.
     expect(url).not.toContain(' ');
-    expect(url).toContain('%20');
-  });
-
-  it('omits optional fields when absent', () => {
-    const minimal: BookingLike = {
-      booking_name: 'Ravi',
-      booking_reference: 'CC-ECY-20250101-ZZZZ',
-      plan_title: 'Basic',
-      booking_date: '2025-01-01',
-      slot_description: '6 PM - 9 PM',
-    };
-    const text = decodedText(buildWhatsappUrl(minimal));
-    expect(text).not.toContain('Occasion:');
-    expect(text).not.toContain('Cake:');
-    expect(text).not.toContain('Location:');
+    expect(decodedText(url)).toContain('vinutha');
   });
 });

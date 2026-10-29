@@ -76,6 +76,10 @@ export interface BookingListItem {
   special_decor: string[];
   cakes: string[];
   combos: string[];
+  name_on_cake?: string | null;
+  cake_weight_half_kg?: number | null;
+  led_name?: string | null;
+  map_url?: string | null;
   discount_paise: number;
   total_paise: number;
   advance_paise?: number;
