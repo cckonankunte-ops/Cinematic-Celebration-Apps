@@ -58,6 +58,24 @@ describe('buildWhatsappMessage', () => {
     expect(msg).toContain('Cake details: *Strawberry | Happy B 1 KG*');
   });
 
+  it('falls back to the special person name when name on cake is blank', () => {
+    const msg = buildWhatsappMessage({
+      ...booking,
+      name_on_cake: null,
+      special_person_name: 'tarun',
+    });
+    expect(msg).toContain('Cake details: *Strawberry | tarun 1/2 KG*');
+  });
+
+  it('uses only the cake name when neither name on cake nor person is set', () => {
+    const msg = buildWhatsappMessage({
+      ...booking,
+      name_on_cake: '  ',
+      special_person_name: null,
+    });
+    expect(msg).toContain('Cake details: *Strawberry | 1/2 KG*');
+  });
+
   it('trims values so stray spaces do not break WhatsApp bold', () => {
     const msg = buildWhatsappMessage({
       ...booking,

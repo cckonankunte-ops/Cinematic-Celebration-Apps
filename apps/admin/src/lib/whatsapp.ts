@@ -66,7 +66,8 @@ function spaceLine(plan: string, combos: string[] | undefined): string {
 
 /**
  * Compose the "Cake details" value: "<cake name> | <name on cake> <weight>".
- * Returns null when there's no cake so the line can be omitted.
+ * When no name is written on the cake, the special person's name is used
+ * instead. Returns null when there's no cake so the line can be omitted.
  */
 function cakeDetails(booking: BookingLike): string | null {
   const name = booking.cakes?.[0];
@@ -74,7 +75,10 @@ function cakeDetails(booking: BookingLike): string | null {
     return null;
   }
   const bits = [name];
-  const onCake = booking.name_on_cake?.trim();
+  // Name written on the cake; when it's blank, fall back to the special person's
+  // name so the cake line still carries a name.
+  const onCake =
+    booking.name_on_cake?.trim() || booking.special_person_name?.trim();
   const weight =
     booking.cake_weight_half_kg != null
       ? cakeWeightLabel(booking.cake_weight_half_kg)
