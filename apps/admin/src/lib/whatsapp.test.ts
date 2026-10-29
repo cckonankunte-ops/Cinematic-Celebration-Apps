@@ -113,8 +113,9 @@ describe('buildWhatsappMessage', () => {
     const msg = buildWhatsappMessage(minimal);
     expect(msg).not.toContain('Occasion:');
     expect(msg).not.toContain('Special person name:');
-    expect(msg).not.toContain('Cake details:');
     expect(msg).not.toContain('Location:');
+    // The cake line always renders; with no cake it reads "No Cake".
+    expect(msg).toContain('Cake details: *No Cake*');
     // Space line with no combos is just the plan + " Package".
     expect(msg).toContain('Space: *Basic Package*');
   });
