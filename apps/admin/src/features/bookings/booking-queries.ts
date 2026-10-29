@@ -96,8 +96,12 @@ export function useBooking(id: number | null): UseQueryResult<BookingRead> {
  * `advance_amount_paise` (paise) + `advance_method` only when an advance was
  * entered. Everything else mirrors `BookingCreateValues`.
  */
-export type CreateBookingBody = Omit<BookingCreateValues, 'advance_rupees'> & {
+export type CreateBookingBody = Omit<
+  BookingCreateValues,
+  'advance_rupees' | 'advance_method'
+> & {
   advance_amount_paise?: number;
+  advance_method?: 'cash' | 'upi' | 'card' | 'other';
 };
 
 export function useCreateBooking(): UseMutationResult<
