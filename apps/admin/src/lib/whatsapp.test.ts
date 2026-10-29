@@ -32,7 +32,7 @@ function decodedText(url: string): string {
 describe('buildWhatsappMessage', () => {
   it('renders the legacy confirmation format with bold fields', () => {
     const msg = buildWhatsappMessage(booking);
-    expect(msg).toContain('Your Booking is confirmed🥳');
+    expect(msg).toContain(`Your Booking is confirmed${'\u{1F973}'}`);
     expect(msg).toContain('Booking name: *vinutha*');
     expect(msg).toContain('Booking Id: *OCTOBER4GOA1M*');
     expect(msg).toContain('Space: *Lavender Dream Theatre + Combo2 Package*');
@@ -56,6 +56,18 @@ describe('buildWhatsappMessage', () => {
   it('renders whole-kg cake weights without the "/2" form', () => {
     const msg = buildWhatsappMessage({ ...booking, cake_weight_half_kg: 2 });
     expect(msg).toContain('Cake details: *Strawberry | Happy B 1 KG*');
+  });
+
+  it('trims values so stray spaces do not break WhatsApp bold', () => {
+    const msg = buildWhatsappMessage({
+      ...booking,
+      special_person_name: 'Somalisa singha ',
+      booking_name: '  vinutha ',
+    });
+    // No space between the asterisk and the text (WhatsApp would not bold it).
+    expect(msg).toContain('Special person name: *Somalisa singha*');
+    expect(msg).toContain('Booking name: *vinutha*');
+    expect(msg).not.toContain('*Somalisa singha *');
   });
 
   it('omits optional lines when absent', () => {

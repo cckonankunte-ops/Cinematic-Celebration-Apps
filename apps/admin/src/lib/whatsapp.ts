@@ -34,6 +34,22 @@ const NOTE =
   'Note: Party Poppers (Blasters) and Spray not allowed from outside.';
 const REFUND_POLICY_URL = 'https://cinematiccelebration.in/refund-policy';
 
+// Emoji as Unicode escapes so the source can't be corrupted by editor/encoding
+// issues (which previously turned 🥳 into mojibake in the sent message).
+const PARTY = '\u{1F973}'; // 🥳
+const STAR_STRUCK = '\u{1F929}'; // 🤩
+const HUGGING = '\u{1F917}'; // 🤗
+
+/**
+ * Wrap a value in WhatsApp bold markers. WhatsApp only renders `*text*` as bold
+ * when the asterisks sit directly against non-space characters, so the value is
+ * trimmed first — otherwise a stray leading/trailing space leaves the literal
+ * `*` visible and the text un-bolded.
+ */
+function bold(value: string): string {
+  return `*${value.trim()}*`;
+}
+
 /** Render cake weight half-kg units as a human label, e.g. 1 -> "1/2 KG". */
 function cakeWeightLabel(halfKg: number): string {
   return halfKg % 2 === 0 ? `${halfKg / 2} KG` : `${halfKg}/2 KG`;
@@ -77,35 +93,35 @@ function cakeDetails(booking: BookingLike): string | null {
  */
 export function buildWhatsappMessage(booking: BookingLike): string {
   const lines: string[] = [
-    'Your Booking is confirmed🥳',
+    `Your Booking is confirmed${PARTY}`,
     '',
-    `Booking name: *${booking.booking_name}*`,
-    `Booking Id: *${booking.booking_reference}*`,
-    `Space: *${spaceLine(booking.plan_title, booking.combos)}*`,
+    `Booking name: ${bold(booking.booking_name)}`,
+    `Booking Id: ${bold(booking.booking_reference)}`,
+    `Space: ${bold(spaceLine(booking.plan_title, booking.combos))}`,
   ];
   if (booking.occasion_name) {
-    lines.push(`Occasion: *${booking.occasion_name}*`);
+    lines.push(`Occasion: ${bold(booking.occasion_name)}`);
   }
-  lines.push(`Date: *${formatDate(booking.booking_date)}*`);
-  if (booking.special_person_name) {
-    lines.push(`Special person name: *${booking.special_person_name}*`);
+  lines.push(`Date: ${bold(formatDate(booking.booking_date))}`);
+  if (booking.special_person_name?.trim()) {
+    lines.push(`Special person name: ${bold(booking.special_person_name)}`);
   }
   const cake = cakeDetails(booking);
   if (cake) {
-    lines.push(`Cake details: *${cake}*`);
+    lines.push(`Cake details: ${bold(cake)}`);
   }
-  lines.push(`Slot: *${booking.slot_description}*`);
-  if (booking.map_url) {
-    lines.push(`Location: ${booking.map_url}`);
+  lines.push(`Slot: ${bold(booking.slot_description)}`);
+  if (booking.map_url?.trim()) {
+    lines.push(`Location: ${booking.map_url.trim()}`);
   }
   lines.push('');
-  lines.push(`*${NOTE}*`);
+  lines.push(bold(NOTE));
   lines.push(`Refund Policy: ${REFUND_POLICY_URL}`);
   lines.push('');
   lines.push(
     "If you have any questions or concerns, please don't hesitate to contact us.",
   );
-  lines.push('We look forward to hosting you 🤩🤗');
+  lines.push(`We look forward to hosting you ${STAR_STRUCK}${HUGGING}`);
   lines.push('');
   lines.push('Warmly,');
   lines.push('Cinematic Celebration Team');
