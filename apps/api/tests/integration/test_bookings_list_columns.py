@@ -72,14 +72,18 @@ def test_list_includes_main_columns(client: TestClient, db: Session) -> None:
         },
     )
     assert create.status_code == 201
+    reference = create.json()["booking_reference"]
 
     resp = client.get(
         f"/api/v1/admin/bookings?location_id={loc.id}", headers=_ORIGIN
     )
     assert resp.status_code == 200
     rows = resp.json()
-    assert len(rows) == 1
-    row = rows[0]
+    # Select this test's own booking by reference rather than assuming a single
+    # row, so the test is robust whether the DB is empty or pre-populated.
+    matches = [r for r in rows if r["booking_reference"] == reference]
+    assert len(matches) == 1
+    row = matches[0]
 
     assert row["plan_title"] == plan.title
     assert row["slot_description"] == "9 AM - 12 PM"
