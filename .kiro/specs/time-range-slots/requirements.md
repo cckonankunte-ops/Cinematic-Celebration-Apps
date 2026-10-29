@@ -279,6 +279,46 @@ walk-in), so online bookings are always serviceable but admins keep full control
 - Future date: any valid slot allowed for all roles (subject to other rules).
 - Public availability for today hides slots whose start already passed.
 
+### Requirement 11 — Base price varies by plan AND duration
+
+**User Story:** As the business, I want the plan's base price (and advance, and
+people allowance) to depend on the slot's duration, so a 1-hour booking and a
+2-hour booking of the same plan charge different prices.
+
+Examples (illustrative, real values are data):
+- Plan 1, 1 hour → ₹799 (2 people, free entry)
+- Plan 1, 2 hour → ₹1199 (2 people)
+- Plan 2, 1 hour → ₹1499 (6 people)
+- Plan 2, 2 hour → ₹1999 (6 people)
+
+#### Acceptance Criteria
+1. THE base price charged SHALL be determined by the selected `(plan, duration)`
+   — i.e. by the chosen **slot** — not by the plan alone.
+2. Server-side pricing (`services/pricing.py`) SHALL read the base price (and
+   advance) from the duration-specific source for the selected slot, not from a
+   single plan-level price, and SHALL remain server-authoritative (client sends
+   only ids/quantities; client totals ignored).
+3. WHERE a plan offers multiple durations THE system SHALL store a distinct base
+   price (and advance) per duration.
+4. People allowance (`people_allowed`, `max_people_allowed`) and the extra-guest
+   charge do NOT vary by duration and SHALL remain plan-level attributes (they
+   apply to all durations of the plan).
+5. THE admin catalog SHALL let an admin set the base price (and advance) for each
+   duration of a plan.
+6. THE customer web and admin booking UIs SHALL show the price for the selected
+   duration, and the live preview/total SHALL reflect the duration-specific base.
+7. Money stays integer paise; all existing pricing rules (extra-guest, cake,
+   decor, combos, LED, discount, coupon) apply on top of the duration-specific
+   base unchanged.
+
+**Test cases**
+- Plan 1 + 1h slot prices at ₹799 base; Plan 1 + 2h slot at ₹1199; selecting the
+  other duration re-prices the preview.
+- Extra-guest / add-ons compute on top of the correct duration base.
+- Client-sent base price is ignored; server uses the slot's duration price.
+- Retrofit: existing (single-duration) plans keep their current price as the
+  2-hour price (see Requirement 8 / design).
+
 ### Requirement 9 — Configuration and defaults
 
 **User Story:** As an operator, I want the buffer, working hours, and cutoff to be
