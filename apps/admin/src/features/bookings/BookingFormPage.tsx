@@ -202,6 +202,7 @@ function EditBooking({ bookingId }: { bookingId: number }): JSX.Element {
         locationId={booking.location_id}
         bookingId={bookingId}
         initial={toInitialValues(booking)}
+        paymentsVersion={booking.amount_paid_paise}
         submitLabel="Save changes"
         onSubmit={onSubmit}
         isSubmitting={updateBooking.isPending}

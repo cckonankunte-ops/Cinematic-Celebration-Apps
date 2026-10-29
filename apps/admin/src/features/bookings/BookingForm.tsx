@@ -39,6 +39,12 @@ interface BookingFormProps {
   initial?: Partial<BookingCreateInput>;
   /** Present in edit mode (preview self-exclusion). */
   bookingId?: number;
+  /**
+   * A value that changes when the booking's payments change (e.g. the current
+   * amount-paid in paise). Including it re-fires the live preview so the
+   * Summary's amount paid/due refresh immediately after recording a payment.
+   */
+  paymentsVersion?: number;
   submitLabel: string;
   onSubmit: (values: BookingCreateValues) => void;
   isSubmitting: boolean;
@@ -59,6 +65,7 @@ export function BookingForm({
   locationId,
   initial,
   bookingId,
+  paymentsVersion,
   submitLabel,
   onSubmit,
   isSubmitting,
@@ -181,6 +188,9 @@ export function BookingForm({
       cleaning_rupees: watched.cleaning_rupees,
       special_decor: watched.special_decor,
       combos: watched.combos,
+      // Not a priced input, but re-fires the preview after a payment so the
+      // Summary's amount paid/due refresh without remounting the form.
+      payments_version: paymentsVersion,
     }),
     400,
   );
