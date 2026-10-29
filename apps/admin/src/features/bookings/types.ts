@@ -34,6 +34,9 @@ export interface BookingRead {
   booking_name: string;
   email: string | null;
   phone: string | null;
+  special_person_name: string | null;
+  name_on_cake: string | null;
+  message: string | null;
   people: number;
   occasion_id: number | null;
   plan_price_paise: number;

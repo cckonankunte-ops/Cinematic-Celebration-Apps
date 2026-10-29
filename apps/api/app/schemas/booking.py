@@ -239,6 +239,9 @@ class BookingRead(BaseModel):
     booking_name: str
     email: str | None
     phone: str | None
+    special_person_name: str | None
+    name_on_cake: str | None
+    message: str | None
     people: int
     occasion_id: int | None
     plan_price_paise: int

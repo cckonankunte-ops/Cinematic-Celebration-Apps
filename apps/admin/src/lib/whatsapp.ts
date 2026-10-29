@@ -67,12 +67,12 @@ function spaceLine(plan: string, combos: string[] | undefined): string {
 /**
  * Compose the "Cake details" value: "<cake name> | <name on cake> <weight>".
  * When no name is written on the cake, the special person's name is used
- * instead. Returns null when there's no cake so the line can be omitted.
+ * instead. Returns "No Cake" when the booking has no cake.
  */
-function cakeDetails(booking: BookingLike): string | null {
+function cakeDetails(booking: BookingLike): string {
   const name = booking.cakes?.[0];
   if (!name) {
-    return null;
+    return 'No Cake';
   }
   const bits = [name];
   // Name written on the cake; when it's blank, fall back to the special person's
@@ -110,10 +110,7 @@ export function buildWhatsappMessage(booking: BookingLike): string {
   if (booking.special_person_name?.trim()) {
     lines.push(`Special person name: ${bold(booking.special_person_name)}`);
   }
-  const cake = cakeDetails(booking);
-  if (cake) {
-    lines.push(`Cake details: ${bold(cake)}`);
-  }
+  lines.push(`Cake details: ${bold(cakeDetails(booking))}`);
   lines.push(`Slot: ${bold(booking.slot_description)}`);
   if (booking.map_url?.trim()) {
     lines.push(`Location: ${booking.map_url.trim()}`);

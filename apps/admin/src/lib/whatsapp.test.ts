@@ -76,6 +76,11 @@ describe('buildWhatsappMessage', () => {
     expect(msg).toContain('Cake details: *Strawberry | 1/2 KG*');
   });
 
+  it('shows "No Cake" when the booking has no cake', () => {
+    const msg = buildWhatsappMessage({ ...booking, cakes: [] });
+    expect(msg).toContain('Cake details: *No Cake*');
+  });
+
   it('trims values so stray spaces do not break WhatsApp bold', () => {
     const msg = buildWhatsappMessage({
       ...booking,

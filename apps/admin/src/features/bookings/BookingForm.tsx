@@ -130,17 +130,30 @@ export function BookingForm({
     setValue('combos', []);
   }, [locationId, isEdit, setValue]);
 
-  // Reset the slot when the plan changes so a stale slot can't be submitted. In
-  // edit mode we must NOT clobber the pre-filled slot on the very first render,
-  // so skip the first run there via a ref.
-  const skipFirstSlotClear = useRef<boolean>(isEdit);
+  // Reset the slot when the plan changes so a stale slot can't be submitted.
+  // We track the previous plan id and only clear when it genuinely changes from
+  // one real plan to another. This avoids clobbering the pre-filled slot in
+  // edit mode, where RHF applies async defaults over one or more renders (the
+  // plan id transitions undefined -> <initial plan>, which must NOT clear the
+  // pre-filled slot). `prevPlanId` is seeded with the initial plan so that
+  // first transition is treated as "no change".
+  const prevPlanId = useRef<number | null>(
+    initial?.plan_id !== undefined && Number.isFinite(initial.plan_id)
+      ? (initial.plan_id as number)
+      : null,
+  );
   useEffect(() => {
-    if (skipFirstSlotClear.current) {
-      skipFirstSlotClear.current = false;
+    if (planId === prevPlanId.current) {
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RHF reset to empty
-    setValue('slot_id', undefined as any);
+    const hadPlan = prevPlanId.current !== null;
+    prevPlanId.current = planId;
+    // Only clear when moving away from a previously chosen plan; don't clear on
+    // the initial undefined -> plan hydration.
+    if (hadPlan) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RHF reset to empty
+      setValue('slot_id', undefined as any);
+    }
   }, [planId, setValue]);
 
   // --- Live preview summary (server-authoritative) -------------------------
