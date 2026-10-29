@@ -67,11 +67,14 @@ function spaceLine(plan: string, combos: string[] | undefined): string {
 /**
  * Compose the "Cake details" value: "<cake name> | <name on cake> <weight>".
  * When no name is written on the cake, the special person's name is used
- * instead. Returns "No Cake" when the booking has no cake.
+ * instead. Returns "No Cake" when the booking has no cake — including the
+ * catalog "NO" row customers pick to decline a cake.
  */
 function cakeDetails(booking: BookingLike): string {
-  const name = booking.cakes?.[0];
-  if (!name) {
+  const name = booking.cakes?.[0]?.trim();
+  // "No cake" is modelled as a catalog row literally named "NO" (the first
+  // dropdown option), so treat that — and a genuinely absent cake — as no cake.
+  if (!name || name.toUpperCase() === 'NO') {
     return 'No Cake';
   }
   const bits = [name];

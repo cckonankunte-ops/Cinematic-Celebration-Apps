@@ -81,6 +81,15 @@ describe('buildWhatsappMessage', () => {
     expect(msg).toContain('Cake details: *No Cake*');
   });
 
+  it('treats the catalog "No" cake row as no cake (case-insensitive)', () => {
+    expect(buildWhatsappMessage({ ...booking, cakes: ['No'] })).toContain(
+      'Cake details: *No Cake*',
+    );
+    expect(buildWhatsappMessage({ ...booking, cakes: ['NO'] })).toContain(
+      'Cake details: *No Cake*',
+    );
+  });
+
   it('trims values so stray spaces do not break WhatsApp bold', () => {
     const msg = buildWhatsappMessage({
       ...booking,
