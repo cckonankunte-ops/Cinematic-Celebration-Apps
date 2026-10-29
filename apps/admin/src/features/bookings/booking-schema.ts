@@ -86,10 +86,18 @@ export const bookingCreateSchema = z.object({
   // Optional advance recorded at creation (create flow only). Entered in rupees
   // in the UI (like PaymentDialog); mapped to `advance_amount_paise` before the
   // request is sent. Method defaults to cash.
-  advance_rupees: z
-    .number({ invalid_type_error: 'Must be a number' })
-    .positive('Advance must be greater than zero')
-    .optional(),
+  // Empty number inputs yield NaN via `valueAsNumber`; coerce NaN/'' to
+  // undefined so an untouched optional advance field doesn't fail validation.
+  advance_rupees: z.preprocess(
+    (v) =>
+      v === '' || v === null || (typeof v === 'number' && Number.isNaN(v))
+        ? undefined
+        : v,
+    z
+      .number({ invalid_type_error: 'Must be a number' })
+      .positive('Advance must be greater than zero')
+      .optional(),
+  ),
   advance_method: z.enum(['cash', 'upi', 'card', 'other']).default('cash'),
 });
 

@@ -45,7 +45,12 @@ def list_active_locations(db: Session) -> list[LocationRead]:
     ).scalars()
     return [
         LocationRead(
-            id=r.id, name=r.name, slug=r.slug, address=r.address, phone=r.phone
+            id=r.id,
+            name=r.name,
+            slug=r.slug,
+            address=r.address,
+            phone=r.phone,
+            map_url=r.map_url,
         )
         for r in rows
     ]
@@ -287,3 +292,9 @@ def booking_occasion_name(db: Session, occasion_id: int | None) -> str | None:
         return None
     occasion = db.get(Occasion, occasion_id)
     return occasion.name if occasion is not None else None
+
+
+def location_map_url(db: Session, location_id: int) -> str | None:
+    """Return the location's Google Maps share link, or None when unset."""
+    location = db.get(Location, location_id)
+    return location.map_url if location is not None else None

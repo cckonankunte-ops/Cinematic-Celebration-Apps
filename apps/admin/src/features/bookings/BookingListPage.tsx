@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 
 import { formatDate, todayIsoInIST } from '@/lib/dates';
 import { formatRupees } from '@/lib/money';
+import { buildWhatsappUrl } from '@/lib/whatsapp';
 import { useLocation } from '@/features/location/useLocation';
 import { BookingCard } from './BookingCard';
 import { StatusBadge } from './StatusBadge';
@@ -147,14 +148,25 @@ export function BookingListPage(): JSX.Element {
                     <td className="py-2 pr-4">{b.special_person_name ?? '—'}</td>
                     <td className="py-2 pr-4">{formatDate(b.created_at)}</td>
                     <td className="py-2 pr-4">
-                      {(b.status === 'pending' || b.status === 'accepted') && (
-                        <Link
-                          to={`/bookings/${b.id}/edit`}
-                          className="font-medium text-gray-700 underline hover:text-gray-900"
+                      <div className="flex items-center gap-3">
+                        {(b.status === 'pending' || b.status === 'accepted') && (
+                          <Link
+                            to={`/bookings/${b.id}/edit`}
+                            className="font-medium text-gray-700 underline hover:text-gray-900"
+                          >
+                            Edit
+                          </Link>
+                        )}
+                        <a
+                          href={buildWhatsappUrl(b)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-green-700 underline hover:text-green-900"
+                          title="Send WhatsApp confirmation to the customer"
                         >
-                          Edit
-                        </Link>
-                      )}
+                          WhatsApp
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -18,14 +18,22 @@ import { StatusBadge } from './StatusBadge';
 import type { BookingListItem } from './types';
 
 function toWhatsapp(booking: BookingListItem): BookingLike {
-  // The list item lacks plan/slot descriptions; use what we have so the
-  // message is still useful. Full detail is available on the booking page.
+  // The list item now carries the full confirmation detail, so the WhatsApp
+  // message matches the booking exactly.
   return {
     booking_name: booking.booking_name,
     booking_reference: booking.booking_reference,
-    plan_title: '',
+    plan_title: booking.plan_title,
+    combos: booking.combos,
+    occasion_name: booking.occasion_name,
     booking_date: booking.booking_date,
-    slot_description: '',
+    special_person_name: booking.special_person_name,
+    cakes: booking.cakes,
+    name_on_cake: booking.name_on_cake,
+    cake_weight_half_kg: booking.cake_weight_half_kg,
+    slot_description: booking.slot_description,
+    phone: booking.phone,
+    map_url: booking.map_url,
   };
 }
 

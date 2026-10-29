@@ -15,6 +15,7 @@ class LocationRead(BaseModel):
     slug: str
     address: str | None
     phone: str | None
+    map_url: str | None = None
 
 
 class PlanRead(BaseModel):
