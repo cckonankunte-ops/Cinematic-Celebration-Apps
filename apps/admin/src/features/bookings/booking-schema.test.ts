@@ -24,10 +24,10 @@ describe('bookingCreateSchema', () => {
     expect(parsed.special_decor).toEqual([]);
     expect(parsed.combos).toEqual([]);
     expect(parsed.cake_weight_half_kg).toBe(1);
-    expect(parsed.discount_paise).toBe(0);
-    expect(parsed.food_paise).toBe(0);
-    expect(parsed.other_paise).toBe(0);
-    expect(parsed.cleaning_paise).toBe(0);
+    expect(parsed.discount_rupees).toBe(0);
+    expect(parsed.food_rupees).toBe(0);
+    expect(parsed.other_rupees).toBe(0);
+    expect(parsed.cleaning_rupees).toBe(0);
   });
 
   it('accepts a full payload with add-ons and extra charges', () => {
@@ -41,10 +41,10 @@ describe('bookingCreateSchema', () => {
       combos: [{ id: 2 }],
       led_name: 'HAPPY',
       coupon_code: 'SAVE10',
-      discount_paise: 5000,
-      food_paise: 20000,
-      other_paise: 0,
-      cleaning_paise: 10000,
+      discount_rupees: 50,
+      food_rupees: 200,
+      other_rupees: 0,
+      cleaning_rupees: 100,
     });
     expect(result.success).toBe(true);
   });
@@ -86,7 +86,7 @@ describe('bookingCreateSchema', () => {
   it('rejects negative money fields', () => {
     const result = bookingCreateSchema.safeParse({
       ...validPayload(),
-      discount_paise: -1,
+      discount_rupees: -1,
     });
     expect(result.success).toBe(false);
   });
