@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -104,6 +104,8 @@ def make_slot(
     plan_id: int,
     *,
     description: str = "9 AM - 12 PM",
+    start_time: time | None = time(9, 0),
+    duration_minutes: int | None = 180,
     show_combos: bool = True,
     sort_order: int = 1,
     effective_from: date = FAR_PAST,
@@ -113,6 +115,8 @@ def make_slot(
     slot = Slot(
         plan_id=plan_id,
         description=description,
+        start_time=start_time,
+        duration_minutes=duration_minutes,
         show_combos=show_combos,
         sort_order=sort_order,
         effective_from=effective_from,

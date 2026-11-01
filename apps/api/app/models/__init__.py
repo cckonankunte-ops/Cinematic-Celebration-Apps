@@ -16,6 +16,7 @@ from app.models.location import Location
 from app.models.occasion import Occasion
 from app.models.payment import Payment
 from app.models.plan import Plan, PlanGalleryImage
+from app.models.plan_pricing import PlanPricing
 from app.models.slot import Slot
 from app.models.special_decor_item import SpecialDecorItem
 from app.models.user import User
@@ -35,6 +36,7 @@ __all__ = [
     "Payment",
     "Plan",
     "PlanGalleryImage",
+    "PlanPricing",
     "Slot",
     "SpecialDecorItem",
     "User",

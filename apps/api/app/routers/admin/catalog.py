@@ -22,8 +22,13 @@ from app.schemas.catalog_admin import (
     ComboUpdate,
     GalleryImageRead,
     GalleryUploadRequest,
+    LocationAdminRead,
+    LocationHoursUpdate,
     PlanAdminRead,
     PlanCreate,
+    PlanPricingAdminRead,
+    PlanPricingCreate,
+    PlanPricingUpdate,
     PlanUpdate,
     SlotAdminRead,
     SlotCreate,
@@ -39,6 +44,25 @@ router = APIRouter(
     tags=["admin-catalog"],
     dependencies=[Depends(require_role("admin")), Depends(check_origin)],
 )
+
+
+# --- Locations (working hours + online-booking policy; admin only) ---
+@router.get("/locations", response_model=list[LocationAdminRead])
+def list_locations(db: Session = Depends(get_db)) -> list[LocationAdminRead]:
+    return [
+        catalog_admin.to_location_admin_read(loc)
+        for loc in catalog_admin.list_locations_admin(db)
+    ]
+
+
+@router.patch("/locations/{location_id}", response_model=LocationAdminRead)
+def update_location_hours(
+    location_id: int, body: LocationHoursUpdate, db: Session = Depends(get_db)
+) -> LocationAdminRead:
+    location = catalog_admin.update_location_hours(
+        db, location_id, body.model_dump(exclude_unset=True)
+    )
+    return catalog_admin.to_location_admin_read(location)
 
 
 # --- Plans ---
@@ -116,6 +140,39 @@ def update_slot(slot_id: int, body: SlotUpdate, db: Session = Depends(get_db)) -
 @router.delete("/slots/{slot_id}", response_model=SlotAdminRead)
 def deactivate_slot(slot_id: int, db: Session = Depends(get_db)) -> SlotAdminRead:
     return catalog_admin.to_slot_admin_read(catalog_admin.deactivate_slot(db, slot_id))
+
+
+# --- Plan pricing (per-duration base price + advance) ---
+@router.get("/plan-pricing", response_model=list[PlanPricingAdminRead])
+def list_plan_pricing(plan_id: int, db: Session = Depends(get_db)) -> list[PlanPricingAdminRead]:
+    rows = catalog_admin.list_plan_pricing_admin(db, plan_id)
+    return [catalog_admin.to_plan_pricing_admin_read(r) for r in rows]
+
+
+@router.post("/plan-pricing", response_model=PlanPricingAdminRead, status_code=201)
+def create_plan_pricing(
+    body: PlanPricingCreate, db: Session = Depends(get_db)
+) -> PlanPricingAdminRead:
+    return catalog_admin.to_plan_pricing_admin_read(
+        catalog_admin.create_plan_pricing(db, body.model_dump())
+    )
+
+
+@router.patch("/plan-pricing/{pricing_id}", response_model=PlanPricingAdminRead)
+def update_plan_pricing(
+    pricing_id: int, body: PlanPricingUpdate, db: Session = Depends(get_db)
+) -> PlanPricingAdminRead:
+    row = catalog_admin.update_plan_pricing(db, pricing_id, body.model_dump(exclude_unset=True))
+    return catalog_admin.to_plan_pricing_admin_read(row)
+
+
+@router.delete("/plan-pricing/{pricing_id}", response_model=PlanPricingAdminRead)
+def deactivate_plan_pricing(
+    pricing_id: int, db: Session = Depends(get_db)
+) -> PlanPricingAdminRead:
+    return catalog_admin.to_plan_pricing_admin_read(
+        catalog_admin.deactivate_plan_pricing(db, pricing_id)
+    )
 
 
 # --- Cakes ---

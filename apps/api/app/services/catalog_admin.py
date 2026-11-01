@@ -11,17 +11,23 @@ Services own transactions and business rules; routers stay thin.
 from __future__ import annotations
 
 import secrets
-from datetime import date
+from datetime import date, time
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.errors import NotFoundError, ValidationFailedError
+from app.core.errors import (
+    NotFoundError,
+    OutsideWorkingHoursError,
+    ValidationFailedError,
+)
 from app.core.security import hash_password
 from app.integrations.storage import create_upload_url, public_url
 from app.models.cake import Cake
 from app.models.combo_item import ComboItem
+from app.models.location import Location
 from app.models.plan import Plan, PlanGalleryImage
+from app.models.plan_pricing import PlanPricing
 from app.models.slot import Slot
 from app.models.special_decor_item import SpecialDecorItem
 from app.models.user import User
@@ -30,11 +36,14 @@ from app.schemas.catalog_admin import (
     CakeAdminRead,
     ComboAdminRead,
     GalleryImageRead,
+    LocationAdminRead,
     PlanAdminRead,
+    PlanPricingAdminRead,
     SlotAdminRead,
     SpecialDecorAdminRead,
     UserAdminRead,
 )
+from app.services.slots import window_fits_working_hours
 
 _FAR_FUTURE = date(2099, 12, 31)
 
@@ -43,6 +52,38 @@ def _apply(model: object, data: dict[str, object]) -> None:
     """Set only the provided (non-None already filtered) attributes on a model."""
     for field, value in data.items():
         setattr(model, field, value)
+
+
+# --- Locations (working hours + online-booking policy) ---
+def list_locations_admin(db: Session) -> list[Location]:
+    """All locations (active + inactive) for admin management."""
+    return list(db.execute(select(Location).order_by(Location.id)).scalars())
+
+
+def update_location_hours(
+    db: Session, location_id: int, data: dict[str, object]
+) -> Location:
+    """Update a location's working hours / cutoff / late-booking switch."""
+    location = db.get(Location, location_id)
+    if location is None:
+        raise NotFoundError("Location not found.")
+    _apply(location, data)
+    db.commit()
+    db.refresh(location)
+    return location
+
+
+def to_location_admin_read(location: Location) -> LocationAdminRead:
+    return LocationAdminRead(
+        id=location.id,
+        name=location.name,
+        slug=location.slug,
+        opens_at=location.opens_at,
+        closes_at=location.closes_at,
+        last_online_booking_start=location.last_online_booking_start,
+        allow_late_booking=location.allow_late_booking,
+        is_active=location.is_active,
+    )
 
 
 # --- Plans ---
@@ -97,9 +138,37 @@ def get_plan_admin(db: Session, plan_id: int) -> Plan:
 
 
 # --- Slots ---
+def _assert_slot_within_working_hours(
+    db: Session, plan_id: int, start: time | None, duration_minutes: int | None
+) -> None:
+    """Reject a slot whose usable window falls outside its location's hours.
+
+    Uses a representative date (today); working hours are date-independent clock
+    times, so any date works for the containment check.
+    """
+    if start is None or duration_minutes is None:
+        return
+    plan = db.get(Plan, plan_id)
+    if plan is None:
+        raise NotFoundError("Plan not found.")
+    location = db.get(Location, plan.location_id)
+    if location is None:
+        raise NotFoundError("Location not found.")
+    if not window_fits_working_hours(
+        date.today(), start, duration_minutes, location.opens_at, location.closes_at
+    ):
+        raise OutsideWorkingHoursError()
+
+
 def create_slot(db: Session, data: dict[str, object]) -> Slot:
     if data.get("effective_to") is None:
         data = {**data, "effective_to": _FAR_FUTURE}
+    _assert_slot_within_working_hours(
+        db,
+        int(data["plan_id"]),  # type: ignore[arg-type]
+        data.get("start_time"),  # type: ignore[arg-type]
+        data.get("duration_minutes"),  # type: ignore[arg-type]
+    )
     slot = Slot(**data)
     db.add(slot)
     db.commit()
@@ -112,6 +181,10 @@ def update_slot(db: Session, slot_id: int, data: dict[str, object]) -> Slot:
     if slot is None:
         raise NotFoundError("Slot not found.")
     _apply(slot, data)
+    # Validate against working hours using the post-update values.
+    _assert_slot_within_working_hours(
+        db, slot.plan_id, slot.start_time, slot.duration_minutes
+    )
     db.commit()
     db.refresh(slot)
     return slot
@@ -126,6 +199,83 @@ def deactivate_slot(db: Session, slot_id: int) -> Slot:
     db.commit()
     db.refresh(slot)
     return slot
+
+
+def _active_pricing_exists(db: Session, plan_id: int, duration_minutes: int) -> bool:
+    return (
+        db.execute(
+            select(PlanPricing).where(
+                PlanPricing.plan_id == plan_id,
+                PlanPricing.duration_minutes == duration_minutes,
+                PlanPricing.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def create_plan_pricing(db: Session, data: dict[str, object]) -> PlanPricing:
+    """Create a per-duration price row; reject a duplicate active (plan,duration)."""
+    if data.get("effective_to") is None:
+        data = {**data, "effective_to": _FAR_FUTURE}
+    plan_id = int(data["plan_id"])  # type: ignore[arg-type]
+    duration = int(data["duration_minutes"])  # type: ignore[arg-type]
+    if _active_pricing_exists(db, plan_id, duration):
+        raise ValidationFailedError(
+            "An active price for this plan and duration already exists."
+        )
+    row = PlanPricing(**data)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def update_plan_pricing(
+    db: Session, pricing_id: int, data: dict[str, object]
+) -> PlanPricing:
+    row = db.get(PlanPricing, pricing_id)
+    if row is None:
+        raise NotFoundError("Plan pricing not found.")
+    _apply(row, data)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def deactivate_plan_pricing(db: Session, pricing_id: int) -> PlanPricing:
+    row = db.get(PlanPricing, pricing_id)
+    if row is None:
+        raise NotFoundError("Plan pricing not found.")
+    row.is_active = False
+    row.effective_to = date.today()
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def list_plan_pricing_admin(db: Session, plan_id: int) -> list[PlanPricing]:
+    """All pricing rows (active + inactive) for a plan, ordered by duration."""
+    return list(
+        db.execute(
+            select(PlanPricing)
+            .where(PlanPricing.plan_id == plan_id)
+            .order_by(PlanPricing.duration_minutes, PlanPricing.id)
+        ).scalars()
+    )
+
+
+def to_plan_pricing_admin_read(row: PlanPricing) -> PlanPricingAdminRead:
+    return PlanPricingAdminRead(
+        id=row.id,
+        plan_id=row.plan_id,
+        duration_minutes=row.duration_minutes,
+        price_paise=row.price_paise,
+        advance_paise=row.advance_paise,
+        effective_from=row.effective_from,
+        effective_to=row.effective_to,
+        is_active=row.is_active,
+    )
 
 
 def list_slots_admin(db: Session, plan_id: int) -> list[Slot]:
@@ -393,6 +543,8 @@ def to_slot_admin_read(slot: Slot) -> SlotAdminRead:
     return SlotAdminRead(
         id=slot.id,
         plan_id=slot.plan_id,
+        start_time=slot.start_time,
+        duration_minutes=slot.duration_minutes,
         description=slot.description,
         show_combos=slot.show_combos,
         sort_order=slot.sort_order,

@@ -46,6 +46,41 @@ class BookingDateInPastError(AppError):
     message = "The booking date cannot be in the past."
 
 
+class StartInPastError(AppError):
+    """Customer/staff booked a start time at/before now (admins are exempt)."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "START_IN_PAST"
+    message = "The slot start time has already passed. Please pick a later slot."
+
+
+class OutsideWorkingHoursError(AppError):
+    """Slot/booking window falls outside the location's open-close window."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "OUTSIDE_WORKING_HOURS"
+    message = "The selected time is outside this location's working hours."
+
+
+class BookingEndsAfterCloseError(AppError):
+    """Usable end (start + duration, excluding cleaning buffer) exceeds close."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "BOOKING_ENDS_AFTER_CLOSE"
+    message = (
+        "This booking would end after we close. "
+        "Please choose a shorter duration or an earlier start."
+    )
+
+
+class LateBookingDisabledError(AppError):
+    """Public booking at/after the cutoff while late booking is switched off."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "LATE_BOOKING_DISABLED"
+    message = "Online booking for this time is closed. Please contact us to book."
+
+
 class AcceptRequiresAdvanceError(AppError):
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     code = "ACCEPT_REQUIRES_ADVANCE"

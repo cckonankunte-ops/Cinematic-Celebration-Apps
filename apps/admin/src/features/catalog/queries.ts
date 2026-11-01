@@ -18,9 +18,13 @@ import type {
   CakeAdminRead,
   ComboCreateBody,
   ComboUpdateBody,
+  LocationAdminRead,
+  LocationHoursUpdateBody,
   NamedAddonAdminRead,
   PlanAdminRead,
   PlanCreateBody,
+  PlanPricingAdminRead,
+  PlanPricingCreateBody,
   SlotAdminRead,
   SlotCreateBody,
 } from './types';
@@ -169,6 +173,73 @@ export function useUpdateCombo(
       api.patch<NamedAddonAdminRead>(`/api/v1/admin/combos/${comboId}`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['catalog', 'combos', locationId] });
+    },
+  });
+}
+
+// --- Plan pricing (per-duration base price + advance, R11) ---
+export function usePlanPricing(
+  planId: number | null,
+): UseQueryResult<PlanPricingAdminRead[]> {
+  return useQuery<PlanPricingAdminRead[]>({
+    queryKey: ['catalog', 'plan-pricing', planId],
+    queryFn: () =>
+      api.get<PlanPricingAdminRead[]>(
+        `/api/v1/admin/plan-pricing?plan_id=${planId as number}`,
+      ),
+    enabled: planId !== null,
+  });
+}
+
+export function useCreatePlanPricing(
+  planId: number | null,
+): UseMutationResult<PlanPricingAdminRead, unknown, PlanPricingCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<PlanPricingAdminRead, unknown, PlanPricingCreateBody>({
+    mutationFn: (body) =>
+      api.post<PlanPricingAdminRead>('/api/v1/admin/plan-pricing', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'plan-pricing', planId] });
+    },
+  });
+}
+
+export function useDeactivatePlanPricing(
+  planId: number | null,
+): UseMutationResult<PlanPricingAdminRead, unknown, number> {
+  const qc = useQueryClient();
+  return useMutation<PlanPricingAdminRead, unknown, number>({
+    mutationFn: (pricingId) =>
+      api.del<PlanPricingAdminRead>(`/api/v1/admin/plan-pricing/${pricingId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'plan-pricing', planId] });
+    },
+  });
+}
+
+// --- Locations (working hours + online-booking policy) ---
+export function useLocationsAdmin(): UseQueryResult<LocationAdminRead[]> {
+  return useQuery<LocationAdminRead[]>({
+    queryKey: ['catalog', 'locations'],
+    queryFn: () => api.get<LocationAdminRead[]>('/api/v1/admin/locations'),
+  });
+}
+
+export function useUpdateLocationHours(): UseMutationResult<
+  LocationAdminRead,
+  unknown,
+  { locationId: number; body: LocationHoursUpdateBody }
+> {
+  const qc = useQueryClient();
+  return useMutation<
+    LocationAdminRead,
+    unknown,
+    { locationId: number; body: LocationHoursUpdateBody }
+  >({
+    mutationFn: ({ locationId, body }) =>
+      api.patch<LocationAdminRead>(`/api/v1/admin/locations/${locationId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'locations'] });
     },
   });
 }

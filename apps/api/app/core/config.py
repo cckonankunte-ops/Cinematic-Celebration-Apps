@@ -51,6 +51,9 @@ class Settings(BaseSettings):
 
     # --- Booking lifecycle ---
     PENDING_HOLD_MINUTES: int = 120
+    # Minutes reserved after a booking's usable time for cleaning/preparation.
+    # Applied when checking slot availability/overlap; invisible to customers.
+    CLEANING_BUFFER_MINUTES: int = 30
 
     # --- Manual payment (Phase 1) ---
     MANUAL_UPI_VPA: str = "cinematic@upi"

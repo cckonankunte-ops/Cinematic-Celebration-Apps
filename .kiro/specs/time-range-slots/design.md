@@ -367,6 +367,23 @@ from start+duration, buffer never shown, rejection messages surfaced.
 
 ---
 
+## Test-harness limitation (recorded during implementation)
+
+The pytest harness builds the schema with ``Base.metadata.create_all``, not
+Alembic. The range **exclusion constraint** and the generated ``occupied_range``
+column live only in migration ``0012`` (production truth), so they are NOT
+present in `create_all`-built test databases. Consequences:
+- Overlap behaviour in tests is exercised through the **service-layer
+  pre-check** (`_assert_no_overlap`), which is the real application code path
+  and returns the 409.
+- The model retains the original ``uq_bookings_active_slot`` partial unique index
+  so `create_all` tests still have a same-slot double-booking guard at the DB
+  level; migration 0012 drops it in production and replaces it with the stronger
+  range exclusion constraint.
+- The cross-duration, concurrent "exactly one wins" guarantee from the range
+  constraint is verified by running migration 0012 against real Postgres (the
+  Codespace), not by the `create_all` unit harness.
+
 ## Open items for the tasks phase
 - Confirm whether a location-edit admin endpoint/screen exists or must be added
   (working hours/cutoff/switch need an entry point).

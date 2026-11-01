@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
@@ -59,6 +59,7 @@ from app.schemas.booking import (
 from app.services import coupon as coupon_service
 from app.services import payments as payments_service
 from app.services.events import write_booking_event
+from app.services.plan_pricing import resolve_duration_pricing
 from app.services.pricing import (
     AddonLine,
     ComboSelection,
@@ -67,6 +68,12 @@ from app.services.pricing import (
     ValidatedCoupon,
     ValidatedRequest,
     compute_booking_price,
+)
+from app.services.slots import (
+    ActorKind,
+    LocationHours,
+    occupied_window,
+    validate_booking_time,
 )
 
 _IST = ZoneInfo("Asia/Kolkata")
@@ -239,6 +246,79 @@ def generate_reference(location: Location, booking_date: date) -> str:
     return f"CC-{abbrev}-{booking_date.strftime('%Y%m%d')}-{hex_part}"
 
 
+def _slot_timing(db: Session, slot_id: int) -> tuple[time | None, int | None]:
+    """Return (start_time, duration_minutes) for a slot (may be None pre-backfill)."""
+    slot = db.get(Slot, slot_id)
+    if slot is None:
+        return None, None
+    return slot.start_time, slot.duration_minutes
+
+
+def _enforce_booking_time(
+    db: Session,
+    *,
+    location: Location,
+    booking_date: date,
+    start: time | None,
+    duration_minutes: int | None,
+    actor: ActorKind,
+) -> None:
+    """Run the time-rule pipeline for a booking (skips legacy slots w/o times)."""
+    if start is None or duration_minutes is None:
+        return
+    hours = LocationHours(
+        opens_at=location.opens_at,
+        closes_at=location.closes_at,
+        last_online_booking_start=location.last_online_booking_start,
+        allow_late_booking=location.allow_late_booking,
+    )
+    validate_booking_time(
+        hours=hours,
+        booking_date=booking_date,
+        start=start,
+        duration_minutes=duration_minutes,
+        actor=actor,
+    )
+
+
+def _assert_no_overlap(
+    db: Session,
+    *,
+    location_id: int,
+    plan_id: int,
+    booking_date: date,
+    start: time | None,
+    duration_minutes: int | None,
+    exclude_booking_id: int | None = None,
+) -> None:
+    """Pre-check: raise SlotUnavailableError if the window overlaps an active one.
+
+    The DB exclusion constraint is the authoritative backstop under concurrency;
+    this gives a clean 409 before the INSERT. Legacy bookings without times are
+    ignored (they are handled by the retrofit before constraints are enabled).
+    """
+    if start is None or duration_minutes is None:
+        return
+    buffer = settings.CLEANING_BUFFER_MINUTES
+    window = occupied_window(booking_date, start, duration_minutes, buffer)
+    rows = db.execute(
+        select(Booking.id, Booking.start_time, Booking.duration_minutes).where(
+            Booking.location_id == location_id,
+            Booking.plan_id == plan_id,
+            Booking.booking_date == booking_date,
+            Booking.status.in_(("pending", "accepted")),
+            Booking.start_time.is_not(None),
+            Booking.duration_minutes.is_not(None),
+        )
+    ).all()
+    for bid, b_start, b_dur in rows:
+        if exclude_booking_id is not None and bid == exclude_booking_id:
+            continue
+        other = occupied_window(booking_date, b_start, b_dur, buffer)
+        if window.overlaps(other):
+            raise SlotUnavailableError()
+
+
 @dataclass(frozen=True)
 class _ConstraintCheck:
     is_slot_conflict: bool
@@ -248,7 +328,13 @@ class _ConstraintCheck:
 def _classify_integrity_error(exc: IntegrityError) -> _ConstraintCheck:
     detail = str(getattr(exc, "orig", exc))
     return _ConstraintCheck(
-        is_slot_conflict="uq_bookings_active_slot" in detail,
+        # The overlap exclusion constraint (migration B) is the range-aware
+        # successor to the old uq_bookings_active_slot unique index; either name
+        # signals the slot/window is already taken.
+        is_slot_conflict=(
+            "excl_bookings_active_overlap" in detail
+            or "uq_bookings_active_slot" in detail
+        ),
         is_reference_conflict="booking_reference" in detail,
     )
 
@@ -339,10 +425,42 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
         cake_weight_half_kg=data.cake_weight_half_kg,
         led_name=data.led_name,
     )
+    location = db.get(Location, data.location_id)
+    if location is None:
+        raise ItemInvalidError("The selected location is not valid.")
+
+    # Duration-based base price + advance (R11) and the slot's time snapshot.
+    start_time, duration_minutes = _slot_timing(db, data.slot_id)
+    duration_pricing = resolve_duration_pricing(
+        db, req.plan, duration_minutes, data.booking_date
+    )
+
+    # Customer self-service time rules (future-start, working-hours,
+    # end-before-close, late cutoff), then an overlap pre-check for a clean 409.
+    _enforce_booking_time(
+        db,
+        location=location,
+        booking_date=data.booking_date,
+        start=start_time,
+        duration_minutes=duration_minutes,
+        actor=ActorKind.PUBLIC,
+    )
+    _assert_no_overlap(
+        db,
+        location_id=data.location_id,
+        plan_id=data.plan_id,
+        booking_date=data.booking_date,
+        start=start_time,
+        duration_minutes=duration_minutes,
+    )
+
     # Two-pass coupon: price once with no coupon to get the pre-coupon total
     # (the min-order check reads it), validate the coupon against that total,
     # then re-price with the validated coupon for the final breakdown.
-    pass1 = compute_booking_price(req, is_customer=True, coupon=None)
+    pass1 = compute_booking_price(
+        req, is_customer=True, coupon=None,
+        base_price_paise=duration_pricing.price_paise,
+    )
     validated, coupon_row = _resolve_coupon(
         db,
         coupon_code=data.coupon_code,
@@ -352,14 +470,13 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
         booking_id=None,
         booking_date=data.booking_date,
     )
-    price = compute_booking_price(req, is_customer=True, coupon=validated)
-
-    location = db.get(Location, data.location_id)
-    if location is None:
-        raise ItemInvalidError("The selected location is not valid.")
+    price = compute_booking_price(
+        req, is_customer=True, coupon=validated,
+        base_price_paise=duration_pricing.price_paise,
+    )
 
     public_token = secrets.token_urlsafe(12)
-    advance_paise = req.plan.advance_paise
+    advance_paise = duration_pricing.advance_paise
     final_reference = ""
 
     for _ in range(_MAX_REFERENCE_ATTEMPTS):
@@ -371,6 +488,8 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
             plan_id=data.plan_id,
             slot_id=data.slot_id,
             booking_date=data.booking_date,
+            start_time=start_time,
+            duration_minutes=duration_minutes,
             booking_name=data.booking_name,
             email=data.email,
             phone=data.phone,
@@ -390,7 +509,7 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
             coupon_code=price.coupon_code,
             coupon_discount_paise=price.coupon_discount_paise,
             total_paise=price.total_paise,
-            advance_paise=req.plan.advance_paise,
+            advance_paise=advance_paise,
             status="pending",
         )
         db.add(booking)
@@ -499,6 +618,36 @@ def create_admin_booking(
         cake_weight_half_kg=data.cake_weight_half_kg,
         led_name=data.led_name,
     )
+
+    location = db.get(Location, data.location_id)
+    if location is None:
+        raise ItemInvalidError("The selected location is not valid.")
+
+    # Duration-based price/advance + slot time snapshot (R11).
+    start_time, duration_minutes = _slot_timing(db, data.slot_id)
+    duration_pricing = resolve_duration_pricing(
+        db, req.plan, duration_minutes, data.booking_date
+    )
+
+    # Admin is exempt from future-start / late-cutoff / end-before-close, but
+    # working-hours still apply. Overlap pre-check gives a clean 409.
+    _enforce_booking_time(
+        db,
+        location=location,
+        booking_date=data.booking_date,
+        start=start_time,
+        duration_minutes=duration_minutes,
+        actor=ActorKind.ADMIN,
+    )
+    _assert_no_overlap(
+        db,
+        location_id=data.location_id,
+        plan_id=data.plan_id,
+        booking_date=data.booking_date,
+        start=start_time,
+        duration_minutes=duration_minutes,
+    )
+
     # Two-pass coupon (see create_customer_booking) with admin money fields.
     pass1 = compute_booking_price(
         req,
@@ -508,6 +657,7 @@ def create_admin_booking(
         cleaning_paise=data.cleaning_paise,
         is_customer=False,
         coupon=None,
+        base_price_paise=duration_pricing.price_paise,
     )
     validated, coupon_row = _resolve_coupon(
         db,
@@ -526,11 +676,8 @@ def create_admin_booking(
         cleaning_paise=data.cleaning_paise,
         is_customer=False,
         coupon=validated,
+        base_price_paise=duration_pricing.price_paise,
     )
-
-    location = db.get(Location, data.location_id)
-    if location is None:
-        raise ItemInvalidError("The selected location is not valid.")
 
     public_token = secrets.token_urlsafe(12)
 
@@ -542,6 +689,8 @@ def create_admin_booking(
             plan_id=data.plan_id,
             slot_id=data.slot_id,
             booking_date=data.booking_date,
+            start_time=start_time,
+            duration_minutes=duration_minutes,
             booking_name=data.booking_name,
             email=data.email,
             phone=data.phone,
@@ -561,7 +710,7 @@ def create_admin_booking(
             coupon_code=price.coupon_code,
             coupon_discount_paise=price.coupon_discount_paise,
             total_paise=price.total_paise,
-            advance_paise=req.plan.advance_paise,
+            advance_paise=duration_pricing.advance_paise,
             status="accepted",
             crm_user_id=actor.id,
         )
@@ -733,6 +882,11 @@ def update_booking(
             cake_weight_half_kg=cake_weight_half_kg,
             led_name=led_name,
         )
+        # Re-price against the booking's duration base (slot/date are not edited
+        # here, so the snapshotted duration still applies).
+        duration_pricing = resolve_duration_pricing(
+            db, req.plan, booking.duration_minutes, booking.booking_date
+        )
         # Two-pass coupon; booking_id excludes this booking's own prior redemption.
         pass1 = compute_booking_price(
             req,
@@ -742,6 +896,7 @@ def update_booking(
             cleaning_paise=cleaning,
             is_customer=False,
             coupon=None,
+            base_price_paise=duration_pricing.price_paise,
         )
         validated, coupon_row = _resolve_coupon(
             db,
@@ -760,6 +915,7 @@ def update_booking(
             cleaning_paise=cleaning,
             is_customer=False,
             coupon=validated,
+            base_price_paise=duration_pricing.price_paise,
         )
         db.execute(
             BookingItem.__table__.delete().where(BookingItem.booking_id == booking.id)
@@ -899,6 +1055,12 @@ def preview_booking(
     else:
         discount_paise = food_paise = other_paise = cleaning_paise = 0
 
+    # Resolve the duration-specific base price for the selected slot (R11).
+    _start, duration_minutes = _slot_timing(db, data.slot_id)
+    duration_pricing = resolve_duration_pricing(
+        db, req.plan, duration_minutes, data.booking_date
+    )
+
     pass1 = compute_booking_price(
         req,
         discount_paise=discount_paise,
@@ -907,6 +1069,7 @@ def preview_booking(
         cleaning_paise=cleaning_paise,
         is_customer=is_customer,
         coupon=None,
+        base_price_paise=duration_pricing.price_paise,
     )
     booking_id = getattr(data, "booking_id", None)
     validated, _ = _resolve_coupon(
@@ -926,6 +1089,7 @@ def preview_booking(
         cleaning_paise=cleaning_paise,
         is_customer=is_customer,
         coupon=validated,
+        base_price_paise=duration_pricing.price_paise,
     )
 
     # Brand-new previews have no booking, so nothing is paid yet; an edit preview

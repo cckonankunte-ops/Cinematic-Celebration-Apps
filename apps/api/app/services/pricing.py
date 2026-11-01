@@ -179,6 +179,7 @@ def compute_booking_price(
     cleaning_paise: int = 0,
     is_customer: bool,
     coupon: ValidatedCoupon | None = None,
+    base_price_paise: int | None = None,
 ) -> PriceBreakdown:
     """Compute the authoritative price breakdown.
 
@@ -186,10 +187,17 @@ def compute_booking_price(
     (standalone weighted line unless a combo absorbs it), LED (standalone line
     unless a combo absorbs it), combo lines (price + floored cake/LED deltas),
     subtotal, admin discount, pre-coupon total, coupon discount, clamped total.
+
+    ``base_price_paise`` overrides the plan's base price when the caller has
+    resolved a duration-specific price (see ``services.plan_pricing``). When
+    None, the plan's own ``price_paise`` is used (back-compatible default).
+    People allowance and the extra-guest rate always come from the plan.
     """
     plan = req.plan
+    # Duration-specific base price when provided, else the plan's price.
+    plan_price = base_price_paise if base_price_paise is not None else plan.price_paise
 
-    # 1. Plan price + extra-guest charge (rates come from the plan row).
+    # 1. Plan price + extra-guest charge (extra-guest rate comes from the plan).
     extra_guest = _extra_guest_paise(plan, req.people)
 
     lines: list[AddonLine] = []
@@ -280,7 +288,7 @@ def compute_booking_price(
 
     # 6. Subtotal = plan + extra_guest + sum(addon amounts).
     addon_total = sum(line.amount_paise for line in lines)
-    subtotal = plan.price_paise + extra_guest + addon_total
+    subtotal = plan_price + extra_guest + addon_total
 
     # 7. Admin manual discount: clamped to [0, plan.max_discount_paise], 0 when
     #    the plan disallows discounts, and always 0 for customers.
@@ -300,7 +308,7 @@ def compute_booking_price(
         coupon_discount = compute_coupon_discount(
             coupon,
             total_before_coupon=total_before_coupon,
-            plan_price=plan.price_paise,
+            plan_price=plan_price,
             extra_guest=extra_guest,
             decor_total=sum(line.amount_paise for line in lines if line.kind == "decor"),
             combo_total=sum(line.amount_paise for line in lines if line.kind == "combo"),
@@ -312,7 +320,7 @@ def compute_booking_price(
     total = max(0, total_before_coupon - coupon_discount)
 
     return PriceBreakdown(
-        plan_price_paise=plan.price_paise,
+        plan_price_paise=plan_price,
         extra_guest_paise=extra_guest,
         addon_lines=lines,
         subtotal_paise=subtotal,
