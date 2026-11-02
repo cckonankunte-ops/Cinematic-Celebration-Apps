@@ -16,6 +16,7 @@ import { useAuth } from '@/features/auth/useAuth';
 import { useLocation } from '@/features/location/useLocation';
 import { CreatePlanForm } from './CreatePlanForm';
 import { GalleryUpload } from './GalleryUpload';
+import { LocationSettings } from './LocationSettings';
 import { PlanPricingManager } from './PlanPricingManager';
 import { SlotManager } from './SlotManager';
 import {
@@ -102,6 +103,8 @@ export function CatalogPage(): JSX.Element {
   return (
     <section className="space-y-6">
       <h1 className="text-xl font-semibold text-gray-900">Catalog</h1>
+
+      <LocationSettings />
 
       <div className="space-y-2">
         <h2 className="text-base font-semibold text-gray-800">Plans</h2>

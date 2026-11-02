@@ -140,18 +140,18 @@ Money/pricing untouched. Times are IST wall-clock.
     affect public availability.
   - _Requirements: 5.1, 5.3, 6.1, 6.5, 9.2_
 
-- [ ] 12. Frontend — admin slot management + per-duration pricing
+- [x] 12. Frontend — admin slot management + per-duration pricing
   - Catalog slot form: `start_time` select (:00/:30 within hours) +
     `duration_minutes` select (60/90/120); show derived label.
   - Catalog plan pricing UI: edit price/advance per `(plan, duration)` in rupees
     → paise. Vitest for form mapping/validation.
   - _Requirements: 1.3, 2.1, 7.3, 11.5_
 
-- [ ] 13. Frontend — location settings (admin)
+- [x] 13. Frontend — location settings (admin)
   - Fields for open/close, cutoff, late switch (admin only). Vitest.
   - _Requirements: 5.1, 6.1_
 
-- [ ] 14. Frontend — booking form + customer wizard
+- [x] 14. Frontend — booking form + customer wizard
   - Render slot times from start+duration; show the duration-specific base price
     and re-price the preview/total when the duration changes (R11.6); keep
     greyed/non-selectable unavailable slots; surface specific rejection messages
@@ -159,13 +159,13 @@ Money/pricing untouched. Times are IST wall-clock.
     Vitest for display + re-pricing + message surfacing.
   - _Requirements: 3.3, 7.2, 7.3, 7.4, 5.5, 6.2, 10.1, 11.6_
 
-- [ ] 15. Docs + .env.example + regenerate API types
+- [x] 15. Docs + .env.example + regenerate API types
   - Document the buffer-literal-in-migration trade-off and the retrofit runbook
     in `docs/`; ensure `.env.example` carries `CLEANING_BUFFER_MINUTES`.
   - Run `gen:api` so admin/web types match the new schema.
   - _Requirements: 9.3_
 
-- [ ] 16. Full verification gate
+- [-] 16. Full verification gate
   - `ruff`, `pytest` (incl. all mandatory integrity/role cases), `eslint`,
     `vitest`, both builds green.
   - _Requirements: all; tech.md Definition of Done_
