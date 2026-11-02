@@ -16,6 +16,8 @@ import { useAuth } from '@/features/auth/useAuth';
 import { useLocation } from '@/features/location/useLocation';
 import { CreatePlanForm } from './CreatePlanForm';
 import { GalleryUpload } from './GalleryUpload';
+import { PlanPricingManager } from './PlanPricingManager';
+import { SlotManager } from './SlotManager';
 import {
   useCakes,
   useCombos,
@@ -70,7 +72,21 @@ function AddonList({
 export function CatalogPage(): JSX.Element {
   const { user } = useAuth();
   const { selectedLocationId } = useLocation();
-  const [expandedPlanId, setExpandedPlanId] = useState<number | null>(null);
+  // Which expandable panel is open for a plan: gallery | slots | pricing.
+  const [expanded, setExpanded] = useState<{
+    planId: number;
+    panel: 'gallery' | 'slots' | 'pricing';
+  } | null>(null);
+
+  const togglePanel = (
+    planId: number,
+    panel: 'gallery' | 'slots' | 'pricing',
+  ): void =>
+    setExpanded((cur) =>
+      cur && cur.planId === planId && cur.panel === panel
+        ? null
+        : { planId, panel },
+    );
 
   const plans = usePlans(selectedLocationId);
   const cakes = useCakes(selectedLocationId);
@@ -103,9 +119,21 @@ export function CatalogPage(): JSX.Element {
                   <ActiveTag active={plan.is_active} />
                   <button
                     type="button"
-                    onClick={() =>
-                      setExpandedPlanId((id) => (id === plan.id ? null : plan.id))
-                    }
+                    onClick={() => togglePanel(plan.id, 'slots')}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+                  >
+                    Slots
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => togglePanel(plan.id, 'pricing')}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+                  >
+                    Pricing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => togglePanel(plan.id, 'gallery')}
                     className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
                   >
                     Gallery
@@ -120,7 +148,15 @@ export function CatalogPage(): JSX.Element {
                   </button>
                 </div>
               </div>
-              {expandedPlanId === plan.id && <GalleryUpload planId={plan.id} />}
+              {expanded?.planId === plan.id && expanded.panel === 'gallery' && (
+                <GalleryUpload planId={plan.id} />
+              )}
+              {expanded?.planId === plan.id && expanded.panel === 'slots' && (
+                <SlotManager planId={plan.id} />
+              )}
+              {expanded?.planId === plan.id && expanded.panel === 'pricing' && (
+                <PlanPricingManager planId={plan.id} />
+              )}
             </li>
           ))}
         </ul>
