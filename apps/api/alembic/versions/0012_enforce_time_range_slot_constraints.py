@@ -37,9 +37,12 @@ down_revision: str | None = "0011"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Cleaning buffer baked into the generated range (minutes). Keep in sync with
-# CLEANING_BUFFER_MINUTES; changing it needs a new migration (see docstring).
-_BUFFER_MINUTES = 30
+# The DB exclusion constraint guards the PHYSICAL invariant: no two active
+# bookings may occupy overlapping USABLE time for the same (location, plan,
+# date). The cleaning buffer is an operational policy enforced by the service
+# pre-check on NEW bookings only (so historical back-to-back bookings created
+# before the buffer existed stay valid). Therefore the generated range uses NO
+# buffer. This also avoids baking a mutable buffer literal into the schema.
 
 
 def upgrade() -> None:
@@ -64,18 +67,18 @@ def upgrade() -> None:
     )
 
     # --- Generated occupied_range + overlap exclusion constraint ---
-    # anchor = booking_date + start_time; end = anchor + (duration + buffer) min.
+    # anchor = booking_date + start_time; end = anchor + duration (NO buffer).
     # Anchoring on a timestamp makes midnight crossover automatic. Half-open [)
-    # so back-to-back bookings at the buffer boundary do not overlap.
+    # so genuinely back-to-back bookings (one ends exactly when the next starts)
+    # do not overlap. The cleaning buffer is a service-layer policy, not a DB one.
     op.execute(
-        f"""
+        """
         ALTER TABLE bookings
         ADD COLUMN occupied_range tsrange
         GENERATED ALWAYS AS (
             tsrange(
                 (booking_date + start_time),
-                (booking_date + start_time)
-                    + make_interval(mins => duration_minutes + {_BUFFER_MINUTES}),
+                (booking_date + start_time) + make_interval(mins => duration_minutes),
                 '[)'
             )
         ) STORED

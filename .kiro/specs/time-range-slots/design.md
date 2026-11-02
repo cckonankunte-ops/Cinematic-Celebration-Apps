@@ -189,7 +189,19 @@ Design notes:
   old equality index and keeps the per-`(location, plan, date)` basis (date is
   embedded in the anchor timestamp, so same-plan different-date never overlap).
 
-#### Buffer & the exclusion constraint (the one real trade-off)
+#### Buffer enforcement split (decided during retrofit)
+
+The retrofit surfaced two legitimate historical back-to-back bookings (an 8 PM
+handoff) that a retroactive 30-min buffer would have invalidated. Decision: the
+**DB exclusion constraint guards the physical invariant only** — no two active
+bookings may occupy overlapping *usable* time for the same (location, plan,
+date), with **no buffer** baked into the generated range. The **cleaning buffer
+is a service-layer policy** applied by the booking pre-check and the availability
+calculation to **new** bookings (via ``CLEANING_BUFFER_MINUTES``). This keeps
+historical back-to-back bookings valid, lets the buffer stay live-tunable (no
+migration needed to change it), and still gives new bookings the 30-min gap.
+
+#### (Superseded) Buffer & the exclusion constraint trade-off
 A generated column's expression must be immutable, so `<BUFFER>` must be a
 **literal baked into the migration**, seeded from `CLEANING_BUFFER_MINUTES` at
 migration time. Implications, stated honestly:

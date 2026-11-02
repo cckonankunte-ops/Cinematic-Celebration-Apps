@@ -119,7 +119,13 @@ def seed_plan_pricing(cur: psycopg.Cursor, report: list[str]) -> int:
 
 
 def overlap_precheck(cur: psycopg.Cursor, buffer_minutes: int, report: list[str]) -> int:
-    """Report active bookings whose new occupied windows overlap. Returns count."""
+    """Report active bookings whose occupied windows overlap. Returns count.
+
+    Uses buffer_minutes=0 by default to match the DB exclusion constraint, which
+    guards USABLE-time overlap only (the cleaning buffer is a service-layer policy
+    on new bookings, not a DB invariant). Pass a non-zero --buffer to preview the
+    stricter policy if desired.
+    """
     cur.execute(
         """
         SELECT id, location_id, plan_id, booking_date, start_time, duration_minutes
@@ -182,7 +188,13 @@ def run(buffer_minutes: int, report_path: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Backfill time-range slot data.")
-    ap.add_argument("--buffer", type=int, default=30, help="cleaning buffer minutes")
+    ap.add_argument(
+        "--buffer",
+        type=int,
+        default=0,
+        help="buffer minutes for the overlap pre-check (0 = match the DB "
+        "constraint, which is usable-time only)",
+    )
     ap.add_argument("--report", default="time_slots_retrofit_report.txt")
     args = ap.parse_args()
     run(args.buffer, args.report)
