@@ -165,7 +165,7 @@ Money/pricing untouched. Times are IST wall-clock.
   - Run `gen:api` so admin/web types match the new schema.
   - _Requirements: 9.3_
 
-- [-] 16. Full verification gate
+- [x] 16. Full verification gate
   - `ruff`, `pytest` (incl. all mandatory integrity/role cases), `eslint`,
     `vitest`, both builds green.
   - _Requirements: all; tech.md Definition of Done_

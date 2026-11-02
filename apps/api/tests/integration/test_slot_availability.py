@@ -9,12 +9,14 @@ blocked slots are returned (not hidden) so the UI can grey them out.
 
 from __future__ import annotations
 
-from datetime import time
+from datetime import date, datetime, time
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.services.catalog import list_slots_with_availability
+from app.services.slots import ActorKind
 from tests.factories import future_date, make_location, make_plan, make_slot
 
 pytestmark = pytest.mark.integration
@@ -100,9 +102,16 @@ def test_all_slots_available_when_nothing_booked(
     assert by_id[s2.id]["is_available"] is True
 
 
-def test_post_cutoff_slot_unavailable_to_public_when_switch_off(
+def test_cutoff_does_not_block_future_dated_late_slot(
     client: TestClient, db: Session
 ) -> None:
+    """The late-booking cutoff is SAME-DAY only.
+
+    A late slot booked for a future date must stay available even when the
+    switch is off — the cutoff exists only to stop last-minute same-day late
+    bookings after staff have left. (Same-day blocking is covered
+    deterministically in the service unit tests, where `now` is injectable.)
+    """
     loc = make_location(db)  # cutoff 22:00, allow_late_booking False
     plan = make_plan(db, loc.id)
     late = make_slot(
@@ -111,7 +120,7 @@ def test_post_cutoff_slot_unavailable_to_public_when_switch_off(
     db.commit()
 
     by_id = _avail(client, plan.id, loc.id, future_date().isoformat())
-    assert by_id[late.id]["is_available"] is False
+    assert by_id[late.id]["is_available"] is True
 
 
 def test_post_cutoff_slot_available_to_public_when_switch_on(
@@ -127,3 +136,29 @@ def test_post_cutoff_slot_available_to_public_when_switch_on(
 
     by_id = _avail(client, plan.id, loc.id, future_date().isoformat())
     assert by_id[late.id]["is_available"] is True
+
+
+def test_same_day_cutoff_hides_late_slot_for_public(db: Session) -> None:
+    """Service-level: with the switch off, a same-day late slot is unavailable.
+
+    Uses an injected `now` (early morning today) so the 22:30 start is still in
+    the future (passes future-start) yet same-day (hits the cutoff). The HTTP
+    endpoint can't inject `now`, so this rule is asserted at the service layer
+    to stay deterministic.
+    """
+    loc = make_location(db)  # cutoff 22:00, allow_late_booking False
+    plan = make_plan(db, loc.id)
+    late = make_slot(
+        db, plan.id, start_time=time(22, 30), duration_minutes=60, sort_order=1
+    )
+    db.commit()
+
+    today = date.today()
+    now_morning = datetime.combine(today, time(9, 0))
+    result = {
+        s.id: s
+        for s in list_slots_with_availability(
+            db, plan.id, loc.id, today, actor=ActorKind.PUBLIC, now=now_morning
+        )
+    }
+    assert result[late.id].is_available is False

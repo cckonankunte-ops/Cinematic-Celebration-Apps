@@ -171,7 +171,8 @@ def validate_booking_time(
       1. future-start   — PUBLIC/STAFF only (ADMIN may book the past)
       2. working-hours  — all actors (usable window within open/close)
       3. end-before-close — PUBLIC/STAFF (ADMIN may override)
-      4. late-cutoff    — PUBLIC only (STAFF/ADMIN exempt)
+      4. late-cutoff    — PUBLIC only, SAME-DAY only (STAFF/ADMIN exempt;
+                          future-dated bookings always allowed)
 
     Overlap/buffer conflict is checked separately (service + DB), not here.
     Raises the specific AppError; returns None when valid.
@@ -200,7 +201,10 @@ def validate_booking_time(
         if end_dt > close_dt:
             raise BookingEndsAfterCloseError()
 
-    # 4. Late-booking cutoff (public self-service only).
+    # 4. Late-booking cutoff (public self-service only) — SAME-DAY ONLY.
+    #    The cutoff exists purely to stop last-minute same-day late slots after
+    #    staff have left for the night. Future-dated bookings are always allowed,
+    #    so the same late slot on any later date stays bookable anytime.
     if actor is ActorKind.PUBLIC and not hours.allow_late_booking:
-        if start >= hours.last_online_booking_start:
+        if booking_date == current.date() and start >= hours.last_online_booking_start:
             raise LateBookingDisabledError()

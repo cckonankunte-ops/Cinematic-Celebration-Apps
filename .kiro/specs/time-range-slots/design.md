@@ -235,9 +235,12 @@ booking_date, actor)`. Order and responsibility:
 3. **End-before-close (R5.5–5.6):** usable end (`start + duration`, **no buffer**)
    must be ≤ close. Reject for customer/staff with the friendly message; an admin
    may override (R6.4, R10 interplay). Buffer may exceed close (R5.6).
-4. **Late-booking cutoff (R6):** public only. If `start >= last_online_booking_start`
-   and `not allow_late_booking` → not offered / rejected. Staff & admin exempt
-   from the cutoff; end-before-close still applies to staff.
+4. **Late-booking cutoff (R6):** public only, **same-day only**. If the booking
+   is for *today* and `start >= last_online_booking_start` and
+   `not allow_late_booking` → not offered / rejected. Future-dated bookings are
+   never blocked by the cutoff (it exists only to stop last-minute same-day late
+   starts after staff leave). Staff & admin exempt entirely; end-before-close
+   still applies to staff.
 5. **Overlap + buffer (R3, R4):** pre-check queries active bookings for the same
    `(location, plan, date)` and rejects on any occupied-range overlap, raising the
    existing `SlotUnavailableError` (409). The INSERT then relies on the exclusion

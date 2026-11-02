@@ -163,9 +163,18 @@ def test_end_exactly_at_close_allowed() -> None:
     _validate(ActorKind.STAFF, time(0, 0), 60, now=datetime(2026, 11, 9, 23, 0))
 
 
-def test_late_cutoff_blocks_public_when_off() -> None:
+def test_late_cutoff_blocks_public_same_day_when_off() -> None:
+    # now is same-day (D); a late same-day start is blocked for public.
     with pytest.raises(LateBookingDisabledError):
         _validate(ActorKind.PUBLIC, time(22, 30), 60)  # >= 22:00 cutoff, ends 23:30
+
+
+def test_late_cutoff_allows_public_future_date_when_off() -> None:
+    # Same late slot, but booked for a FUTURE date: the cutoff must NOT apply.
+    # now is the day before D, so D is a future booking date.
+    _validate(
+        ActorKind.PUBLIC, time(22, 30), 60, now=datetime(2026, 11, 9, 23, 0)
+    )
 
 
 def test_late_cutoff_allows_staff_and_admin() -> None:
