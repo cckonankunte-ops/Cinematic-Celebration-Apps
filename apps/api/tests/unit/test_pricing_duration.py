@@ -55,15 +55,21 @@ def test_fallback_to_plan_price_when_no_override() -> None:
     assert two_hour.total_paise == 119900
 
 
+def _total(plan: Plan, base: int, people: int = 2) -> int:
+    return compute_booking_price(
+        _req(plan, people), is_customer=True, base_price_paise=base
+    ).total_paise
+
+
 def test_example_prices_plan1_and_plan2() -> None:
     # Plan 1: 1h=799, 2h=1199 (₹ -> paise). Plan 2: 1h=1499, 2h=1999.
     p1 = _plan(119900, people_allowed=2)
-    assert compute_booking_price(_req(p1), is_customer=True, base_price_paise=79900).total_paise == 79900
-    assert compute_booking_price(_req(p1), is_customer=True, base_price_paise=119900).total_paise == 119900
+    assert _total(p1, 79900) == 79900
+    assert _total(p1, 119900) == 119900
 
     p2 = _plan(199900, people_allowed=6)
-    assert compute_booking_price(_req(p2, 6), is_customer=True, base_price_paise=149900).total_paise == 149900
-    assert compute_booking_price(_req(p2, 6), is_customer=True, base_price_paise=199900).total_paise == 199900
+    assert _total(p2, 149900, people=6) == 149900
+    assert _total(p2, 199900, people=6) == 199900
 
 
 def test_extra_guest_stacks_on_duration_base() -> None:

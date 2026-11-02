@@ -84,7 +84,7 @@ class OccupiedWindow:
     start: datetime
     end: datetime
 
-    def overlaps(self, other: "OccupiedWindow") -> bool:
+    def overlaps(self, other: OccupiedWindow) -> bool:
         """True when the two half-open ranges intersect."""
         return self.start < other.end and other.start < self.end
 
