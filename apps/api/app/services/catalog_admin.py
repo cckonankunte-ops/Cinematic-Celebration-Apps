@@ -43,7 +43,7 @@ from app.schemas.catalog_admin import (
     SpecialDecorAdminRead,
     UserAdminRead,
 )
-from app.services.slots import window_fits_working_hours
+from app.services.slots import full_window_within_working_hours
 
 _FAR_FUTURE = date(2099, 12, 31)
 
@@ -138,6 +138,20 @@ def get_plan_admin(db: Session, plan_id: int) -> Plan:
 
 
 # --- Slots ---
+def _fmt_12h(t: time) -> str:
+    hour = t.hour % 12 or 12
+    ampm = "AM" if t.hour < 12 else "PM"
+    return f"{hour}:{t.minute:02d} {ampm}"
+
+
+def _derive_slot_label(start: time, duration_minutes: int) -> str:
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    end = (_dt.combine(date.today(), start) + _td(minutes=duration_minutes)).time()
+    return f"{_fmt_12h(start)} - {_fmt_12h(end)}"
+
+
 def _assert_slot_within_working_hours(
     db: Session, plan_id: int, start: time | None, duration_minutes: int | None
 ) -> None:
@@ -154,7 +168,7 @@ def _assert_slot_within_working_hours(
     location = db.get(Location, plan.location_id)
     if location is None:
         raise NotFoundError("Location not found.")
-    if not window_fits_working_hours(
+    if not full_window_within_working_hours(
         date.today(), start, duration_minutes, location.opens_at, location.closes_at
     ):
         raise OutsideWorkingHoursError()
@@ -163,6 +177,13 @@ def _assert_slot_within_working_hours(
 def create_slot(db: Session, data: dict[str, object]) -> Slot:
     if data.get("effective_to") is None:
         data = {**data, "effective_to": _FAR_FUTURE}
+    # Derive a display label when none was supplied (start+duration -> "3:00 PM
+    # - 4:00 PM") so the stored description is never blank.
+    if not data.get("description"):
+        start = data.get("start_time")
+        duration = data.get("duration_minutes")
+        if isinstance(start, time) and isinstance(duration, int):
+            data = {**data, "description": _derive_slot_label(start, duration)}
     _assert_slot_within_working_hours(
         db,
         int(data["plan_id"]),  # type: ignore[arg-type]

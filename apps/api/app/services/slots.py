@@ -118,9 +118,28 @@ def window_fits_working_hours(
     """True when the usable window fits within the location's working window."""
     open_dt, close_dt = working_window(on, opens_at, closes_at)
     start_dt = _anchor(on, start)
+    # A late start (e.g. 00:30) belongs to the same working window that opened
+    # the previous calendar day; shift it forward a day if it sorts before open.
+    if start_dt < open_dt:
+        start_dt += timedelta(days=1)
+    # Containment is START-only: the start must fall within [open, close). The
+    # usable END exceeding close is a separate, role-aware rule (end-before-close)
+    # so admins can book a late slot that runs a bit past close.
+    return open_dt <= start_dt < close_dt
+
+
+def full_window_within_working_hours(
+    on: date, start: time, duration_minutes: int, opens_at: time, closes_at: time
+) -> bool:
+    """True when BOTH the start and the usable end fall within working hours.
+
+    Used for slot-catalog validation (a configured slot should fit entirely);
+    the booking pipeline uses the start-only ``window_fits_working_hours`` plus
+    the role-aware end-before-close rule instead.
+    """
+    open_dt, close_dt = working_window(on, opens_at, closes_at)
+    start_dt = _anchor(on, start)
     end_dt = usable_end(on, start, duration_minutes)
-    # A late start (e.g. 00:30) belongs to the same working window that opened the
-    # previous calendar day; shift it forward a day if it sorts before open.
     if start_dt < open_dt:
         start_dt += timedelta(days=1)
         end_dt += timedelta(days=1)

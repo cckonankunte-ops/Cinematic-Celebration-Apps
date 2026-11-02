@@ -103,41 +103,55 @@ HOURS = LocationHours(
     allow_late_booking=False,
 )
 
-NOW = datetime(2026, 11, 10, 14, 0)  # "current" IST for deterministic tests
+# A "now" at the very start of D so every same-day start sorts as future (so the
+# future-start rule passes and the working-hours / end-close rules are exercised).
+MIDNIGHT = datetime(2026, 11, 10, 0, 0)
+# A "now" mid-afternoon used only for the future-start test (13:00 is past).
+AFTERNOON = datetime(2026, 11, 10, 14, 0)
 
 
-def _validate(actor: ActorKind, start: time, duration: int, hours: LocationHours = HOURS):
+def _validate(
+    actor: ActorKind,
+    start: time,
+    duration: int,
+    hours: LocationHours = HOURS,
+    now: datetime = MIDNIGHT,
+):
     validate_booking_time(
         hours=hours,
         booking_date=D,
         start=start,
         duration_minutes=duration,
         actor=actor,
-        now=NOW,
+        now=now,
     )
 
 
 def test_future_start_blocks_public_and_staff() -> None:
     for actor in (ActorKind.PUBLIC, ActorKind.STAFF):
         with pytest.raises(StartInPastError):
-            _validate(actor, time(13, 0), 60)  # before NOW 14:00
+            _validate(actor, time(13, 0), 60, now=AFTERNOON)  # 13:00 < 14:00
 
 
 def test_admin_may_book_in_the_past() -> None:
-    _validate(ActorKind.ADMIN, time(13, 0), 60)  # no raise
+    _validate(ActorKind.ADMIN, time(13, 0), 60, now=AFTERNOON)  # no raise
 
 
 def test_outside_working_hours_blocks_all() -> None:
+    # 02:00 start is after close (01:00) and before open (10:00) -> outside.
+    # now=02:00 so future-start passes for non-admins and we reach working-hours.
     for actor in (ActorKind.PUBLIC, ActorKind.STAFF, ActorKind.ADMIN):
         with pytest.raises(OutsideWorkingHoursError):
-            _validate(actor, time(2, 0), 60)  # 02:00 outside 10:00-01:00
+            _validate(actor, time(2, 0), 60, now=datetime(2026, 11, 10, 1, 0))
 
 
 def test_end_after_close_blocks_non_admin() -> None:
-    # start 00:00 + 120 = 02:00 > close 01:00
+    # start 00:00 + 120 = 02:00 > close 01:00; now before 00:00 so start is future.
     for actor in (ActorKind.PUBLIC, ActorKind.STAFF):
         with pytest.raises(BookingEndsAfterCloseError):
-            _validate(actor, time(0, 0), 120)
+            _validate(
+                actor, time(0, 0), 120, now=datetime(2026, 11, 9, 23, 0)
+            )
 
 
 def test_end_after_close_admin_override() -> None:
@@ -145,7 +159,8 @@ def test_end_after_close_admin_override() -> None:
 
 
 def test_end_exactly_at_close_allowed() -> None:
-    _validate(ActorKind.STAFF, time(0, 0), 60)  # 00:00 + 60 = 01:00 == close
+    # 00:00 + 60 = 01:00 == close; now before 00:00 so start is future.
+    _validate(ActorKind.STAFF, time(0, 0), 60, now=datetime(2026, 11, 9, 23, 0))
 
 
 def test_late_cutoff_blocks_public_when_off() -> None:
