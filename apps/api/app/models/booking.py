@@ -12,7 +12,7 @@ No payment columns live here (payments are a ledger). No add-on columns live her
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, time
 
 from sqlalchemy import (
     BigInteger,
