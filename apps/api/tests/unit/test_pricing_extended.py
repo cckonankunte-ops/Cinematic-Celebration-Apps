@@ -323,10 +323,17 @@ def test_property_7_no_double_charge(
         ],
     )
     bd = compute_booking_price(req, is_customer=True)
-    # A combo absorbing cake/LED means there are NO standalone cake/led lines.
-    assert all(line.kind != "cake" for line in bd.addon_lines)
+    # A combo absorbing the cake still records a cake line (so an edit can
+    # reconstruct the selection), but it is flagged absorbed and contributes 0
+    # to avoid double-charging. LED has no line (LED text lives on the booking).
+    cake_lines = [line for line in bd.addon_lines if line.kind == "cake"]
+    assert len(cake_lines) == 1
+    assert cake_lines[0].absorbed_by_combo is True
+    assert cake_lines[0].amount_paise == 0
+    assert cake_lines[0].item_id == req.cake.id
+    assert cake_lines[0].weight_half_kg == cake_weight
     assert all(line.kind != "led" for line in bd.addon_lines)
-    # Cake/LED contribute only through the single combo line.
+    # Cake/LED cost contributes only through the single combo line.
     combo_lines = [line for line in bd.addon_lines if line.kind == "combo"]
     assert len(combo_lines) == 1
     cake_weighted = cake_price * cake_weight
@@ -337,6 +344,9 @@ def test_property_7_no_double_charge(
         + max(0, led_charge - led_baseline)
     )
     assert combo_lines[0].amount_paise == expected
+    # No double-charge: subtotal counts the combo line once; the absorbed cake
+    # line adds nothing.
+    assert bd.subtotal_paise == bd.plan_price_paise + bd.extra_guest_paise + expected
 
 
 # ---------------------------------------------------------------------------

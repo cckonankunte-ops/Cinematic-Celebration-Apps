@@ -404,3 +404,57 @@ present in `create_all`-built test databases. Consequences:
   (working hours/cutoff/switch need an entry point).
 - Decide the duration options exposed in the UI (60/90/120 initially).
 - Confirm the seeded buffer literal for Migration B equals the config default (30).
+
+## Deferred / future work (not in this spec — captured so it isn't lost)
+
+### Per-branch booking mode toggle: "slot picker" vs "slotless start+duration"
+**Status:** open requirement, deferred to its own spec. Do NOT build on this
+branch. Raised while smoke-testing the admin booking page — the current UI shows
+a single dropdown of pre-configured slots, which becomes confusing when many
+overlapping start times (10:00 / 10:30 / 11:00 … × 1h / 2h) are pre-created.
+
+**Goal:** let each location choose how its booking UX produces the booking
+window, via an admin-set per-location mode:
+
+- **Mode A — slot-backed (current behaviour):** admin configures slot rows per
+  plan; the booking carries a real `slot_id`; the UI can later improve to a
+  duration toggle + start-time grid built *from* those slots (greying out taken
+  ones) instead of one long dropdown.
+- **Mode B — slotless (open):** no per-start-time slot rows. The customer/staff
+  pick a **duration** (1h/2h → drives `plan_pricing`) and a **start time**
+  (:00/:30) generated from the branch's working hours; the server validates the
+  raw `(start_time, duration_minutes)` directly. No `slot_id`.
+
+**Why both:** branch 1 may prefer curated slots (Mode A); branch 2 may prefer
+open booking (Mode B). The toggle is per-location and admin-tunable.
+
+**Design sketch (for the future spec):**
+- Both modes converge on the same invariant already built here: a booking
+  occupies `[start, start + duration + cleaning_buffer)` on a date, validated by
+  the existing time-rule pipeline + overlap exclusion constraint, and priced by
+  duration via `plan_pricing`. Only the *source* of `(start, duration)` differs.
+- Add `locations.booking_mode` (`'slot' | 'open'`, default `'slot'`).
+- Make `bookings.slot_id` **nullable**; required in slot mode, null in open mode.
+- Branch `validate_booking_request` / `_slot_timing`: slot mode reads the window
+  from the slot (as today); open mode takes start+duration from the request and
+  skips the slot FK. Affects create (public + admin), preview, and edit.
+- Open-mode availability: a new endpoint that generates candidate :00/:30 start
+  times across working hours for a chosen duration and flags each
+  available/blocked (reusing the buffer + overlap logic).
+- Frontend: location-settings toggle; booking form + customer wizard render
+  either the slot picker (A) or the duration+start-time grid (B) by mode.
+- Tests: open-mode create/preview/edit, open-mode availability generation,
+  nullable-`slot_id` path, and no regression of the slot-mode path.
+
+**Size:** medium–large (core time/buffer/overlap/pricing already exists and is
+reused; cost is making `slot_id` optional cleanly and threading the mode branch
+through 3 service call sites + 2 UIs + tests). Recommend merging this branch
+first, then building dual-mode as its own spec on a fresh branch.
+
+### Also noted during smoke-test
+- **People field default = plan minimum.** On the new booking page the "People"
+  field should default to the plan's minimum allowed people (e.g. plan 1 min =
+  2 → field pre-fills 2) once a plan is selected, instead of the current hard
+  default of 1. Needs a `min_people`/`people_allowed` floor surfaced per plan
+  and the admin form to set `people` from it on plan change. (Confirm whether
+  `plans.people_allowed` is the intended minimum or a separate field is needed.)

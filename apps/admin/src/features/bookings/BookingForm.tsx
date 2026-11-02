@@ -636,6 +636,11 @@ function PreviewSummary({ breakdown, error }: PreviewSummaryProps): JSX.Element 
       )}
 
       {breakdown.addon_lines.map((line, idx) => {
+        // An absorbed cake line is 0-amount (its cost lives in the combo's
+        // upgrade) and exists only to persist the selection — don't render it.
+        if (line.absorbed_by_combo) {
+          return null;
+        }
         const cakeUpgrade = line.cake_upgrade_paise ?? 0;
         const ledUpgrade = line.led_upgrade_paise ?? 0;
         const hasUpgrades =

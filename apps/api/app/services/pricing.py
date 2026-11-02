@@ -86,6 +86,12 @@ class AddonLine:
     combo_base_paise: int | None = None
     cake_upgrade_paise: int | None = None
     led_upgrade_paise: int | None = None
+    # True only for a cake line whose cost is already carried by a combo's cake
+    # upgrade (the cake is "absorbed" into the combo). Such a line contributes
+    # ZERO to the subtotal — it exists only to persist the chosen cake id +
+    # weight so an edit can reconstruct the selection. Without it, editing a
+    # booking would silently drop the combo's cake upgrade.
+    absorbed_by_combo: bool = False
 
     @property
     def amount_paise(self) -> int:
@@ -93,9 +99,12 @@ class AddonLine:
 
         For a cake line the weight multiplier is the stored half-kg integer, so
         amount = unit_price_paise × weight_half_kg (quantity is always 1). For
-        decor/combo/led, amount = unit_price_paise × quantity.
+        decor/combo/led, amount = unit_price_paise × quantity. An absorbed cake
+        line (its cost already in a combo's upgrade) contributes 0.
         """
         if self.kind == "cake":
+            if self.absorbed_by_combo:
+                return 0
             return self.unit_price_paise * (self.weight_half_kg or 1)
         return self.unit_price_paise * self.quantity
 
@@ -121,12 +130,22 @@ def _extra_guest_paise(plan: Plan, people: int) -> int:
 
 
 def _resolve_discount(plan: Plan, requested_discount_paise: int, is_customer: bool) -> int:
-    """Customer discount is always 0; admin discount is clamped and gated."""
+    """Resolve the manual discount in paise.
+
+    Customers never get a manual discount (always 0). The admin manual discount
+    is a TRUSTED STAFF OVERRIDE: any non-negative amount is accepted, NOT gated
+    by ``plan.give_discount`` and NOT capped by ``plan.max_discount_paise``. The
+    total is still clamped at 0 downstream, so a discount can never make the
+    booking negative.
+
+    Note: the per-plan ``give_discount`` / ``max_discount_paise`` fields remain
+    DB-driven and continue to govern the customer-facing / coupon discount path
+    (see the coupon logic); they intentionally do NOT constrain this admin-only
+    manual override.
+    """
     if is_customer:
         return 0
-    if not plan.give_discount:
-        return 0
-    return min(max(0, requested_discount_paise), plan.max_discount_paise)
+    return max(0, requested_discount_paise)
 
 
 def _round_half_up(numerator: int, denominator: int) -> int:
@@ -227,9 +246,12 @@ def compute_booking_price(
 
     # 3. Cake handling.
     #    If a selected combo has a cake baseline, the cake is priced THROUGH that
-    #    combo's cake delta (step 5) — NO standalone cake line here.
-    #    Else emit a standalone weighted cake line.
-    if req.cake is not None and not combo_covers_cake:
+    #    combo's cake delta (step 5). We STILL emit a cake line in that case, but
+    #    flagged `absorbed_by_combo` so it contributes 0 to the subtotal — it
+    #    exists only to persist the chosen cake id + weight so an edit can
+    #    reconstruct the selection (otherwise the combo's cake upgrade is lost on
+    #    edit). Else emit a normal standalone weighted cake line.
+    if req.cake is not None:
         lines.append(
             AddonLine(
                 kind="cake",
@@ -238,6 +260,7 @@ def compute_booking_price(
                 unit_price_paise=req.cake.price_paise,
                 quantity=1,
                 weight_half_kg=req.cake_weight_half_kg,  # amount = base × weight_half_kg
+                absorbed_by_combo=combo_covers_cake,
             )
         )
 
@@ -290,8 +313,9 @@ def compute_booking_price(
     addon_total = sum(line.amount_paise for line in lines)
     subtotal = plan_price + extra_guest + addon_total
 
-    # 7. Admin manual discount: clamped to [0, plan.max_discount_paise], 0 when
-    #    the plan disallows discounts, and always 0 for customers.
+    # 7. Admin manual discount: a trusted staff override — any non-negative
+    #    amount (not gated/capped by the plan); always 0 for customers. The
+    #    final total is clamped at 0 so it can't go negative.
     discount = _resolve_discount(plan, discount_paise, is_customer)
     food = max(0, food_paise)
     other = max(0, other_paise)

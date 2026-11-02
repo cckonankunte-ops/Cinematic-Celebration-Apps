@@ -999,6 +999,7 @@ def _breakdown_to_read(
                 combo_base_paise=line.combo_base_paise,
                 cake_upgrade_paise=line.cake_upgrade_paise,
                 led_upgrade_paise=line.led_upgrade_paise,
+                absorbed_by_combo=line.absorbed_by_combo,
             )
             for line in breakdown.addon_lines
         ],

@@ -46,6 +46,10 @@ class AddonLineRead(BaseModel):
     combo_base_paise: int | None = None
     cake_upgrade_paise: int | None = None
     led_upgrade_paise: int | None = None
+    # True for a cake line whose cost is already carried by a combo's cake
+    # upgrade; such a line is 0-amount and should not be shown as its own
+    # priced row in the summary.
+    absorbed_by_combo: bool = False
 
 
 class PriceBreakdownRead(BaseModel):
