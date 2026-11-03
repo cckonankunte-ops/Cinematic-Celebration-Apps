@@ -317,3 +317,20 @@ class GalleryImageRead(BaseModel):
     image_url: str
     sort_order: int
     upload_url: str | None = None
+
+
+# --- Catalog add-on image uploads (cake / decor / combo) ---
+class CatalogImageUploadRequest(BaseModel):
+    """Request a presigned PUT URL for a cake/decor/combo image.
+
+    Returns an object key + upload URL WITHOUT creating any row; the caller
+    uploads the file, then includes the object_key in the entity's create/update.
+    """
+
+    kind: Literal["cake", "decor", "combo"]
+    filename: str = Field(min_length=1, max_length=255)
+
+
+class CatalogImageUploadRead(BaseModel):
+    object_key: str
+    upload_url: str

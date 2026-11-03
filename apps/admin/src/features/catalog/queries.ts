@@ -16,8 +16,12 @@ import {
 import { api } from '@/api/client';
 import type {
   CakeAdminRead,
+  CakeCreateBody,
+  CakeUpdateBody,
   ComboCreateBody,
   ComboUpdateBody,
+  DecorCreateBody,
+  DecorUpdateBody,
   LocationAdminRead,
   LocationHoursUpdateBody,
   NamedAddonAdminRead,
@@ -107,6 +111,31 @@ export function useCakes(locationId: number | null): UseQueryResult<CakeAdminRea
   });
 }
 
+export function useCreateCake(
+  locationId: number | null,
+): UseMutationResult<CakeAdminRead, unknown, CakeCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<CakeAdminRead, unknown, CakeCreateBody>({
+    mutationFn: (body) => api.post<CakeAdminRead>('/api/v1/admin/cakes', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'cakes', locationId] });
+    },
+  });
+}
+
+export function useUpdateCake(
+  locationId: number | null,
+  cakeId: number,
+): UseMutationResult<CakeAdminRead, unknown, CakeUpdateBody> {
+  const qc = useQueryClient();
+  return useMutation<CakeAdminRead, unknown, CakeUpdateBody>({
+    mutationFn: (body) => api.patch<CakeAdminRead>(`/api/v1/admin/cakes/${cakeId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'cakes', locationId] });
+    },
+  });
+}
+
 export function useDeactivateCake(
   locationId: number | null,
 ): UseMutationResult<CakeAdminRead, unknown, number> {
@@ -130,6 +159,45 @@ export function useSpecialDecor(
         `/api/v1/admin/special-decor?location_id=${locationId as number}`,
       ),
     enabled: locationId !== null,
+  });
+}
+
+export function useCreateDecor(
+  locationId: number | null,
+): UseMutationResult<NamedAddonAdminRead, unknown, DecorCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, DecorCreateBody>({
+    mutationFn: (body) => api.post<NamedAddonAdminRead>('/api/v1/admin/special-decor', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'special-decor', locationId] });
+    },
+  });
+}
+
+export function useUpdateDecor(
+  locationId: number | null,
+  decorId: number,
+): UseMutationResult<NamedAddonAdminRead, unknown, DecorUpdateBody> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, DecorUpdateBody>({
+    mutationFn: (body) =>
+      api.patch<NamedAddonAdminRead>(`/api/v1/admin/special-decor/${decorId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'special-decor', locationId] });
+    },
+  });
+}
+
+export function useDeactivateDecor(
+  locationId: number | null,
+): UseMutationResult<NamedAddonAdminRead, unknown, number> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, number>({
+    mutationFn: (decorId) =>
+      api.del<NamedAddonAdminRead>(`/api/v1/admin/special-decor/${decorId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'special-decor', locationId] });
+    },
   });
 }
 
@@ -171,6 +239,18 @@ export function useUpdateCombo(
   return useMutation<NamedAddonAdminRead, unknown, ComboUpdateBody>({
     mutationFn: (body) =>
       api.patch<NamedAddonAdminRead>(`/api/v1/admin/combos/${comboId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'combos', locationId] });
+    },
+  });
+}
+
+export function useDeactivateCombo(
+  locationId: number | null,
+): UseMutationResult<NamedAddonAdminRead, unknown, number> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, number>({
+    mutationFn: (comboId) => api.del<NamedAddonAdminRead>(`/api/v1/admin/combos/${comboId}`),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['catalog', 'combos', locationId] });
     },

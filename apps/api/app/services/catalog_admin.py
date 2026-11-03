@@ -513,6 +513,24 @@ def create_gallery_upload_url(plan_id: int, filename: str) -> dict[str, str]:
     return {"object_key": object_key, "upload_url": upload_url}
 
 
+# Object-key prefix per add-on kind (cake / decor / combo image uploads).
+_CATALOG_IMAGE_PREFIX = {"cake": "cakes", "decor": "special-decor", "combo": "combos"}
+
+
+def create_catalog_image_upload_url(kind: str, filename: str) -> dict[str, str]:
+    """Presigned PUT URL + object key for a cake/decor/combo image.
+
+    Creates NO row — the caller uploads the file then includes the returned
+    object_key in the entity's create/update payload.
+    """
+    prefix = _CATALOG_IMAGE_PREFIX.get(kind)
+    if prefix is None:
+        raise ValidationFailedError(f"Unknown catalog image kind: {kind}")
+    token = secrets.token_hex(4)
+    object_key = f"{prefix}/{token}-{filename}"
+    return {"object_key": object_key, "upload_url": create_upload_url(object_key)}
+
+
 def add_gallery_image(
     db: Session, plan_id: int, object_key: str, sort_order: int
 ) -> PlanGalleryImage:

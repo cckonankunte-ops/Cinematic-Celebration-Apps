@@ -149,7 +149,67 @@ export interface ComboCreateBody {
   effective_from: string;
   cake_baseline_paise?: number | null;
   led_baseline_paise?: number | null;
+  /** Optional image key; combos are not image tiles, so this may be omitted. */
+  object_key?: string;
 }
 
 /** PATCH body for a combo: every field optional (partial update). */
-export type ComboUpdateBody = Partial<Omit<ComboCreateBody, 'location_id'>>;
+export type ComboUpdateBody = Partial<
+  Omit<ComboCreateBody, 'location_id'>
+> & {
+  object_key?: string;
+  is_active?: boolean;
+  effective_to?: string;
+};
+
+/** Create body for a cake add-on (object_key from a prior image upload). */
+export interface CakeCreateBody {
+  location_id: number;
+  description: string;
+  price_paise: number;
+  object_key: string;
+  effective_from: string;
+}
+
+/** PATCH body for a cake: every field optional (partial update). */
+export interface CakeUpdateBody {
+  description?: string;
+  price_paise?: number;
+  object_key?: string;
+  is_active?: boolean;
+  effective_to?: string;
+}
+
+/** Create body for a special-decor add-on. */
+export interface DecorCreateBody {
+  location_id: number;
+  name: string;
+  description: string;
+  price_paise: number;
+  object_key: string;
+  sort_order: number;
+  effective_from: string;
+}
+
+/** PATCH body for a special-decor item: every field optional. */
+export interface DecorUpdateBody {
+  name?: string;
+  description?: string;
+  price_paise?: number;
+  object_key?: string;
+  sort_order?: number;
+  is_active?: boolean;
+  effective_to?: string;
+}
+
+/** Response from the catalog add-on image upload endpoint. */
+export interface CatalogImageUploadRead {
+  object_key: string;
+  upload_url: string;
+}
+
+/** The add-on kind for an image upload. */
+export type CatalogImageKind = 'cake' | 'decor' | 'combo';
+
+/** The far-future validity end used when (re)activating catalog rows. */
+export const FAR_FUTURE_DATE = '2099-12-31';

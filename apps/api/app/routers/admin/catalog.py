@@ -17,6 +17,8 @@ from app.schemas.catalog_admin import (
     CakeAdminRead,
     CakeCreate,
     CakeUpdate,
+    CatalogImageUploadRead,
+    CatalogImageUploadRequest,
     ComboAdminRead,
     ComboCreate,
     ComboUpdate,
@@ -172,6 +174,24 @@ def deactivate_plan_pricing(
 ) -> PlanPricingAdminRead:
     return catalog_admin.to_plan_pricing_admin_read(
         catalog_admin.deactivate_plan_pricing(db, pricing_id)
+    )
+
+
+# --- Catalog add-on image uploads (cake / decor / combo) ---
+@router.post(
+    "/catalog-image-uploads", response_model=CatalogImageUploadRead, status_code=201
+)
+def create_catalog_image_upload(
+    body: CatalogImageUploadRequest,
+) -> CatalogImageUploadRead:
+    """Return a presigned PUT URL + object key for a cake/decor/combo image.
+
+    No row is created; the client uploads the file then sends the object_key in
+    the entity's create/update request.
+    """
+    upload = catalog_admin.create_catalog_image_upload_url(body.kind, body.filename)
+    return CatalogImageUploadRead(
+        object_key=upload["object_key"], upload_url=upload["upload_url"]
     )
 
 

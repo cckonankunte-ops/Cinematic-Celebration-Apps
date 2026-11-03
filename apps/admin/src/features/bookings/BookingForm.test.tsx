@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+import { ApiError } from '@/api/client';
 import { BookingForm } from './BookingForm';
 
 // Mock the catalog query hooks so the form renders without a QueryClient or a
@@ -17,17 +18,57 @@ vi.mock('./catalog-queries', () => ({
 }));
 
 // Mock the preview mutation so the live-summary effect doesn't need a
-// QueryClient or a live API.
+// QueryClient or a live API. `previewResult` lets a test control what the
+// preview "server" returns, so we can drive the coupon apply/remove UI.
+let previewResult: { onSuccess?: Record<string, unknown>; onError?: unknown } = {};
+
 vi.mock('./booking-queries', () => ({
   usePreviewBooking: () => ({
-    mutate: vi.fn(),
+    mutate: (
+      _body: unknown,
+      opts?: {
+        onSuccess?: (data: Record<string, unknown>) => void;
+        onError?: (err: unknown) => void;
+      },
+    ) => {
+      if (previewResult.onError !== undefined) {
+        opts?.onError?.(previewResult.onError);
+      } else if (previewResult.onSuccess !== undefined) {
+        opts?.onSuccess?.(previewResult.onSuccess);
+      }
+    },
     mutateAsync: vi.fn().mockResolvedValue({}),
     data: undefined,
     isPending: false,
   }),
 }));
 
+/** A minimal successful breakdown with an applied coupon discount. */
+function couponBreakdown(discountPaise: number, code: string): Record<string, unknown> {
+  return {
+    plan_price_paise: 100000,
+    extra_guest_paise: 0,
+    addon_lines: [],
+    subtotal_paise: 100000,
+    discount_paise: 0,
+    food_paise: 0,
+    other_paise: 0,
+    cleaning_paise: 0,
+    coupon_code: code,
+    coupon_discount_paise: discountPaise,
+    total_paise: 100000 - discountPaise,
+    amount_paid_paise: 0,
+    amount_due_paise: 100000 - discountPaise,
+  };
+}
+
 describe('BookingForm', () => {
+  beforeEach(() => {
+    // Default: the preview "server" does nothing (no breakdown), matching the
+    // original tests that don't drive the live summary.
+    previewResult = {};
+  });
+
   it('renders cascading plan/slot selects and add-on options', () => {
     render(
       <BookingForm
@@ -131,5 +172,84 @@ describe('BookingForm', () => {
       />,
     );
     expect(screen.getByText('Slot not available')).toBeInTheDocument();
+  });
+
+  it('guards Apply when the coupon field is empty', async () => {
+    render(
+      <BookingForm
+        locationId={1}
+        submitLabel="Create booking"
+        onSubmit={() => {}}
+        isSubmitting={false}
+        serverError={null}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() =>
+      expect(screen.getByText('Enter a coupon code first.')).toBeInTheDocument(),
+    );
+  });
+
+  it('applies a coupon and shows the discount, then allows removing it', async () => {
+    // Preview "server" returns a valid coupon discount of ₹100 (10000 paise).
+    previewResult = { onSuccess: couponBreakdown(10000, 'SAVE10') };
+    render(
+      <BookingForm
+        locationId={1}
+        submitLabel="Create booking"
+        onSubmit={() => {}}
+        isSubmitting={false}
+        serverError={null}
+      />,
+    );
+    // A plan + slot + date are needed for the preview effect to fire.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Plan' }), {
+      target: { value: '3' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Slot' }), {
+      target: { value: '7' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Coupon code' }), {
+      target: { value: 'SAVE10' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Coupon SAVE10 applied/)).toBeInTheDocument(),
+    );
+    // Now a Remove button is shown; clicking it drops the applied state.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Apply' })).toBeInTheDocument(),
+    );
+  });
+
+  it('shows a field-level error when the coupon is rejected', async () => {
+    // Preview "server" rejects the coupon with a COUPON_INVALID ApiError.
+    const err = new ApiError('COUPON_INVALID', 'The coupon code is not valid.', 422);
+    previewResult = { onError: err };
+    render(
+      <BookingForm
+        locationId={1}
+        submitLabel="Create booking"
+        onSubmit={() => {}}
+        isSubmitting={false}
+        serverError={null}
+      />,
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'Plan' }), {
+      target: { value: '3' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Slot' }), {
+      target: { value: '7' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Coupon code' }), {
+      target: { value: 'BADCODE' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('The coupon code is not valid.')).toBeInTheDocument(),
+    );
   });
 });
