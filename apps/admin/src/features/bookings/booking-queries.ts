@@ -38,7 +38,10 @@ export interface RecordPaymentBody {
 export interface AdminPreviewBody {
   location_id: number;
   plan_id: number;
-  slot_id: number;
+  // Slot mode sends slot_id; open mode sends start_time + duration_minutes.
+  slot_id?: number;
+  start_time?: string; // "HH:MM" (open mode)
+  duration_minutes?: number;
   booking_date: string;
   people: number;
   cake_id?: number;

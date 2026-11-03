@@ -68,6 +68,54 @@ def test_admin_updates_hours_and_switch(client: TestClient, db: Session) -> None
     assert body["allow_late_booking"] is True
 
 
+def test_admin_toggles_booking_mode_repeatedly(client: TestClient, db: Session) -> None:
+    loc = make_location(db)  # defaults to booking_mode 'slot'
+    admin = make_user(db, "admin", location_id=None)
+    db.commit()
+    _login(client, admin.username)
+
+    def set_mode(mode: str) -> dict:
+        resp = client.patch(
+            f"/api/v1/admin/locations/{loc.id}",
+            headers=_ORIGIN,
+            json={"booking_mode": mode},
+        )
+        assert resp.status_code == 200
+        return resp.json()
+
+    assert set_mode("open")["booking_mode"] == "open"
+    assert set_mode("slot")["booking_mode"] == "slot"
+    assert set_mode("open")["booking_mode"] == "open"  # flip back and forth freely
+
+
+def test_invalid_booking_mode_rejected(client: TestClient, db: Session) -> None:
+    loc = make_location(db)
+    admin = make_user(db, "admin", location_id=None)
+    db.commit()
+    _login(client, admin.username)
+
+    resp = client.patch(
+        f"/api/v1/admin/locations/{loc.id}",
+        headers=_ORIGIN,
+        json={"booking_mode": "banana"},
+    )
+    assert resp.status_code == 422  # Literal['slot','open'] rejects it
+
+
+def test_staff_cannot_change_booking_mode(client: TestClient, db: Session) -> None:
+    loc = make_location(db)
+    staff = make_user(db, "staff", location_id=loc.id)
+    db.commit()
+    _login(client, staff.username)
+
+    resp = client.patch(
+        f"/api/v1/admin/locations/{loc.id}",
+        headers=_ORIGIN,
+        json={"booking_mode": "open"},
+    )
+    assert resp.status_code == 403
+
+
 def test_switch_affects_same_day_public_availability(
     client: TestClient, db: Session
 ) -> None:

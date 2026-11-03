@@ -64,7 +64,12 @@ const optionalId = z.preprocess(
 export const bookingCreateSchema = z.object({
   location_id: z.number().int().positive(),
   plan_id: z.number().int().positive(),
-  slot_id: z.number().int().positive(),
+  // Slot mode sends slot_id; open mode sends start_time + duration_minutes.
+  // Kept permissive here (the server validates against the location's mode);
+  // the form enforces that the right one is present before enabling submit.
+  slot_id: optionalId,
+  start_time: optionalText, // "HH:MM" in open mode
+  duration_minutes: optionalId,
   booking_date: isoDate,
   booking_name: z.string().trim().min(1, 'Name is required'),
   email: optionalText,

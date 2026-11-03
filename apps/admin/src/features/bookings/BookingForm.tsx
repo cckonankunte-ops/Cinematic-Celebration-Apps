@@ -26,7 +26,10 @@ import { usePreviewBooking, type AdminPreviewBody } from './booking-queries';
 import {
   useCakes,
   useCombos,
+  useLocationBookingMode,
   useOccasions,
+  useOpenAvailability,
+  usePlanDurations,
   usePlans,
   useSlotAvailability,
   useSpecialDecor,
@@ -59,6 +62,20 @@ const CAKE_WEIGHT_OPTIONS = [1, 2, 3, 4, 5, 6] as const;
 
 function cakeWeightLabel(halfKg: number): string {
   return `${halfKg / 2} kg`;
+}
+
+/** "60" -> "1 hour", "90" -> "1.5 hours", "120" -> "2 hours". */
+function formatDurationLabel(minutes: number): string {
+  const hours = minutes / 60;
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+}
+
+/** "15:00" -> "3:00 PM". */
+function formatTimeLabel(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const hour12 = h % 12 || 12;
+  return `${hour12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
 export function BookingForm({
@@ -108,9 +125,33 @@ export function BookingForm({
   const currentSlotId = watch('slot_id');
 
   const plans = usePlans(locationId);
-  // Availability is scoped to plan + location + date so held slots are flagged
-  // and rendered greyed-out / non-selectable.
-  const slots = useSlotAvailability(planId, locationId, bookingDate ?? null);
+  // The branch's booking mode drives which window UI we render.
+  const locationsQuery = useLocationBookingMode(locationId);
+  const bookingMode: 'slot' | 'open' =
+    locationsQuery.data?.find((l) => l.id === locationId)?.booking_mode ?? 'slot';
+  const isOpenMode = bookingMode === 'open';
+
+  // Slot mode: availability is scoped to plan + location + date so held slots
+  // are flagged and rendered greyed-out / non-selectable.
+  const slots = useSlotAvailability(
+    isOpenMode ? null : planId,
+    locationId,
+    bookingDate ?? null,
+  );
+
+  // Open mode: a Duration selector (plan's priced durations) + a Start-time
+  // picker generated from working hours for the chosen duration.
+  const durationMinutes = watch('duration_minutes');
+  const normalizedDuration = Number.isFinite(durationMinutes)
+    ? (durationMinutes as number)
+    : null;
+  const durations = usePlanDurations(isOpenMode ? planId : null);
+  const openStarts = useOpenAvailability(
+    isOpenMode ? planId : null,
+    locationId,
+    bookingDate ?? null,
+    isOpenMode ? normalizedDuration : null,
+  );
   const cakes = useCakes(locationId);
   const decor = useSpecialDecor(locationId);
   const combos = useCombos(locationId);
@@ -187,6 +228,8 @@ export function BookingForm({
     JSON.stringify({
       plan_id: watched.plan_id,
       slot_id: watched.slot_id,
+      start_time: watched.start_time,
+      duration_minutes: watched.duration_minutes,
       booking_date: watched.booking_date,
       people: watched.people,
       cake_id: watched.cake_id,
@@ -213,8 +256,18 @@ export function BookingForm({
     const parsed = JSON.parse(previewKey) as BookingCreateInput;
     const planIdNum = Number.isFinite(parsed.plan_id) ? (parsed.plan_id as number) : null;
     const slotIdNum = Number.isFinite(parsed.slot_id) ? (parsed.slot_id as number) : null;
+    const durationNum = Number.isFinite(parsed.duration_minutes)
+      ? (parsed.duration_minutes as number)
+      : null;
+    const startStr =
+      typeof parsed.start_time === 'string' && parsed.start_time.length > 0
+        ? parsed.start_time
+        : null;
     const bookingDate = parsed.booking_date;
-    if (!planIdNum || !slotIdNum || !bookingDate) {
+    // A window is defined either by a slot (slot mode) or start+duration (open
+    // mode). Don't preview until plan, date, and a complete window are present.
+    const hasWindow = slotIdNum !== null || (startStr !== null && durationNum !== null);
+    if (!planIdNum || !hasWindow || !bookingDate) {
       setBreakdown(null);
       setPreviewError(null);
       return;
@@ -229,7 +282,10 @@ export function BookingForm({
     const body: AdminPreviewBody = {
       location_id: locationId,
       plan_id: planIdNum,
-      slot_id: slotIdNum,
+      // Send exactly one window source, matching the branch's mode.
+      slot_id: slotIdNum ?? undefined,
+      start_time: slotIdNum === null ? (startStr ?? undefined) : undefined,
+      duration_minutes: slotIdNum === null ? (durationNum ?? undefined) : undefined,
       booking_date: bookingDate,
       people: num(parsed.people) || 1,
       cake_id: optionalId(parsed.cake_id),
@@ -317,8 +373,14 @@ export function BookingForm({
   const submit = handleSubmit((values) => {
     // Only persist a coupon that was actually applied. A code typed but never
     // applied (or one that failed validation) must not be saved.
+    // Send exactly one window source matching the branch's mode: slot mode →
+    // slot_id only; open mode → start_time + duration_minutes only.
+    const windowFields = isOpenMode
+      ? { slot_id: undefined, start_time: values.start_time, duration_minutes: values.duration_minutes }
+      : { slot_id: values.slot_id, start_time: undefined, duration_minutes: undefined };
     const finalValues = {
       ...values,
+      ...windowFields,
       coupon_code: appliedCoupon ?? undefined,
     } as BookingCreateValues;
     onSubmit(finalValues);
@@ -345,29 +407,70 @@ export function BookingForm({
         </label>
 
         <label className="space-y-1 text-sm">
-          <span className="font-medium text-gray-700">Slot</span>
-          <select
-            aria-label="Slot"
-            className={inputClass}
-            disabled={!planId}
-            {...register('slot_id', { valueAsNumber: true })}
-          >
-            <option value="">Select a slot…</option>
-            {slots.data?.map((s) => {
-              // A held slot is non-selectable, EXCEPT the booking's own slot in
-              // edit mode (it holds itself) so the pre-filled value stays valid.
-              const isCurrent = currentSlotId === s.id;
-              const blocked = !s.is_available && !isCurrent;
-              return (
-                <option key={s.id} value={s.id} disabled={blocked}>
-                  {s.description}
-                  {blocked ? ' — already booked' : ''}
+          <span className="font-medium text-gray-700">
+            {isOpenMode ? 'Duration' : 'Slot'}
+          </span>
+          {isOpenMode ? (
+            <select
+              aria-label="Duration"
+              className={inputClass}
+              disabled={!planId}
+              {...register('duration_minutes', { valueAsNumber: true })}
+            >
+              <option value="">Select a duration…</option>
+              {durations.data?.map((d) => (
+                <option key={d.duration_minutes} value={d.duration_minutes}>
+                  {formatDurationLabel(d.duration_minutes)} — {formatRupees(d.price_paise)}
                 </option>
-              );
-            })}
-          </select>
+              ))}
+            </select>
+          ) : (
+            <select
+              aria-label="Slot"
+              className={inputClass}
+              disabled={!planId}
+              {...register('slot_id', { valueAsNumber: true })}
+            >
+              <option value="">Select a slot…</option>
+              {slots.data?.map((s) => {
+                // A held slot is non-selectable, EXCEPT the booking's own slot
+                // in edit mode (it holds itself) so the pre-fill stays valid.
+                const isCurrent = currentSlotId === s.id;
+                const blocked = !s.is_available && !isCurrent;
+                return (
+                  <option key={s.id} value={s.id} disabled={blocked}>
+                    {s.description}
+                    {blocked ? ' — already booked' : ''}
+                  </option>
+                );
+              })}
+            </select>
+          )}
           {errors.slot_id && <p className="text-xs text-red-600">{errors.slot_id.message}</p>}
         </label>
+
+        {isOpenMode && (
+          <label className="space-y-1 text-sm">
+            <span className="font-medium text-gray-700">Start time</span>
+            <select
+              aria-label="Start time"
+              className={inputClass}
+              disabled={!planId || normalizedDuration === null}
+              {...register('start_time')}
+            >
+              <option value="">Select a start time…</option>
+              {openStarts.data?.map((o) => {
+                const hhmm = o.start_time.slice(0, 5);
+                return (
+                  <option key={hhmm} value={hhmm} disabled={!o.is_available}>
+                    {formatTimeLabel(hhmm)}
+                    {!o.is_available ? ' — unavailable' : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+        )}
 
         <label className="space-y-1 text-sm">
           <span className="font-medium text-gray-700">Date</span>

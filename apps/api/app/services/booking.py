@@ -41,6 +41,7 @@ from app.models.coupon_redemption import CouponRedemption
 from app.models.location import Location
 from app.models.payment import Payment
 from app.models.plan import Plan
+from app.models.plan_pricing import PlanPricing
 from app.models.slot import Slot
 from app.models.special_decor_item import SpecialDecorItem
 from app.schemas.booking import (
@@ -72,6 +73,7 @@ from app.services.pricing import (
 from app.services.slots import (
     ActorKind,
     LocationHours,
+    is_valid_start_minute,
     occupied_window,
     validate_booking_time,
 )
@@ -120,6 +122,102 @@ def _load_valid_slot(db: Session, plan_id: int, slot_id: int, on: date) -> Slot:
     return slot
 
 
+@dataclass(frozen=True)
+class WindowResolution:
+    """The resolved booking window + the slot_id to persist.
+
+    ``slot_id`` is the chosen slot in slot mode, or None in open mode. The
+    ``(start_time, duration_minutes)`` pair is the authoritative window for both
+    the time-rule pipeline and overlap/pricing, regardless of mode.
+    """
+
+    slot_id: int | None
+    start_time: time
+    duration_minutes: int
+
+
+def _active_pricing_duration_exists(
+    db: Session, plan_id: int, duration_minutes: int, on: date
+) -> bool:
+    """True when an active plan_pricing row exists for (plan, duration) on a date."""
+    return (
+        db.execute(
+            select(PlanPricing).where(
+                PlanPricing.plan_id == plan_id,
+                PlanPricing.duration_minutes == duration_minutes,
+                PlanPricing.is_active.is_(True),
+                PlanPricing.effective_from <= on,
+                PlanPricing.effective_to >= on,
+            )
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def resolve_booking_window(
+    db: Session,
+    location: Location,
+    plan_id: int,
+    *,
+    slot_id: int | None,
+    start_time: time | None,
+    duration_minutes: int | None,
+    booking_date: date,
+) -> WindowResolution:
+    """Resolve the booking window per the location's booking_mode.
+
+    Slot mode: a valid ``slot_id`` is required; the window is the slot's
+    ``(start_time, duration_minutes)`` and that slot_id is persisted. Supplying
+    an open-mode window instead is a mode mismatch (422).
+
+    Open mode: ``start_time`` (:00/:30) + ``duration_minutes`` (>0) are required
+    and taken directly; persisted slot_id is None. Supplying a slot_id is a mode
+    mismatch (422). The duration must have an active ``plan_pricing`` row so the
+    booking has an authoritative base price (R3.3).
+    """
+    if location.booking_mode == "open":
+        if slot_id is not None:
+            raise ValidationFailedError(
+                "This branch uses open booking: provide start_time + "
+                "duration_minutes, not a slot."
+            )
+        if start_time is None or duration_minutes is None:
+            raise ValidationFailedError(
+                "Open booking requires a start_time and duration_minutes."
+            )
+        if not is_valid_start_minute(start_time):
+            raise ValidationFailedError(
+                "start_time must be on the hour or half-hour."
+            )
+        if not _active_pricing_duration_exists(
+            db, plan_id, duration_minutes, booking_date
+        ):
+            raise ItemInvalidError(
+                "The selected duration is not offered for this plan."
+            )
+        return WindowResolution(
+            slot_id=None, start_time=start_time, duration_minutes=duration_minutes
+        )
+
+    # slot mode (default)
+    if start_time is not None or duration_minutes is not None:
+        raise ValidationFailedError(
+            "This branch uses slot booking: choose a slot, not a start time + "
+            "duration."
+        )
+    if slot_id is None:
+        raise ValidationFailedError("A slot must be selected for this branch.")
+    slot = _load_valid_slot(db, plan_id, slot_id, booking_date)
+    if slot.start_time is None or slot.duration_minutes is None:
+        # Legacy/unbackfilled slot without a time window — cannot resolve.
+        raise ItemInvalidError("The selected slot has no time window configured.")
+    return WindowResolution(
+        slot_id=slot.id,
+        start_time=slot.start_time,
+        duration_minutes=slot.duration_minutes,
+    )
+
+
 def _load_valid_cake(db: Session, location_id: int, cake_id: int, on: date) -> Cake:
     cake = db.get(Cake, cake_id)
     if (
@@ -163,7 +261,6 @@ def validate_booking_request(
     *,
     location_id: int,
     plan_id: int,
-    slot_id: int,
     booking_date: date,
     people: int,
     cake_id: int | None,
@@ -186,7 +283,8 @@ def validate_booking_request(
         raise BookingDateInPastError()
 
     plan = _load_valid_plan(db, location_id, plan_id, booking_date)
-    _load_valid_slot(db, plan_id, slot_id, booking_date)
+    # Window (slot vs open) is resolved/validated separately by
+    # resolve_booking_window; item validation here no longer requires a slot.
 
     if people < 1 or people > plan.max_people_allowed:
         raise ValidationFailedError(
@@ -244,14 +342,6 @@ def generate_reference(location: Location, booking_date: date) -> str:
     abbrev = "".join(ch for ch in source if ch.isalnum())[:3].upper() or "LOC"
     hex_part = secrets.token_hex(2).upper()
     return f"CC-{abbrev}-{booking_date.strftime('%Y%m%d')}-{hex_part}"
-
-
-def _slot_timing(db: Session, slot_id: int) -> tuple[time | None, int | None]:
-    """Return (start_time, duration_minutes) for a slot (may be None pre-backfill)."""
-    slot = db.get(Slot, slot_id)
-    if slot is None:
-        return None, None
-    return slot.start_time, slot.duration_minutes
 
 
 def _enforce_booking_time(
@@ -416,7 +506,6 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
         db,
         location_id=data.location_id,
         plan_id=data.plan_id,
-        slot_id=data.slot_id,
         booking_date=data.booking_date,
         people=data.people,
         cake_id=data.cake_id,
@@ -429,8 +518,19 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
     if location is None:
         raise ItemInvalidError("The selected location is not valid.")
 
-    # Duration-based base price + advance (R11) and the slot's time snapshot.
-    start_time, duration_minutes = _slot_timing(db, data.slot_id)
+    # Resolve the window by the branch's booking mode (slot vs open), then price
+    # by its duration (R11). slot_id is None for open-mode bookings.
+    window = resolve_booking_window(
+        db,
+        location,
+        data.plan_id,
+        slot_id=data.slot_id,
+        start_time=data.start_time,
+        duration_minutes=data.duration_minutes,
+        booking_date=data.booking_date,
+    )
+    start_time = window.start_time
+    duration_minutes = window.duration_minutes
     duration_pricing = resolve_duration_pricing(
         db, req.plan, duration_minutes, data.booking_date
     )
@@ -486,7 +586,7 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
             public_token=public_token,
             location_id=data.location_id,
             plan_id=data.plan_id,
-            slot_id=data.slot_id,
+            slot_id=window.slot_id,
             booking_date=data.booking_date,
             start_time=start_time,
             duration_minutes=duration_minutes,
@@ -609,7 +709,6 @@ def create_admin_booking(
         db,
         location_id=data.location_id,
         plan_id=data.plan_id,
-        slot_id=data.slot_id,
         booking_date=data.booking_date,
         people=data.people,
         cake_id=data.cake_id,
@@ -623,8 +722,18 @@ def create_admin_booking(
     if location is None:
         raise ItemInvalidError("The selected location is not valid.")
 
-    # Duration-based price/advance + slot time snapshot (R11).
-    start_time, duration_minutes = _slot_timing(db, data.slot_id)
+    # Resolve the window by booking mode (slot vs open), then price by duration.
+    window = resolve_booking_window(
+        db,
+        location,
+        data.plan_id,
+        slot_id=data.slot_id,
+        start_time=data.start_time,
+        duration_minutes=data.duration_minutes,
+        booking_date=data.booking_date,
+    )
+    start_time = window.start_time
+    duration_minutes = window.duration_minutes
     duration_pricing = resolve_duration_pricing(
         db, req.plan, duration_minutes, data.booking_date
     )
@@ -687,7 +796,7 @@ def create_admin_booking(
             public_token=public_token,
             location_id=data.location_id,
             plan_id=data.plan_id,
-            slot_id=data.slot_id,
+            slot_id=window.slot_id,
             booking_date=data.booking_date,
             start_time=start_time,
             duration_minutes=duration_minutes,
@@ -820,8 +929,53 @@ def update_booking(
     #   effective phone used for the coupon customer_key.
     effective_phone = data.phone if data.phone is not None else booking.phone
 
+    # Open-mode window edit: only an open-mode booking (slot_id null) may change
+    # its start/duration. For a slot-mode booking the window is fixed by its
+    # slot, so start_time/duration_minutes in the payload are rejected.
+    window_changed = data.start_time is not None or data.duration_minutes is not None
+    if window_changed:
+        if booking.slot_id is not None:
+            raise ValidationFailedError(
+                "A slot-mode booking's time is fixed by its slot and cannot be "
+                "edited directly."
+            )
+        new_start = data.start_time if data.start_time is not None else booking.start_time
+        new_duration = (
+            data.duration_minutes
+            if data.duration_minutes is not None
+            else booking.duration_minutes
+        )
+        location = db.get(Location, booking.location_id)
+        if location is None:
+            raise ItemInvalidError("The booking's location is no longer valid.")
+        if new_duration is None or not _active_pricing_duration_exists(
+            db, booking.plan_id, new_duration, booking.booking_date
+        ):
+            raise ItemInvalidError("The selected duration is not offered for this plan.")
+        actor_kind = ActorKind.ADMIN if actor.role == "admin" else ActorKind.STAFF
+        _enforce_booking_time(
+            db,
+            location=location,
+            booking_date=booking.booking_date,
+            start=new_start,
+            duration_minutes=new_duration,
+            actor=actor_kind,
+        )
+        _assert_no_overlap(
+            db,
+            location_id=booking.location_id,
+            plan_id=booking.plan_id,
+            booking_date=booking.booking_date,
+            start=new_start,
+            duration_minutes=new_duration,
+            exclude_booking_id=booking.id,
+        )
+        booking.start_time = new_start
+        booking.duration_minutes = new_duration
+
     reprice = (
-        data.people is not None
+        window_changed
+        or data.people is not None
         or data.cake_id is not None
         or data.special_decor is not None
         or data.combos is not None
@@ -873,7 +1027,6 @@ def update_booking(
             db,
             location_id=booking.location_id,
             plan_id=booking.plan_id,
-            slot_id=booking.slot_id,
             booking_date=booking.booking_date,
             people=people,
             cake_id=cake_id,
@@ -882,8 +1035,7 @@ def update_booking(
             cake_weight_half_kg=cake_weight_half_kg,
             led_name=led_name,
         )
-        # Re-price against the booking's duration base (slot/date are not edited
-        # here, so the snapshotted duration still applies).
+        # Re-price against the booking's (possibly just-updated) duration base.
         duration_pricing = resolve_duration_pricing(
             db, req.plan, booking.duration_minutes, booking.booking_date
         )
@@ -1038,7 +1190,6 @@ def preview_booking(
         db,
         location_id=data.location_id,
         plan_id=data.plan_id,
-        slot_id=data.slot_id,
         booking_date=data.booking_date,
         people=data.people,
         cake_id=data.cake_id,
@@ -1056,8 +1207,21 @@ def preview_booking(
     else:
         discount_paise = food_paise = other_paise = cleaning_paise = 0
 
-    # Resolve the duration-specific base price for the selected slot (R11).
-    _start, duration_minutes = _slot_timing(db, data.slot_id)
+    # Resolve the window by booking mode, then the duration-specific base price
+    # (R11). This also validates the mode/window for an open-mode preview.
+    location = db.get(Location, data.location_id)
+    if location is None:
+        raise ItemInvalidError("The selected location is not valid.")
+    window = resolve_booking_window(
+        db,
+        location,
+        data.plan_id,
+        slot_id=data.slot_id,
+        start_time=data.start_time,
+        duration_minutes=data.duration_minutes,
+        booking_date=data.booking_date,
+    )
+    duration_minutes = window.duration_minutes
     duration_pricing = resolve_duration_pricing(
         db, req.plan, duration_minutes, data.booking_date
     )

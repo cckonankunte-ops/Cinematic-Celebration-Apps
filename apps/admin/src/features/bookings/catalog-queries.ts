@@ -129,3 +129,76 @@ export function useOccasions(locationId: number | null): UseQueryResult<Occasion
     locationId !== null,
   );
 }
+
+/** A location with its booking mode (slot vs open). */
+export interface LocationOption {
+  id: number;
+  name: string;
+  booking_mode: 'slot' | 'open';
+}
+
+/**
+ * Resolve the selected location's booking_mode from the public locations list.
+ * Returns 'slot' until loaded so the form defaults to the current behaviour.
+ */
+export function useLocationBookingMode(
+  locationId: number | null,
+): UseQueryResult<LocationOption[]> {
+  return useCatalog<LocationOption[]>(
+    ['locations'],
+    '/api/v1/public/locations',
+    locationId !== null,
+  );
+}
+
+/** A bookable duration for a plan (open mode) + its base price. */
+export interface PlanDurationOption {
+  duration_minutes: number;
+  price_paise: number;
+  advance_paise: number;
+}
+
+export function usePlanDurations(
+  planId: number | null,
+): UseQueryResult<PlanDurationOption[]> {
+  return useCatalog<PlanDurationOption[]>(
+    ['plan-durations', planId],
+    `/api/v1/public/plans/${planId}/durations`,
+    planId !== null,
+  );
+}
+
+/** A candidate open-mode start time + whether it's bookable. */
+export interface OpenStartOption {
+  start_time: string; // IST "HH:MM:SS"
+  is_available: boolean;
+}
+
+/**
+ * Open-mode candidate start times for a (plan, location, date, duration).
+ * Disabled until all four are known.
+ */
+export function useOpenAvailability(
+  planId: number | null,
+  locationId: number | null,
+  bookingDate: string | null,
+  durationMinutes: number | null,
+): UseQueryResult<OpenStartOption[]> {
+  return useQuery<OpenStartOption[]>({
+    queryKey: ['open-availability', planId, locationId, bookingDate, durationMinutes],
+    queryFn: () =>
+      api.post<OpenStartOption[]>(
+        `/api/v1/public/plans/${planId}/open-availability`,
+        {
+          location_id: locationId,
+          booking_date: bookingDate,
+          duration_minutes: durationMinutes,
+        },
+      ),
+    enabled:
+      planId !== null &&
+      locationId !== null &&
+      !!bookingDate &&
+      durationMinutes !== null,
+  });
+}

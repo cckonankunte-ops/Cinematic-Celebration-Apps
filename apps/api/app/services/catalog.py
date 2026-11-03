@@ -27,6 +27,7 @@ from app.schemas.catalog import (
     ComboRead,
     LocationRead,
     OccasionRead,
+    OpenAvailabilityRead,
     PlanRead,
     SlotAvailabilityRead,
     SlotRead,
@@ -37,7 +38,9 @@ from app.services.slots import (
     LocationHours,
     OccupiedWindow,
     occupied_window,
+    usable_end,
     validate_booking_time,
+    working_window,
 )
 
 
@@ -64,6 +67,7 @@ def list_active_locations(db: Session) -> list[LocationRead]:
             closes_at=r.closes_at,
             last_online_booking_start=r.last_online_booking_start,
             allow_late_booking=r.allow_late_booking,
+            booking_mode=r.booking_mode,
         )
         for r in rows
     ]
@@ -355,19 +359,96 @@ def list_slots_with_availability(
     return out
 
 
-def booking_plan_and_slot_labels(
-    db: Session, plan_id: int, slot_id: int
-) -> tuple[str, str]:
-    """Return (plan.title, slot.description) for a booking status lookup.
+def time_range_label(start: time | None, duration_minutes: int | None) -> str:
+    """Format a window as a '3:00 PM - 4:00 PM' range, or '' when unknown."""
+    if start is None or duration_minutes is None:
+        return ""
+    end = (
+        datetime.combine(date.today(), start) + timedelta(minutes=duration_minutes)
+    ).time()
+    return f"{_fmt_12h(start)} - {_fmt_12h(end)}"
 
-    Unlike the public listing queries, this ignores is_active / validity windows
-    because a historical booking may reference a since-deactivated plan or slot.
-    Missing rows fall back to an empty label rather than raising.
+
+def generate_open_availability(
+    db: Session,
+    plan_id: int,
+    location_id: int,
+    on: date,
+    duration_minutes: int,
+    *,
+    actor: ActorKind = ActorKind.PUBLIC,
+    now: datetime | None = None,
+) -> list[OpenAvailabilityRead]:
+    """Candidate :00/:30 start times for OPEN-mode booking, each flagged.
+
+    Generates starts from the location's open time up to the latest start whose
+    usable end fits within the working window (midnight crossover respected),
+    then flags each: available only when it passes the time-rule pipeline for
+    ``actor`` AND its occupied window (incl. cleaning buffer) does not overlap an
+    active booking for ``(location, plan, date)``. Buffer is never exposed.
+    """
+    buffer = settings.CLEANING_BUFFER_MINUTES
+    location = db.get(Location, location_id)
+    if location is None or duration_minutes <= 0:
+        return []
+    hours = LocationHours(
+        opens_at=location.opens_at,
+        closes_at=location.closes_at,
+        last_online_booking_start=location.last_online_booking_start,
+        allow_late_booking=location.allow_late_booking,
+    )
+    held = _active_occupied_windows(db, location_id, plan_id, on, buffer)
+    open_dt, close_dt = working_window(on, location.opens_at, location.closes_at)
+
+    out: list[OpenAvailabilityRead] = []
+    # Step :00/:30 from open; stop once the usable end would exceed close.
+    cursor = open_dt
+    while usable_end(cursor.date(), cursor.time(), duration_minutes) <= close_dt:
+        start = cursor.time()
+        available = True
+        try:
+            validate_booking_time(
+                hours=hours,
+                booking_date=on,
+                start=start,
+                duration_minutes=duration_minutes,
+                actor=actor,
+                now=now,
+            )
+        except AppError:
+            available = False
+        if available:
+            window = occupied_window(on, start, duration_minutes, buffer)
+            if any(window.overlaps(h) for h in held):
+                available = False
+        out.append(OpenAvailabilityRead(start_time=start, is_available=available))
+        cursor += timedelta(minutes=30)
+    return out
+
+
+def booking_plan_and_slot_labels(
+    db: Session,
+    plan_id: int,
+    slot_id: int | None,
+    *,
+    start_time: time | None = None,
+    duration_minutes: int | None = None,
+) -> tuple[str, str]:
+    """Return (plan.title, slot/window label) for a booking view.
+
+    Slot-mode bookings (slot_id set) use the slot's stored description. Open-mode
+    bookings (slot_id null) derive a time-range label from the booking's
+    start_time + duration_minutes. Ignores is_active / validity so a historical
+    booking referencing a since-deactivated plan/slot still labels. Missing rows
+    fall back to an empty label rather than raising.
     """
     plan = db.get(Plan, plan_id)
-    slot = db.get(Slot, slot_id)
     plan_title = plan.title if plan is not None else ""
-    slot_description = slot.description if slot is not None else ""
+    if slot_id is not None:
+        slot = db.get(Slot, slot_id)
+        slot_description = slot.description if slot is not None else ""
+    else:
+        slot_description = time_range_label(start_time, duration_minutes)
     return plan_title, slot_description
 
 

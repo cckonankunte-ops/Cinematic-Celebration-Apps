@@ -38,11 +38,14 @@ def _seed(db: Session):
 
 
 def _validate(db, loc, plan, slot, combos):
+    # `slot` is accepted for call-site symmetry but no longer passed to
+    # validate_booking_request (window/slot validation moved to
+    # resolve_booking_window).
+    del slot
     return validate_booking_request(
         db,
         location_id=loc.id,
         plan_id=plan.id,
-        slot_id=slot.id,
         booking_date=future_date(),
         people=4,
         cake_id=None,
@@ -120,7 +123,6 @@ def test_unknown_decor_id_rejected(db: Session) -> None:
             db,
             location_id=loc.id,
             plan_id=plan.id,
-            slot_id=slot.id,
             booking_date=future_date(),
             people=4,
             cake_id=None,

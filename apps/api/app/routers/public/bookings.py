@@ -62,7 +62,11 @@ def get_booking_status(
     booking = booking_service.get_booking_by_token(db, public_token)
     amounts = derive_amounts_for_booking(db, booking)
     plan_title, slot_description = catalog_service.booking_plan_and_slot_labels(
-        db, booking.plan_id, booking.slot_id
+        db,
+        booking.plan_id,
+        booking.slot_id,
+        start_time=booking.start_time,
+        duration_minutes=booking.duration_minutes,
     )
     return PublicBookingStatus(
         status=booking.status,

@@ -26,6 +26,7 @@ from app.models.plan import Plan
 from app.models.slot import Slot
 from app.schemas.sheets import CakesheetRow, TimesheetRow
 from app.services import payments as payments_service
+from app.services.catalog import time_range_label
 
 
 def _grouped_item_names(items: list[BookingItem]) -> dict[str, list[str]]:
@@ -38,17 +39,26 @@ def _grouped_item_names(items: list[BookingItem]) -> dict[str, list[str]]:
 
 def _accepted_bookings_by_slot(
     db: Session, location_id: int, on_date: date
-) -> list[tuple[Booking, Slot]]:
-    """Accepted bookings at a location+date joined to their slot, slot-ordered."""
+) -> list[tuple[Booking, Slot | None]]:
+    """Accepted bookings at a location+date, ordered by start time.
+
+    Uses a LEFT join to the slot so OPEN-mode bookings (null slot_id) are
+    included — their window lives on the booking itself. Ordering is by the
+    booking's start_time (both modes have it), falling back to the slot's
+    sort_order, so slot-mode and open-mode bookings interleave by actual time.
+    """
     stmt = (
         select(Booking, Slot)
-        .join(Slot, Slot.id == Booking.slot_id)
+        .outerjoin(Slot, Slot.id == Booking.slot_id)
         .where(
             Booking.location_id == location_id,
             Booking.booking_date == on_date,
             Booking.status == "accepted",
         )
-        .order_by(Slot.sort_order, Slot.id, Booking.id)
+        # Order by the actual window start first so slot-mode and open-mode
+        # bookings interleave by time; fall back to the slot's sort_order (null
+        # for open mode sorts last) then booking id for a stable order.
+        .order_by(Booking.start_time, Slot.sort_order, Booking.id)
     )
     return [(row[0], row[1]) for row in db.execute(stmt).all()]
 
@@ -82,11 +92,18 @@ def timesheet(
                 else occasion.name
             )
         amounts = payments_service.derive_amounts_for_booking(db, booking)
+        # Open-mode bookings have no slot row; derive the label/sort from the
+        # booking's own window so they still appear on the sheet.
+        slot_label = (
+            slot.description
+            if slot is not None
+            else time_range_label(booking.start_time, booking.duration_minutes)
+        )
         rows.append(
             TimesheetRow(
-                slot_id=slot.id,
-                slot_sort_order=slot.sort_order,
-                slot_description=slot.description,
+                slot_id=slot.id if slot is not None else 0,
+                slot_sort_order=slot.sort_order if slot is not None else 0,
+                slot_description=slot_label,
                 plan_title=plan.title if plan is not None else "",
                 booking_name=booking.booking_name,
                 phone=booking.phone,
@@ -119,12 +136,17 @@ def cakesheet(
                 .order_by(BookingItem.id)
             ).scalars()
         )
+        slot_label = (
+            slot.description
+            if slot is not None
+            else time_range_label(booking.start_time, booking.duration_minutes)
+        )
         for cake in cakes:
             rows.append(
                 CakesheetRow(
-                    slot_id=slot.id,
-                    slot_sort_order=slot.sort_order,
-                    slot_description=slot.description,
+                    slot_id=slot.id if slot is not None else 0,
+                    slot_sort_order=slot.sort_order if slot is not None else 0,
+                    slot_description=slot_label,
                     cake=cake.name_snapshot,
                     name_on_cake=booking.name_on_cake,
                 )

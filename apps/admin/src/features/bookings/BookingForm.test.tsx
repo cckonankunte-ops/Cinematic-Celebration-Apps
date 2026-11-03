@@ -4,6 +4,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ApiError } from '@/api/client';
 import { BookingForm } from './BookingForm';
 
+// Mode the mocked location reports; tests flip this to exercise slot vs open.
+let mockBookingMode: 'slot' | 'open' = 'slot';
+
 // Mock the catalog query hooks so the form renders without a QueryClient or a
 // live API. Each returns a tiny deterministic option set.
 vi.mock('./catalog-queries', () => ({
@@ -15,6 +18,21 @@ vi.mock('./catalog-queries', () => ({
   useSpecialDecor: () => ({ data: [{ id: 1, name: 'Balloons', price_paise: 20000 }] }),
   useCombos: () => ({ data: [{ id: 2, name: 'Snacks', price_paise: 30000 }] }),
   useOccasions: () => ({ data: [{ id: 5, name: 'Birthday' }] }),
+  useLocationBookingMode: () => ({
+    data: [{ id: 1, name: 'Hulimavu', booking_mode: mockBookingMode }],
+  }),
+  usePlanDurations: () => ({
+    data: [
+      { duration_minutes: 60, price_paise: 79900, advance_paise: 0 },
+      { duration_minutes: 120, price_paise: 119900, advance_paise: 0 },
+    ],
+  }),
+  useOpenAvailability: () => ({
+    data: [
+      { start_time: '15:00:00', is_available: true },
+      { start_time: '15:30:00', is_available: false },
+    ],
+  }),
 }));
 
 // Mock the preview mutation so the live-summary effect doesn't need a
@@ -67,6 +85,7 @@ describe('BookingForm', () => {
     // Default: the preview "server" does nothing (no breakdown), matching the
     // original tests that don't drive the live summary.
     previewResult = {};
+    mockBookingMode = 'slot';
   });
 
   it('renders cascading plan/slot selects and add-on options', () => {
@@ -222,6 +241,74 @@ describe('BookingForm', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Apply' })).toBeInTheDocument(),
     );
+  });
+
+  it('renders the slot picker in slot mode', () => {
+    mockBookingMode = 'slot';
+    render(
+      <BookingForm
+        locationId={1}
+        submitLabel="Create booking"
+        onSubmit={() => {}}
+        isSubmitting={false}
+        serverError={null}
+      />,
+    );
+    expect(screen.getByRole('combobox', { name: 'Slot' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Duration' })).not.toBeInTheDocument();
+  });
+
+  it('renders duration + start-time pickers in open mode', () => {
+    mockBookingMode = 'open';
+    render(
+      <BookingForm
+        locationId={1}
+        submitLabel="Create booking"
+        onSubmit={() => {}}
+        isSubmitting={false}
+        serverError={null}
+      />,
+    );
+    // Open mode shows Duration + Start time instead of Slot.
+    expect(screen.getByRole('combobox', { name: 'Duration' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Start time' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Slot' })).not.toBeInTheDocument();
+  });
+
+  it('submits an open-mode window (start_time + duration, no slot_id)', async () => {
+    mockBookingMode = 'open';
+    const onSubmit = vi.fn();
+    render(
+      <BookingForm
+        locationId={1}
+        submitLabel="Create booking"
+        onSubmit={onSubmit}
+        isSubmitting={false}
+        serverError={null}
+      />,
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'Plan' }), {
+      target: { value: '3' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Duration' }), {
+      target: { value: '60' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Start time' }), {
+      target: { value: '15:00' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Booking name' }), {
+      target: { value: 'Priya S' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Phone' }), {
+      target: { value: '9876543210' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create booking' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const values = onSubmit.mock.calls[0][0];
+    expect(values.start_time).toBe('15:00');
+    expect(values.duration_minutes).toBe(60);
+    expect(values.slot_id).toBeUndefined();
   });
 
   it('shows a field-level error when the coupon is rejected', async () => {

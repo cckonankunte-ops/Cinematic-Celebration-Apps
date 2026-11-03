@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import time
 
-from sqlalchemy import Boolean, String, Text, Time, text
+from sqlalchemy import Boolean, CheckConstraint, String, Text, Time, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -40,4 +40,20 @@ class Location(Base, TimestampMixin):
         Boolean, nullable=False, server_default=text("false")
     )
 
+    # How this branch produces a booking's time window:
+    #   'slot' — bookings reference a configured Slot row (slot_id); current
+    #            behaviour and the default for every location.
+    #   'open' — slotless; bookings carry start_time + duration_minutes directly
+    #            (slot_id null). A simple admin-toggled switch (not date-scheduled)
+    #            that only affects new bookings.
+    booking_mode: Mapped[str] = mapped_column(
+        String, nullable=False, default="slot", server_default=text("'slot'")
+    )
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "booking_mode IN ('slot', 'open')", name="ck_locations_booking_mode"
+        ),
+    )

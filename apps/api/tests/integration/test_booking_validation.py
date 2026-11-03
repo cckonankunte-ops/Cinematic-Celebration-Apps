@@ -1,9 +1,14 @@
 """Property tests for booking-request validation.
 
 Feature: cinematic-celebration-system, Property 9: Booking-request validation
-rejects invalid items (cross-location, out-of-window/inactive, slot/plan
-mismatch, unknown ID, past date, people > max); duplicates are deduped; a valid
-request passes and returns the loaded catalog rows.
+rejects invalid items (cross-location, out-of-window/inactive, unknown ID, past
+date, people > max); duplicates are deduped; a valid request passes and returns
+the loaded catalog rows.
+
+Window/slot validation (slot-from-different-plan, out-of-window slot, mode
+mismatch) moved to ``resolve_booking_window`` with the booking-mode feature and
+is covered there + in test_booking_open_mode.py; this file focuses on item
+validation, which no longer takes a slot_id.
 
 Validates: Requirements 5.1, 5.2, 5.3
 """
@@ -23,7 +28,7 @@ from app.core.errors import (
     ValidationFailedError,
 )
 from app.schemas.booking import ComboSelectionIn, DecorSelectionIn
-from app.services.booking import validate_booking_request
+from app.services.booking import resolve_booking_window, validate_booking_request
 from tests.factories import (
     FAR_FUTURE,
     FAR_PAST,
@@ -46,7 +51,6 @@ def test_valid_request_passes_and_returns_rows(db: Session) -> None:
     """A fully valid request returns the loaded, de-duplicated catalog rows."""
     loc = make_location(db)
     plan = make_plan(db, loc.id, max_people_allowed=10)
-    slot = make_slot(db, plan.id)
     cake = make_cake(db, loc.id)
     decor = make_decor(db, loc.id)
     combo = make_combo(db, loc.id)
@@ -56,7 +60,6 @@ def test_valid_request_passes_and_returns_rows(db: Session) -> None:
         db,
         location_id=loc.id,
         plan_id=plan.id,
-        slot_id=slot.id,
         booking_date=_valid_date(),
         people=4,
         cake_id=cake.id,
@@ -72,7 +75,6 @@ def test_valid_request_passes_and_returns_rows(db: Session) -> None:
 def test_duplicate_addon_ids_are_deduped(db: Session) -> None:
     loc = make_location(db)
     plan = make_plan(db, loc.id)
-    slot = make_slot(db, plan.id)
     decor = make_decor(db, loc.id)
     combo = make_combo(db, loc.id)
     db.flush()
@@ -81,7 +83,6 @@ def test_duplicate_addon_ids_are_deduped(db: Session) -> None:
         db,
         location_id=loc.id,
         plan_id=plan.id,
-        slot_id=slot.id,
         booking_date=_valid_date(),
         people=2,
         cake_id=None,
@@ -101,14 +102,12 @@ def test_duplicate_addon_ids_are_deduped(db: Session) -> None:
 def test_past_date_rejected(db: Session) -> None:
     loc = make_location(db)
     plan = make_plan(db, loc.id)
-    slot = make_slot(db, plan.id)
     db.flush()
     with pytest.raises(BookingDateInPastError):
         validate_booking_request(
             db,
             location_id=loc.id,
             plan_id=plan.id,
-            slot_id=slot.id,
             booking_date=date.today() - timedelta(days=1),
             people=2,
             cake_id=None,
@@ -122,14 +121,12 @@ def test_past_date_rejected(db: Session) -> None:
 def test_people_over_max_rejected(db: Session, people: int) -> None:
     loc = make_location(db)
     plan = make_plan(db, loc.id, max_people_allowed=10)
-    slot = make_slot(db, plan.id)
     db.flush()
     with pytest.raises(ValidationFailedError):
         validate_booking_request(
             db,
             location_id=loc.id,
             plan_id=plan.id,
-            slot_id=slot.id,
             booking_date=_valid_date(),
             people=people,
             cake_id=None,
@@ -142,7 +139,6 @@ def test_cross_location_cake_rejected(db: Session) -> None:
     loc_a = make_location(db, name="A")
     loc_b = make_location(db, name="B")
     plan = make_plan(db, loc_a.id)
-    slot = make_slot(db, plan.id)
     foreign_cake = make_cake(db, loc_b.id)
     db.flush()
     with pytest.raises(ItemInvalidError):
@@ -150,7 +146,6 @@ def test_cross_location_cake_rejected(db: Session) -> None:
             db,
             location_id=loc_a.id,
             plan_id=plan.id,
-            slot_id=slot.id,
             booking_date=_valid_date(),
             people=2,
             cake_id=foreign_cake.id,
@@ -163,7 +158,6 @@ def test_cross_location_decor_and_combo_rejected(db: Session) -> None:
     loc_a = make_location(db, name="A")
     loc_b = make_location(db, name="B")
     plan = make_plan(db, loc_a.id)
-    slot = make_slot(db, plan.id)
     foreign_decor = make_decor(db, loc_b.id)
     foreign_combo = make_combo(db, loc_b.id)
     db.flush()
@@ -172,7 +166,6 @@ def test_cross_location_decor_and_combo_rejected(db: Session) -> None:
             db,
             location_id=loc_a.id,
             plan_id=plan.id,
-            slot_id=slot.id,
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
@@ -184,7 +177,6 @@ def test_cross_location_decor_and_combo_rejected(db: Session) -> None:
             db,
             location_id=loc_a.id,
             plan_id=plan.id,
-            slot_id=slot.id,
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
@@ -194,29 +186,27 @@ def test_cross_location_decor_and_combo_rejected(db: Session) -> None:
 
 
 def test_slot_from_different_plan_rejected(db: Session) -> None:
-    loc = make_location(db)
+    """resolve_booking_window rejects a slot that belongs to a different plan."""
+    loc = make_location(db)  # slot mode (default)
     plan_a = make_plan(db, loc.id)
     plan_b = make_plan(db, loc.id)
-    slot_b = make_slot(db, plan_b.id)
+    slot_b = make_slot(db, plan_b.id, start_time=None, duration_minutes=None)
     db.flush()
     with pytest.raises(ItemInvalidError):
-        validate_booking_request(
+        resolve_booking_window(
             db,
-            location_id=loc.id,
-            plan_id=plan_a.id,
+            loc,
+            plan_a.id,
             slot_id=slot_b.id,
+            start_time=None,
+            duration_minutes=None,
             booking_date=_valid_date(),
-            people=2,
-            cake_id=None,
-            special_decor=[],
-            combos=[],
         )
 
 
 def test_unknown_ids_rejected(db: Session) -> None:
     loc = make_location(db)
     plan = make_plan(db, loc.id)
-    slot = make_slot(db, plan.id)
     db.flush()
     # Unknown plan.
     with pytest.raises(ItemInvalidError):
@@ -224,7 +214,6 @@ def test_unknown_ids_rejected(db: Session) -> None:
             db,
             location_id=loc.id,
             plan_id=999999,
-            slot_id=slot.id,
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
@@ -237,7 +226,6 @@ def test_unknown_ids_rejected(db: Session) -> None:
             db,
             location_id=loc.id,
             plan_id=plan.id,
-            slot_id=slot.id,
             booking_date=_valid_date(),
             people=2,
             cake_id=999999,
@@ -249,14 +237,12 @@ def test_unknown_ids_rejected(db: Session) -> None:
 def test_inactive_plan_rejected(db: Session) -> None:
     loc = make_location(db)
     plan = make_plan(db, loc.id, is_active=False)
-    slot = make_slot(db, plan.id)
     db.flush()
     with pytest.raises(ItemInvalidError):
         validate_booking_request(
             db,
             location_id=loc.id,
             plan_id=plan.id,
-            slot_id=slot.id,
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
@@ -271,14 +257,12 @@ def test_out_of_window_plan_rejected(db: Session) -> None:
     plan = make_plan(
         db, loc.id, effective_from=FAR_PAST, effective_to=date.today() - timedelta(days=1)
     )
-    slot = make_slot(db, plan.id)
     db.flush()
     with pytest.raises(ItemInvalidError):
         validate_booking_request(
             db,
             location_id=loc.id,
             plan_id=plan.id,
-            slot_id=slot.id,
             booking_date=_valid_date(),
             people=2,
             cake_id=None,
@@ -288,25 +272,26 @@ def test_out_of_window_plan_rejected(db: Session) -> None:
 
 
 def test_out_of_window_slot_rejected(db: Session) -> None:
-    loc = make_location(db)
+    """resolve_booking_window rejects a slot whose validity window has passed."""
+    loc = make_location(db)  # slot mode (default)
     plan = make_plan(db, loc.id)
     slot = make_slot(
         db,
         plan.id,
+        start_time=None,
+        duration_minutes=None,
         effective_from=FAR_PAST,
         effective_to=date.today() - timedelta(days=1),
     )
     assert slot.effective_to != FAR_FUTURE
     db.flush()
     with pytest.raises(ItemInvalidError):
-        validate_booking_request(
+        resolve_booking_window(
             db,
-            location_id=loc.id,
-            plan_id=plan.id,
+            loc,
+            plan.id,
             slot_id=slot.id,
+            start_time=None,
+            duration_minutes=None,
             booking_date=_valid_date(),
-            people=2,
-            cake_id=None,
-            special_decor=[],
-            combos=[],
         )

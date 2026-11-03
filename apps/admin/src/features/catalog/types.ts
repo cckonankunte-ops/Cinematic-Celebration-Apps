@@ -91,6 +91,8 @@ export interface LocationAdminRead {
   closes_at: string;
   last_online_booking_start: string;
   allow_late_booking: boolean;
+  /** 'slot' (pick a configured slot) | 'open' (pick start + duration directly). */
+  booking_mode: 'slot' | 'open';
   is_active: boolean;
 }
 
@@ -99,6 +101,7 @@ export interface LocationHoursUpdateBody {
   closes_at?: string;
   last_online_booking_start?: string;
   allow_late_booking?: boolean;
+  booking_mode?: 'slot' | 'open';
 }
 
 /** Shared shape for location add-ons (cakes/decor/combos) with an image URL. */

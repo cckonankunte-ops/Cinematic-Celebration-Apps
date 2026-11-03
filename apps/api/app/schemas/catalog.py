@@ -24,6 +24,8 @@ class LocationRead(BaseModel):
     closes_at: time | None = None
     last_online_booking_start: time | None = None
     allow_late_booking: bool = False
+    # 'slot' (pick a configured slot) | 'open' (pick start+duration directly).
+    booking_mode: str = "slot"
 
 
 class PlanRead(BaseModel):
@@ -64,6 +66,27 @@ class SlotAvailabilityRead(SlotRead):
     against double booking.
     """
 
+    is_available: bool
+
+
+class PlanDurationRead(BaseModel):
+    """A bookable duration for a plan (open mode) + its base price/advance."""
+
+    duration_minutes: int
+    price_paise: int
+    advance_paise: int
+
+
+class OpenAvailabilityRead(BaseModel):
+    """A candidate start time for OPEN-mode booking + whether it's bookable.
+
+    Generated for a (plan, location, date, duration) across the branch's working
+    hours at :00/:30 steps. ``is_available`` is False when the start fails a time
+    rule for the actor or its occupied window (incl. cleaning buffer) overlaps an
+    active booking. The buffer is never exposed.
+    """
+
+    start_time: time
     is_available: bool
 
 
