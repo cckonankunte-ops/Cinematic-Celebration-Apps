@@ -35,9 +35,9 @@ _ORIGIN = {"Origin": "http://localhost:5173"}
 def test_list_includes_main_columns(client: TestClient, db: Session) -> None:
     loc = make_location(db)
     loc.map_url = "https://maps.app.goo.gl/example"
-    # Allow an admin manual discount so the requested 10000 isn't clamped to 0
-    # (server clamps admin discount to [0, plan.max_discount_paise], 0 when the
-    # plan disallows discounts).
+    # The admin manual discount is a trusted staff override (not gated/capped by
+    # the plan), so the requested 10000 is applied as-is. give_discount /
+    # max_discount_paise here are incidental and no longer constrain it.
     plan = make_plan(db, loc.id, give_discount=True, max_discount_paise=50000)
     slot = make_slot(db, plan.id, description="9 AM - 12 PM")
     cake = make_cake(db, loc.id)

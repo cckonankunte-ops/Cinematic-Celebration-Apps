@@ -12,7 +12,7 @@ No payment columns live here (payments are a ledger). No add-on columns live her
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, time
 
 from sqlalchemy import (
     BigInteger,
@@ -21,8 +21,10 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
+    Time,
     text,
 )
 from sqlalchemy import Enum as SAEnum
@@ -55,6 +57,12 @@ class Booking(Base, TimestampMixin):
         ForeignKey("slots.id", ondelete="RESTRICT"), nullable=False
     )
     booking_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    # Snapshot of the slot's time at booking creation so later slot edits don't
+    # shift historical bookings. Nullable during the retrofit; becomes NOT NULL
+    # after backfill. The occupied window used for overlap is
+    # [booking_date+start_time, +duration_minutes+CLEANING_BUFFER_MINUTES).
+    start_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    duration_minutes: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     # customer info
     booking_name: Mapped[str] = mapped_column(String, nullable=False)

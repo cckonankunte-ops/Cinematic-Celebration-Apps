@@ -7,11 +7,13 @@ requested date. Public plan listings expose the actual chargeable price
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.errors import AppError
 from app.integrations.storage import public_url
 from app.models.cake import Cake
 from app.models.combo_item import ComboItem
@@ -29,6 +31,13 @@ from app.schemas.catalog import (
     SlotAvailabilityRead,
     SlotRead,
     SpecialDecorRead,
+)
+from app.services.slots import (
+    ActorKind,
+    LocationHours,
+    OccupiedWindow,
+    occupied_window,
+    validate_booking_time,
 )
 
 
@@ -51,6 +60,10 @@ def list_active_locations(db: Session) -> list[LocationRead]:
             address=r.address,
             phone=r.phone,
             map_url=r.map_url,
+            opens_at=r.opens_at,
+            closes_at=r.closes_at,
+            last_online_booking_start=r.last_online_booking_start,
+            allow_late_booking=r.allow_late_booking,
         )
         for r in rows
     ]
@@ -109,6 +122,26 @@ def get_plan(db: Session, plan_id: int, on: date) -> PlanRead | None:
     return _to_plan_read(db, plan) if plan else None
 
 
+def _fmt_12h(t: time) -> str:
+    """Format a time as e.g. '3:00 PM' (no leading zero on the hour)."""
+    hour = t.hour % 12 or 12
+    ampm = "AM" if t.hour < 12 else "PM"
+    return f"{hour}:{t.minute:02d} {ampm}"
+
+
+def slot_label(s: Slot) -> str:
+    """Display label for a slot: stored description, else derived from times."""
+    if s.description:
+        return s.description
+    if s.start_time is not None and s.duration_minutes is not None:
+        end = (
+            datetime.combine(date.today(), s.start_time)
+            + timedelta(minutes=s.duration_minutes)
+        ).time()
+        return f"{_fmt_12h(s.start_time)} - {_fmt_12h(end)}"
+    return ""
+
+
 def list_active_slots(db: Session, plan_id: int, on: date) -> list[SlotRead]:
     rows = db.execute(
         select(Slot)
@@ -124,7 +157,9 @@ def list_active_slots(db: Session, plan_id: int, on: date) -> list[SlotRead]:
         SlotRead(
             id=s.id,
             plan_id=s.plan_id,
-            description=s.description,
+            description=slot_label(s),
+            start_time=s.start_time,
+            duration_minutes=s.duration_minutes,
             show_combos=s.show_combos,
             sort_order=s.sort_order,
         )
@@ -232,38 +267,92 @@ def list_available_slots(
     return [s for s in list_active_slots(db, plan_id, on) if s.id not in held_slot_ids]
 
 
+def _active_occupied_windows(
+    db: Session, location_id: int, plan_id: int, on: date, buffer_minutes: int
+) -> list[OccupiedWindow]:
+    """Occupied windows of active bookings for (location, plan, date)."""
+    from app.models.booking import Booking
+
+    rows = db.execute(
+        select(Booking.start_time, Booking.duration_minutes).where(
+            Booking.location_id == location_id,
+            Booking.plan_id == plan_id,
+            Booking.booking_date == on,
+            Booking.status.in_(("pending", "accepted")),
+            Booking.start_time.is_not(None),
+            Booking.duration_minutes.is_not(None),
+        )
+    ).all()
+    return [
+        occupied_window(on, start, duration, buffer_minutes)
+        for start, duration in rows
+    ]
+
+
 def list_slots_with_availability(
-    db: Session, plan_id: int, location_id: int, on: date
+    db: Session,
+    plan_id: int,
+    location_id: int,
+    on: date,
+    *,
+    actor: ActorKind = ActorKind.PUBLIC,
+    now: datetime | None = None,
 ) -> list[SlotAvailabilityRead]:
     """All active slots for a plan on a date, each annotated with availability.
 
-    Unlike ``list_available_slots`` (which drops held slots entirely), this
-    returns every active slot so the booking UIs can render held slots
-    greyed-out and non-selectable. A slot is unavailable when an active
-    (pending|accepted) booking exists for the same (location, slot, date).
+    Every active slot is returned (held/invalid ones flagged unavailable) so the
+    booking UIs can grey them out rather than hide them. A slot is available only
+    when it passes the time-rule pipeline for ``actor`` (future-start,
+    working-hours, end-before-close, late-cutoff) AND its occupied window
+    (incl. cleaning buffer) does not overlap any active booking's window.
     """
-    from app.models.booking import Booking
-
-    held_slot_ids = set(
-        db.execute(
-            select(Booking.slot_id).where(
-                Booking.location_id == location_id,
-                Booking.booking_date == on,
-                Booking.status.in_(("pending", "accepted")),
-            )
-        ).scalars()
-    )
-    return [
-        SlotAvailabilityRead(
-            id=s.id,
-            plan_id=s.plan_id,
-            description=s.description,
-            show_combos=s.show_combos,
-            sort_order=s.sort_order,
-            is_available=s.id not in held_slot_ids,
+    buffer = settings.CLEANING_BUFFER_MINUTES
+    location = db.get(Location, location_id)
+    hours = (
+        LocationHours(
+            opens_at=location.opens_at,
+            closes_at=location.closes_at,
+            last_online_booking_start=location.last_online_booking_start,
+            allow_late_booking=location.allow_late_booking,
         )
-        for s in list_active_slots(db, plan_id, on)
-    ]
+        if location is not None
+        else None
+    )
+    held = _active_occupied_windows(db, location_id, plan_id, on, buffer)
+
+    out: list[SlotAvailabilityRead] = []
+    for s in list_active_slots(db, plan_id, on):
+        available = True
+        # Rule pipeline (only when the slot has real times and we know the hours).
+        if s.start_time is not None and s.duration_minutes is not None and hours is not None:
+            try:
+                validate_booking_time(
+                    hours=hours,
+                    booking_date=on,
+                    start=s.start_time,
+                    duration_minutes=s.duration_minutes,
+                    actor=actor,
+                    now=now,
+                )
+            except AppError:
+                available = False
+            if available:
+                window = occupied_window(on, s.start_time, s.duration_minutes, buffer)
+                if any(window.overlaps(h) for h in held):
+                    available = False
+        out.append(
+            SlotAvailabilityRead(
+                id=s.id,
+                plan_id=s.plan_id,
+                description=s.description,
+                start_time=s.start_time,
+                duration_minutes=s.duration_minutes,
+                show_combos=s.show_combos,
+                sort_order=s.sort_order,
+                is_available=available,
+            )
+        )
+    return out
 
 
 def booking_plan_and_slot_labels(

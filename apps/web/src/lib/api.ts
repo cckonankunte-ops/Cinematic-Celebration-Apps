@@ -135,6 +135,9 @@ export interface Slot {
   id: number;
   plan_id: number;
   description: string;
+  /** IST "HH:MM:SS" (null for legacy rows); length in minutes. */
+  start_time: string | null;
+  duration_minutes: number | null;
   show_combos: boolean;
   sort_order: number;
 }

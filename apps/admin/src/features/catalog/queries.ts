@@ -16,11 +16,19 @@ import {
 import { api } from '@/api/client';
 import type {
   CakeAdminRead,
+  CakeCreateBody,
+  CakeUpdateBody,
   ComboCreateBody,
   ComboUpdateBody,
+  DecorCreateBody,
+  DecorUpdateBody,
+  LocationAdminRead,
+  LocationHoursUpdateBody,
   NamedAddonAdminRead,
   PlanAdminRead,
   PlanCreateBody,
+  PlanPricingAdminRead,
+  PlanPricingCreateBody,
   SlotAdminRead,
   SlotCreateBody,
 } from './types';
@@ -103,6 +111,31 @@ export function useCakes(locationId: number | null): UseQueryResult<CakeAdminRea
   });
 }
 
+export function useCreateCake(
+  locationId: number | null,
+): UseMutationResult<CakeAdminRead, unknown, CakeCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<CakeAdminRead, unknown, CakeCreateBody>({
+    mutationFn: (body) => api.post<CakeAdminRead>('/api/v1/admin/cakes', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'cakes', locationId] });
+    },
+  });
+}
+
+export function useUpdateCake(
+  locationId: number | null,
+  cakeId: number,
+): UseMutationResult<CakeAdminRead, unknown, CakeUpdateBody> {
+  const qc = useQueryClient();
+  return useMutation<CakeAdminRead, unknown, CakeUpdateBody>({
+    mutationFn: (body) => api.patch<CakeAdminRead>(`/api/v1/admin/cakes/${cakeId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'cakes', locationId] });
+    },
+  });
+}
+
 export function useDeactivateCake(
   locationId: number | null,
 ): UseMutationResult<CakeAdminRead, unknown, number> {
@@ -126,6 +159,45 @@ export function useSpecialDecor(
         `/api/v1/admin/special-decor?location_id=${locationId as number}`,
       ),
     enabled: locationId !== null,
+  });
+}
+
+export function useCreateDecor(
+  locationId: number | null,
+): UseMutationResult<NamedAddonAdminRead, unknown, DecorCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, DecorCreateBody>({
+    mutationFn: (body) => api.post<NamedAddonAdminRead>('/api/v1/admin/special-decor', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'special-decor', locationId] });
+    },
+  });
+}
+
+export function useUpdateDecor(
+  locationId: number | null,
+  decorId: number,
+): UseMutationResult<NamedAddonAdminRead, unknown, DecorUpdateBody> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, DecorUpdateBody>({
+    mutationFn: (body) =>
+      api.patch<NamedAddonAdminRead>(`/api/v1/admin/special-decor/${decorId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'special-decor', locationId] });
+    },
+  });
+}
+
+export function useDeactivateDecor(
+  locationId: number | null,
+): UseMutationResult<NamedAddonAdminRead, unknown, number> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, number>({
+    mutationFn: (decorId) =>
+      api.del<NamedAddonAdminRead>(`/api/v1/admin/special-decor/${decorId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'special-decor', locationId] });
+    },
   });
 }
 
@@ -169,6 +241,85 @@ export function useUpdateCombo(
       api.patch<NamedAddonAdminRead>(`/api/v1/admin/combos/${comboId}`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['catalog', 'combos', locationId] });
+    },
+  });
+}
+
+export function useDeactivateCombo(
+  locationId: number | null,
+): UseMutationResult<NamedAddonAdminRead, unknown, number> {
+  const qc = useQueryClient();
+  return useMutation<NamedAddonAdminRead, unknown, number>({
+    mutationFn: (comboId) => api.del<NamedAddonAdminRead>(`/api/v1/admin/combos/${comboId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'combos', locationId] });
+    },
+  });
+}
+
+// --- Plan pricing (per-duration base price + advance, R11) ---
+export function usePlanPricing(
+  planId: number | null,
+): UseQueryResult<PlanPricingAdminRead[]> {
+  return useQuery<PlanPricingAdminRead[]>({
+    queryKey: ['catalog', 'plan-pricing', planId],
+    queryFn: () =>
+      api.get<PlanPricingAdminRead[]>(
+        `/api/v1/admin/plan-pricing?plan_id=${planId as number}`,
+      ),
+    enabled: planId !== null,
+  });
+}
+
+export function useCreatePlanPricing(
+  planId: number | null,
+): UseMutationResult<PlanPricingAdminRead, unknown, PlanPricingCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<PlanPricingAdminRead, unknown, PlanPricingCreateBody>({
+    mutationFn: (body) =>
+      api.post<PlanPricingAdminRead>('/api/v1/admin/plan-pricing', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'plan-pricing', planId] });
+    },
+  });
+}
+
+export function useDeactivatePlanPricing(
+  planId: number | null,
+): UseMutationResult<PlanPricingAdminRead, unknown, number> {
+  const qc = useQueryClient();
+  return useMutation<PlanPricingAdminRead, unknown, number>({
+    mutationFn: (pricingId) =>
+      api.del<PlanPricingAdminRead>(`/api/v1/admin/plan-pricing/${pricingId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'plan-pricing', planId] });
+    },
+  });
+}
+
+// --- Locations (working hours + online-booking policy) ---
+export function useLocationsAdmin(): UseQueryResult<LocationAdminRead[]> {
+  return useQuery<LocationAdminRead[]>({
+    queryKey: ['catalog', 'locations'],
+    queryFn: () => api.get<LocationAdminRead[]>('/api/v1/admin/locations'),
+  });
+}
+
+export function useUpdateLocationHours(): UseMutationResult<
+  LocationAdminRead,
+  unknown,
+  { locationId: number; body: LocationHoursUpdateBody }
+> {
+  const qc = useQueryClient();
+  return useMutation<
+    LocationAdminRead,
+    unknown,
+    { locationId: number; body: LocationHoursUpdateBody }
+  >({
+    mutationFn: ({ locationId, body }) =>
+      api.patch<LocationAdminRead>(`/api/v1/admin/locations/${locationId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'locations'] });
     },
   });
 }

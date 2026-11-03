@@ -183,9 +183,12 @@ have gone home.
 #### Acceptance Criteria
 1. Each location SHALL have a `last_online_booking_start` cutoff time and an
    `allow_late_booking` switch (boolean).
-2. WHEN a customer (public) requests a slot whose start is at/after the cutoff
-   AND `allow_late_booking` is false THEN the system SHALL NOT offer that slot and
-   SHALL reject a direct booking attempt with a clear error.
+2. WHEN a customer (public) requests a **same-day** slot whose start is at/after
+   the cutoff AND `allow_late_booking` is false THEN the system SHALL NOT offer
+   that slot and SHALL reject a direct booking attempt with a clear error. The
+   cutoff applies to **today only**: the identical late slot on any future date
+   SHALL remain offered and bookable, since the cutoff exists solely to stop
+   last-minute same-day bookings after staff have left.
 3. WHERE `allow_late_booking` is true THEN slots whose **usable end** is at/before
    the location's close time SHALL be bookable; a late slot that would end after
    close is still rejected per Requirement 5.5 (the switch enables late *starts*,
@@ -197,8 +200,10 @@ have gone home.
 5. THE cutoff and switch SHALL be per location and admin-tunable.
 
 **Test cases**
-- Cutoff 22:00, switch off: public availability hides 22:00+ slots; direct POST to
-  a 22:30 slot → rejected.
+- Cutoff 22:00, switch off, **same day**: public availability hides 22:00+ slots;
+  direct POST to a 22:30 slot for today → rejected.
+- Cutoff 22:00, switch off, **future date**: a 22:30 slot on a later date stays
+  offered and bookable by the public (cutoff does not apply).
 - Cutoff 22:00, switch on: public can book a 23:00 slot.
 - Admin can create a 23:00 booking regardless of the switch.
 

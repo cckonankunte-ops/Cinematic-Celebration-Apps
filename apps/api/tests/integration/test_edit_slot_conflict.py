@@ -13,6 +13,8 @@ Validates: Requirements 8.1, 8.2, 8.3
 
 from __future__ import annotations
 
+from datetime import time
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -59,8 +61,16 @@ def test_edit_does_not_conflict_with_itself(db: Session) -> None:
     admin = _admin(db)
     loc = make_location(db)
     plan = make_plan(db, loc.id, max_people_allowed=10)
-    slot_a = make_slot(db, plan.id, description="9-12", sort_order=1)
-    slot_b = make_slot(db, plan.id, description="12-3", sort_order=2)
+    # Two distinct, non-overlapping time windows (gap > cleaning buffer) so the
+    # two bookings don't collide and we can test edit self-exclusion.
+    slot_a = make_slot(
+        db, plan.id, description="11 AM - 1 PM",
+        start_time=time(11, 0), duration_minutes=120, sort_order=1,
+    )
+    slot_b = make_slot(
+        db, plan.id, description="2 PM - 4 PM",
+        start_time=time(14, 0), duration_minutes=120, sort_order=2,
+    )
     db.commit()
 
     when = future_date()

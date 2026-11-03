@@ -139,7 +139,8 @@ def test_example_combo3_cake_half_kg_plus_led() -> None:
 
     cake base 50000 @ 0.5kg (weight_half_kg=1) + LED 'ARUNA':
       110000 + max(0, 50000-40000) + max(0, 20000-20000) = 120000.
-    The combo absorbs the cake, so there is NO standalone cake line.
+    The combo absorbs the cake, so the cake line is recorded as a 0-amount
+    absorbed line (for edit round-trip), not an extra charge.
     """
     req = ValidatedRequest(
         plan=_free_plan(),
@@ -154,13 +155,17 @@ def test_example_combo3_cake_half_kg_plus_led() -> None:
         ],
     )
     bd = compute_booking_price(req, is_customer=True)
-    assert all(line.kind != "cake" for line in bd.addon_lines)
+    cake_lines = [line for line in bd.addon_lines if line.kind == "cake"]
+    assert len(cake_lines) == 1
+    assert cake_lines[0].absorbed_by_combo is True
+    assert cake_lines[0].amount_paise == 0
     assert _combo_line_amount(bd) == 120000
 
 
 def test_example_combo3_cake_one_kg_plus_led() -> None:
     """Combo3 same cake @ 1.0kg (weight_half_kg=2 -> weighted 100000) + 'ARUNA':
-      110000 + max(0, 100000-40000) + 0 = 170000. No standalone cake line.
+      110000 + max(0, 100000-40000) + 0 = 170000. The cake line is recorded as
+      a 0-amount absorbed line (for edit round-trip), not an extra charge.
     """
     req = ValidatedRequest(
         plan=_free_plan(),
@@ -175,7 +180,10 @@ def test_example_combo3_cake_one_kg_plus_led() -> None:
         ],
     )
     bd = compute_booking_price(req, is_customer=True)
-    assert all(line.kind != "cake" for line in bd.addon_lines)
+    cake_lines = [line for line in bd.addon_lines if line.kind == "cake"]
+    assert len(cake_lines) == 1
+    assert cake_lines[0].absorbed_by_combo is True
+    assert cake_lines[0].amount_paise == 0
     assert _combo_line_amount(bd) == 170000
 
 

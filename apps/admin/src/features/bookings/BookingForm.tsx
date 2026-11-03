@@ -168,6 +168,18 @@ export function BookingForm({
   const [breakdown, setBreakdown] = useState<PriceBreakdownRead | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
+  // --- Coupon apply/remove state -------------------------------------------
+  // A coupon is only sent to the pricing preview once APPLIED (never silently
+  // as the user types). `appliedCoupon` holds the applied code; while set, the
+  // live preview includes it and re-validates on every priced-field change.
+  // `couponFieldError` surfaces coupon-specific failures right under the field.
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(
+    initial?.coupon_code && initial.coupon_code.trim().length > 0
+      ? initial.coupon_code
+      : null,
+  );
+  const [couponFieldError, setCouponFieldError] = useState<string | null>(null);
+
   const watched = watch();
   // Serialise the priced fields and debounce so the preview fires ~400ms after
   // the last change rather than on every keystroke.
@@ -181,7 +193,8 @@ export function BookingForm({
       cake_weight_half_kg: watched.cake_weight_half_kg,
       occasion_id: watched.occasion_id,
       led_name: watched.led_name,
-      coupon_code: watched.coupon_code,
+      // Only an APPLIED coupon feeds the preview (not the raw typed field).
+      coupon_code: appliedCoupon,
       discount_rupees: watched.discount_rupees,
       food_rupees: watched.food_rupees,
       other_rupees: watched.other_rupees,
@@ -241,16 +254,75 @@ export function BookingForm({
       onSuccess: (data) => {
         setBreakdown(data);
         setPreviewError(null);
+        // A coupon was applied but the server returned no discount for it
+        // (e.g. it no longer applies after a change): surface it at the field
+        // and drop the applied state so the UI reflects reality.
+        if (body.coupon_code) {
+          if (data.coupon_discount_paise <= 0) {
+            // An applied coupon returned no discount (e.g. it stopped applying
+            // after a change): surface it and drop the applied state.
+            setCouponFieldError('This coupon does not apply to the current booking.');
+            setAppliedCoupon(null);
+          } else {
+            // Coupon applied successfully — clear any prior coupon error.
+            setCouponFieldError(null);
+          }
+        }
+        // When no coupon is in play (body.coupon_code is null), leave
+        // couponFieldError untouched so a prior rejection message persists
+        // until the user edits the field or clicks Apply/Remove again.
       },
       onError: (err) => {
-        setPreviewError(
-          err instanceof ApiError ? err.message : 'Could not compute a live summary.',
-        );
+        // Route coupon-specific failures to the field; everything else to the
+        // summary. On a coupon failure, drop the applied state.
+        if (
+          err instanceof ApiError &&
+          (err.code === 'COUPON_INVALID' || err.code === 'COUPON_NOT_APPLICABLE')
+        ) {
+          setCouponFieldError(err.message);
+          setAppliedCoupon(null);
+          setPreviewError(null);
+        } else {
+          setPreviewError(
+            err instanceof ApiError ? err.message : 'Could not compute a live summary.',
+          );
+        }
       },
     });
   }, [previewKey, locationId, bookingId, previewMutate]);
 
-  const submit = handleSubmit((values) => onSubmit(values as BookingCreateValues));
+  // --- Coupon apply/remove handlers ----------------------------------------
+  const applyCoupon = (): void => {
+    const code = (watched.coupon_code ?? '').trim();
+    if (code.length === 0) {
+      setCouponFieldError('Enter a coupon code first.');
+      return;
+    }
+    setCouponFieldError(null);
+    setAppliedCoupon(code); // triggers a preview that validates + prices it
+  };
+
+  const removeCoupon = (): void => {
+    setAppliedCoupon(null);
+    setCouponFieldError(null);
+    setValue('coupon_code', '');
+  };
+
+  const couponApplied =
+    appliedCoupon !== null &&
+    breakdown !== null &&
+    breakdown.coupon_discount_paise > 0 &&
+    breakdown.coupon_code !== null;
+
+  const submit = handleSubmit((values) => {
+    // Only persist a coupon that was actually applied. A code typed but never
+    // applied (or one that failed validation) must not be saved.
+    const finalValues = {
+      ...values,
+      coupon_code: appliedCoupon ?? undefined,
+    } as BookingCreateValues;
+    onSubmit(finalValues);
+  });
 
   return (
     <form onSubmit={submit} className="space-y-5">
@@ -458,10 +530,50 @@ export function BookingForm({
           <span className="text-xs text-gray-500">₹40 per letter</span>
         </label>
 
-        <label className="space-y-1 text-sm">
+        <div className="space-y-1 text-sm">
           <span className="font-medium text-gray-700">Coupon code</span>
-          <input type="text" className={inputClass} {...register('coupon_code')} />
-        </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              aria-label="Coupon code"
+              className={`${inputClass} ${couponFieldError ? 'border-red-400' : ''}`}
+              disabled={couponApplied}
+              {...register('coupon_code', {
+                // Editing the code starts a fresh attempt: clear any prior
+                // rejection so the stale message doesn't linger.
+                onChange: () => {
+                  if (couponFieldError) {
+                    setCouponFieldError(null);
+                  }
+                },
+              })}
+            />
+            {couponApplied ? (
+              <button
+                type="button"
+                onClick={removeCoupon}
+                className="shrink-0 rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Remove
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={applyCoupon}
+                className="shrink-0 rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
+              >
+                Apply
+              </button>
+            )}
+          </div>
+          {couponApplied && breakdown !== null && (
+            <p className="text-xs font-medium text-green-700">
+              Coupon {breakdown.coupon_code} applied — {formatRupees(breakdown.coupon_discount_paise)}{' '}
+              off
+            </p>
+          )}
+          {couponFieldError && <p className="text-xs text-red-600">{couponFieldError}</p>}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -636,6 +748,11 @@ function PreviewSummary({ breakdown, error }: PreviewSummaryProps): JSX.Element 
       )}
 
       {breakdown.addon_lines.map((line, idx) => {
+        // An absorbed cake line is 0-amount (its cost lives in the combo's
+        // upgrade) and exists only to persist the selection — don't render it.
+        if (line.absorbed_by_combo) {
+          return null;
+        }
         const cakeUpgrade = line.cake_upgrade_paise ?? 0;
         const ledUpgrade = line.led_upgrade_paise ?? 0;
         const hasUpgrades =

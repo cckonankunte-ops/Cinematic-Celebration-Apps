@@ -120,6 +120,12 @@ export interface AddonLineRead {
   combo_base_paise: number | null;
   cake_upgrade_paise: number | null;
   led_upgrade_paise: number | null;
+  /**
+   * True for a cake line whose cost is already carried by a combo's cake
+   * upgrade. It is 0-amount and recorded only so an edit can reconstruct the
+   * cake selection; the summary should not render it as its own priced row.
+   */
+  absorbed_by_combo?: boolean;
 }
 
 /** Full server-computed price breakdown. Mirrors the API `PriceBreakdownRead`. */

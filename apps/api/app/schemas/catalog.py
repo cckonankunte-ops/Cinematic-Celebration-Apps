@@ -6,6 +6,8 @@ server-side when give_discount is true). The UI converts paise to rupees.
 
 from __future__ import annotations
 
+from datetime import time
+
 from pydantic import BaseModel
 
 
@@ -16,6 +18,12 @@ class LocationRead(BaseModel):
     address: str | None
     phone: str | None
     map_url: str | None = None
+    # Working hours + online-booking policy (IST "HH:MM"). closes_at may be
+    # earlier than opens_at, meaning close is the next day.
+    opens_at: time | None = None
+    closes_at: time | None = None
+    last_online_booking_start: time | None = None
+    allow_late_booking: bool = False
 
 
 class PlanRead(BaseModel):
@@ -39,6 +47,10 @@ class SlotRead(BaseModel):
     id: int
     plan_id: int
     description: str
+    # Machine-readable time (IST wall-clock, "HH:MM") + length in minutes. May be
+    # null for legacy rows not yet backfilled; the UI falls back to description.
+    start_time: time | None = None
+    duration_minutes: int | None = None
     show_combos: bool
     sort_order: int
 

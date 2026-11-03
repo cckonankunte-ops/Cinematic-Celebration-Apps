@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, String, Text
+from datetime import time
+
+from sqlalchemy import Boolean, String, Text, Time, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -19,4 +21,23 @@ class Location(Base, TimestampMixin):
     phone: Mapped[str | None] = mapped_column(String, nullable=True)
     # Google Maps share link shown to customers (e.g. in the WhatsApp message).
     map_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # --- Working hours & online-booking policy (IST wall-clock) ---
+    # The bookable window. closes_at may be < opens_at, meaning close is the
+    # following day (e.g. opens 10:00, closes 01:00).
+    opens_at: Mapped[time] = mapped_column(
+        Time, nullable=False, server_default=text("'10:00'")
+    )
+    closes_at: Mapped[time] = mapped_column(
+        Time, nullable=False, server_default=text("'01:00'")
+    )
+    # Latest start a customer may self-book online. Starts at/after this are only
+    # offered to the public when allow_late_booking is true. Staff/admin exempt.
+    last_online_booking_start: Mapped[time] = mapped_column(
+        Time, nullable=False, server_default=text("'22:00'")
+    )
+    allow_late_booking: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

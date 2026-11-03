@@ -114,10 +114,15 @@ def test_customer_pricing_formula(
     give_discount=st.booleans(),
 )
 @settings(max_examples=100)
-def test_admin_discount_clamped_and_gated(
+def test_admin_discount_is_free_override(
     price, requested_discount, max_discount, give_discount
 ) -> None:
-    """Property 4 (admin): discount = min(requested, max) if give_discount else 0."""
+    """Property 4 (admin): the admin manual discount is a trusted override.
+
+    It equals the requested non-negative amount, independent of the plan's
+    ``give_discount`` flag and ``max_discount_paise`` cap (those govern the
+    customer/coupon path only). The total is still clamped at 0.
+    """
     req = ValidatedRequest(
         plan=_plan(
             price_paise=price, people_allowed=4, extra_guest_paise=0,
@@ -126,11 +131,29 @@ def test_admin_discount_clamped_and_gated(
         people=1,
     )
     bd = compute_booking_price(req, discount_paise=requested_discount, is_customer=False)
-    expected = min(requested_discount, max_discount) if give_discount else 0
+    expected = requested_discount  # no cap, no gate
     assert bd.discount_paise == expected
     # Total is clamped at 0: a discount larger than the subtotal cannot drive
     # the total negative (same max(0, ...) clamp that bounds coupon discounts).
     assert bd.total_paise == max(0, price - expected)
+
+
+def test_admin_discount_applies_even_when_plan_disallows() -> None:
+    """Regression: admin discount is NOT gated by give_discount / max_discount.
+
+    Previously a plan with give_discount=False (and max_discount_paise=0)
+    silently zeroed any admin discount; it must now apply in full.
+    """
+    req = ValidatedRequest(
+        plan=_plan(
+            price_paise=200000, people_allowed=4, extra_guest_paise=0,
+            give_discount=False, max_discount_paise=0,
+        ),
+        people=1,
+    )
+    bd = compute_booking_price(req, discount_paise=50000, is_customer=False)
+    assert bd.discount_paise == 50000
+    assert bd.total_paise == 150000
 
 
 def test_no_extra_guest_when_under_allowance() -> None:
