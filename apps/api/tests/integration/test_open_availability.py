@@ -9,7 +9,7 @@ confirms wiring.
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -52,9 +52,10 @@ def test_generates_half_hour_starts_within_hours(db: Session) -> None:
     _price_duration(db, plan.id, 60)
     db.commit()
 
-    # now before the day so every same-day start is in the future.
+    # now is the day BEFORE so every same-day start (incl. 00:00) is in the
+    # future — otherwise a 00:00 candidate equals `now` and fails future-start.
     on = future_date()
-    now = datetime.combine(on, time(0, 0))
+    now = datetime.combine(on, time(0, 0)) - timedelta(days=1)
     result = generate_open_availability(
         db, plan.id, loc.id, on, 60, actor=ActorKind.PUBLIC, now=now
     )

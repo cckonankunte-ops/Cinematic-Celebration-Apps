@@ -112,6 +112,7 @@ def test_cross_mode_overlap_conflicts(db: Session) -> None:
         db, plan.id, start_time=time(15, 0), duration_minutes=120, sort_order=1
     )
     _price(db, plan.id, 120)
+    _price(db, plan.id, 60)  # the open-mode overlap booking uses a 1h window
     db.commit()
 
     when = future_date()

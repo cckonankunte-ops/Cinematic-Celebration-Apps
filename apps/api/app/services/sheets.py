@@ -55,7 +55,10 @@ def _accepted_bookings_by_slot(
             Booking.booking_date == on_date,
             Booking.status == "accepted",
         )
-        .order_by(Booking.start_time, Booking.id)
+        # Order by the actual window start first so slot-mode and open-mode
+        # bookings interleave by time; fall back to the slot's sort_order (null
+        # for open mode sorts last) then booking id for a stable order.
+        .order_by(Booking.start_time, Slot.sort_order, Booking.id)
     )
     return [(row[0], row[1]) for row in db.execute(stmt).all()]
 
