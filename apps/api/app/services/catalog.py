@@ -27,6 +27,7 @@ from app.schemas.catalog import (
     ComboRead,
     LocationRead,
     OccasionRead,
+    OpenAvailabilityRead,
     PlanRead,
     SlotAvailabilityRead,
     SlotRead,
@@ -377,7 +378,7 @@ def generate_open_availability(
     *,
     actor: ActorKind = ActorKind.PUBLIC,
     now: datetime | None = None,
-) -> list["OpenAvailabilityRead"]:
+) -> list[OpenAvailabilityRead]:
     """Candidate :00/:30 start times for OPEN-mode booking, each flagged.
 
     Generates starts from the location's open time up to the latest start whose
@@ -386,8 +387,6 @@ def generate_open_availability(
     ``actor`` AND its occupied window (incl. cleaning buffer) does not overlap an
     active booking for ``(location, plan, date)``. Buffer is never exposed.
     """
-    from app.schemas.catalog import OpenAvailabilityRead
-
     buffer = settings.CLEANING_BUFFER_MINUTES
     location = db.get(Location, location_id)
     if location is None or duration_minutes <= 0:
