@@ -257,12 +257,20 @@ export function BookingForm({
         // A coupon was applied but the server returned no discount for it
         // (e.g. it no longer applies after a change): surface it at the field
         // and drop the applied state so the UI reflects reality.
-        if (body.coupon_code && data.coupon_discount_paise <= 0) {
-          setCouponFieldError('This coupon does not apply to the current booking.');
-          setAppliedCoupon(null);
-        } else {
-          setCouponFieldError(null);
+        if (body.coupon_code) {
+          if (data.coupon_discount_paise <= 0) {
+            // An applied coupon returned no discount (e.g. it stopped applying
+            // after a change): surface it and drop the applied state.
+            setCouponFieldError('This coupon does not apply to the current booking.');
+            setAppliedCoupon(null);
+          } else {
+            // Coupon applied successfully — clear any prior coupon error.
+            setCouponFieldError(null);
+          }
         }
+        // When no coupon is in play (body.coupon_code is null), leave
+        // couponFieldError untouched so a prior rejection message persists
+        // until the user edits the field or clicks Apply/Remove again.
       },
       onError: (err) => {
         // Route coupon-specific failures to the field; everything else to the
@@ -530,7 +538,15 @@ export function BookingForm({
               aria-label="Coupon code"
               className={`${inputClass} ${couponFieldError ? 'border-red-400' : ''}`}
               disabled={couponApplied}
-              {...register('coupon_code')}
+              {...register('coupon_code', {
+                // Editing the code starts a fresh attempt: clear any prior
+                // rejection so the stale message doesn't linger.
+                onChange: () => {
+                  if (couponFieldError) {
+                    setCouponFieldError(null);
+                  }
+                },
+              })}
             />
             {couponApplied ? (
               <button
