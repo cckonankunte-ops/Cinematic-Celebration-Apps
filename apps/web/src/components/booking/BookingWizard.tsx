@@ -13,6 +13,7 @@ import { formatRupees, todayIsoInIST } from '../../lib/formatters';
 import { isValidIndianMobile } from '../../lib/phone';
 import AddonSelector from './AddonSelector';
 import BookingForm from './BookingForm';
+import OpenSlotPicker from './OpenSlotPicker';
 import SlotPicker from './SlotPicker';
 import { emptyDraft, type BookingDraft, type Catalog } from './types';
 
@@ -88,10 +89,35 @@ export default function BookingWizard() {
   const patch = (p: Partial<BookingDraft>) =>
     setDraft((d) => ({ ...d, ...p }));
 
-  const selectPlan = (plan: Plan) => patch({ plan, slotId: null });
+  // The branch's booking mode decides which Step-2 picker is shown and which
+  // window fields are sent. Defaults to 'slot' until the location loads.
+  const isOpenMode = location?.booking_mode === 'open';
+
+  const selectPlan = (plan: Plan) =>
+    patch({ plan, slotId: null, startTime: null, durationMinutes: null });
 
   const selectSlot = (slot: Slot) =>
-    patch({ slotId: slot.id, showCombos: slot.show_combos });
+    patch({
+      slotId: slot.id,
+      startTime: null,
+      durationMinutes: null,
+      showCombos: slot.show_combos,
+    });
+
+  // Open mode: choosing a start+duration sets the window; an empty start means
+  // only the duration changed (start reset). Combos are shown in open mode.
+  const selectOpenWindow = (startTime: string, durationMinutes: number) =>
+    patch({
+      slotId: null,
+      durationMinutes,
+      startTime: startTime === '' ? null : startTime,
+      showCombos: true,
+    });
+
+  // True when the draft has a complete booking window for the current mode.
+  const hasWindow = isOpenMode
+    ? draft.startTime !== null && draft.durationMinutes !== null
+    : draft.slotId !== null;
 
   const toggleId = (list: number[], id: number): number[] =>
     list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
@@ -99,13 +125,19 @@ export default function BookingWizard() {
   // Build the preview request body from the current draft (priced inputs only,
   // never money). Returns null when the draft isn't ready to price.
   const buildPreviewRequest = (): PublicPreviewRequest | null => {
-    if (!location || !draft.plan || draft.slotId === null) {
+    if (!location || !draft.plan || !hasWindow) {
       return null;
     }
+    const windowFields = isOpenMode
+      ? {
+          start_time: draft.startTime ?? undefined,
+          duration_minutes: draft.durationMinutes ?? undefined,
+        }
+      : { slot_id: draft.slotId ?? undefined };
     return {
       location_id: location.id,
       plan_id: draft.plan.id,
-      slot_id: draft.slotId,
+      ...windowFields,
       booking_date: draft.bookingDate,
       people: draft.people,
       cake_id: draft.cakeId ?? undefined,
@@ -124,6 +156,8 @@ export default function BookingWizard() {
   const pricedInputs = JSON.stringify({
     plan: draft.plan?.id ?? null,
     slot: draft.slotId,
+    start: draft.startTime,
+    duration: draft.durationMinutes,
     date: draft.bookingDate,
     people: draft.people,
     cake: draft.cakeId,
@@ -174,16 +208,22 @@ export default function BookingWizard() {
   }, [step, pricedInputs]);
 
   async function submit() {
-    if (!location || !draft.plan || draft.slotId === null) {
+    if (!location || !draft.plan || !hasWindow) {
       return;
     }
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const windowFields = isOpenMode
+        ? {
+            start_time: draft.startTime ?? undefined,
+            duration_minutes: draft.durationMinutes ?? undefined,
+          }
+        : { slot_id: draft.slotId ?? undefined };
       const res = await publicApi.createBooking({
         location_id: location.id,
         plan_id: draft.plan.id,
-        slot_id: draft.slotId,
+        ...windowFields,
         booking_date: draft.bookingDate,
         booking_name: draft.bookingName,
         email: draft.email || undefined,
@@ -244,7 +284,7 @@ export default function BookingWizard() {
   }
 
   const canNextFromPlan = draft.plan !== null;
-  const canNextFromSlot = draft.slotId !== null;
+  const canNextFromSlot = hasWindow;
   const canSubmit =
     draft.bookingName.trim() !== '' &&
     isValidIndianMobile(draft.phone) &&
@@ -305,14 +345,27 @@ export default function BookingWizard() {
 
       {step === 2 && draft.plan && (
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Pick an available slot</h2>
-          <SlotPicker
-            planId={draft.plan.id}
-            locationId={location.id}
-            bookingDate={draft.bookingDate}
-            selectedSlotId={draft.slotId}
-            onSelect={selectSlot}
-          />
+          <h2 className="text-lg font-semibold">
+            {isOpenMode ? 'Choose a time' : 'Pick an available slot'}
+          </h2>
+          {isOpenMode ? (
+            <OpenSlotPicker
+              planId={draft.plan.id}
+              locationId={location.id}
+              bookingDate={draft.bookingDate}
+              selectedStart={draft.startTime}
+              selectedDuration={draft.durationMinutes}
+              onSelect={selectOpenWindow}
+            />
+          ) : (
+            <SlotPicker
+              planId={draft.plan.id}
+              locationId={location.id}
+              bookingDate={draft.bookingDate}
+              selectedSlotId={draft.slotId}
+              onSelect={selectSlot}
+            />
+          )}
         </section>
       )}
 

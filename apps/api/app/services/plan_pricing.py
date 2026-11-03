@@ -54,3 +54,39 @@ def resolve_duration_pricing(
     return DurationPricing(
         price_paise=plan.price_paise, advance_paise=plan.advance_paise
     )
+
+
+@dataclass(frozen=True)
+class DurationOption:
+    """A bookable duration for a plan + its base price/advance (integer paise)."""
+
+    duration_minutes: int
+    price_paise: int
+    advance_paise: int
+
+
+def list_plan_durations(db: Session, plan_id: int, on: date) -> list[DurationOption]:
+    """Active, bookable durations for a plan on a date, ordered by duration.
+
+    Used by the open-mode booking UI to offer durations and show the per-duration
+    base price. A duration is offered only when an active ``plan_pricing`` row is
+    valid on the date.
+    """
+    rows = db.execute(
+        select(PlanPricing)
+        .where(
+            PlanPricing.plan_id == plan_id,
+            PlanPricing.is_active.is_(True),
+            PlanPricing.effective_from <= on,
+            PlanPricing.effective_to >= on,
+        )
+        .order_by(PlanPricing.duration_minutes)
+    ).scalars()
+    return [
+        DurationOption(
+            duration_minutes=r.duration_minutes,
+            price_paise=r.price_paise,
+            advance_paise=r.advance_paise,
+        )
+        for r in rows
+    ]

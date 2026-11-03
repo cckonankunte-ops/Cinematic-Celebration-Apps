@@ -9,6 +9,7 @@ BackgroundTasks (which opens its own session after the response).
 from datetime import date
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -24,10 +25,19 @@ from app.schemas.booking import (
     BookingUpdate,
     PriceBreakdownRead,
 )
+from app.schemas.catalog import OpenAvailabilityRead
 from app.services import booking as booking_service
 from app.services import catalog as catalog_service
 from app.services import email as email_service
 from app.services import payments as payments_service
+from app.services.slots import actor_kind_from_role
+
+
+class AdminOpenAvailabilityRequest(BaseModel):
+    plan_id: int
+    location_id: int
+    booking_date: date
+    duration_minutes: int
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -94,7 +104,11 @@ def to_booking_read(db: Session, booking: Booking) -> BookingRead:
 def _to_list_item(db: Session, booking: Booking) -> BookingListItem:
     amounts = payments_service.derive_amounts_for_booking(db, booking)
     plan_title, slot_description = catalog_service.booking_plan_and_slot_labels(
-        db, booking.plan_id, booking.slot_id
+        db,
+        booking.plan_id,
+        booking.slot_id,
+        start_time=booking.start_time,
+        duration_minutes=booking.duration_minutes,
     )
     occasion_name = catalog_service.booking_occasion_name(db, booking.occasion_id)
     items = booking_service.list_booking_items(db, booking.id)
@@ -155,6 +169,27 @@ def preview_booking(
     actor: CurrentUser = Depends(require_role("admin", "staff")),
 ) -> PriceBreakdownRead:
     return booking_service.preview_booking(db, body, actor=actor, is_customer=False)
+
+
+@router.post("/bookings/open-availability", response_model=list[OpenAvailabilityRead])
+def open_availability(
+    body: AdminOpenAvailabilityRequest,
+    db: Session = Depends(get_db),
+    actor: CurrentUser = Depends(require_role("admin", "staff")),
+) -> list[OpenAvailabilityRead]:
+    """OPEN-mode candidate start times for the admin booking form.
+
+    Uses the actor's role for time-rule exemptions (admins are exempt from
+    future-start/cutoff; staff are not), mirroring the slot availability flow.
+    """
+    return catalog_service.generate_open_availability(
+        db,
+        body.plan_id,
+        body.location_id,
+        body.booking_date,
+        body.duration_minutes,
+        actor=actor_kind_from_role(actor.role),
+    )
 
 
 @router.post("/bookings", response_model=BookingRead, status_code=status.HTTP_201_CREATED)

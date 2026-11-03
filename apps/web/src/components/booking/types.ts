@@ -11,6 +11,9 @@ export interface BookingDraft {
   plan: Plan | null;
   bookingDate: string;
   slotId: number | null;
+  /** Open-mode window: chosen start "HH:MM" + duration in minutes (null in slot mode). */
+  startTime: string | null;
+  durationMinutes: number | null;
   showCombos: boolean;
   cakeId: number | null;
   /** Cake weight in half-kg units (1 = 0.5kg). Defaults to 1. */
@@ -47,6 +50,8 @@ export function emptyDraft(bookingDate: string): BookingDraft {
     plan: null,
     bookingDate,
     slotId: null,
+    startTime: null,
+    durationMinutes: null,
     showCombos: true,
     cakeId: null,
     cakeWeightHalfKg: 1,

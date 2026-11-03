@@ -111,6 +111,21 @@ export interface Location {
   slug: string;
   address: string | null;
   phone: string | null;
+  /** 'slot' (pick a configured slot) | 'open' (pick start + duration). */
+  booking_mode?: 'slot' | 'open';
+}
+
+/** A bookable duration for a plan (open mode) + its base price/advance. */
+export interface PlanDuration {
+  duration_minutes: number;
+  price_paise: number;
+  advance_paise: number;
+}
+
+/** A candidate open-mode start time + whether it's bookable. */
+export interface OpenStart {
+  start_time: string; // IST "HH:MM:SS"
+  is_available: boolean;
 }
 
 export interface Plan {
@@ -195,7 +210,10 @@ export interface ComboSelection {
 export interface BookingCreate {
   location_id: number;
   plan_id: number;
-  slot_id: number;
+  /** Slot mode sends slot_id; open mode sends start_time + duration_minutes. */
+  slot_id?: number;
+  start_time?: string; // "HH:MM" (open mode)
+  duration_minutes?: number;
   booking_date: string;
   booking_name: string;
   /** Email is now OPTIONAL on the public contract. */
@@ -224,7 +242,9 @@ export interface BookingCreate {
 export interface PublicPreviewRequest {
   location_id: number;
   plan_id: number;
-  slot_id: number;
+  slot_id?: number;
+  start_time?: string;
+  duration_minutes?: number;
   booking_date: string;
   people: number;
   cake_id?: number;
@@ -325,6 +345,21 @@ export const publicApi = {
         booking_date: bookingDate,
       },
     );
+  },
+  planDurations(planId: number): Promise<PlanDuration[]> {
+    return api.get<PlanDuration[]>(`${PUBLIC}/plans/${planId}/durations`);
+  },
+  openAvailability(
+    planId: number,
+    locationId: number,
+    bookingDate: string,
+    durationMinutes: number,
+  ): Promise<OpenStart[]> {
+    return api.post<OpenStart[]>(`${PUBLIC}/plans/${planId}/open-availability`, {
+      location_id: locationId,
+      booking_date: bookingDate,
+      duration_minutes: durationMinutes,
+    });
   },
   gallery(planId: number): Promise<string[]> {
     return api.get<string[]>(`${PUBLIC}/plans/${planId}/gallery`);

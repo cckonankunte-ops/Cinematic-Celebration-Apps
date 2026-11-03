@@ -17,6 +17,7 @@ function LocationRow({ loc }: { loc: LocationAdminRead }): JSX.Element {
   const [closesAt, setClosesAt] = useState(loc.closes_at.slice(0, 5));
   const [cutoff, setCutoff] = useState(loc.last_online_booking_start.slice(0, 5));
   const [allowLate, setAllowLate] = useState(loc.allow_late_booking);
+  const [bookingMode, setBookingMode] = useState<'slot' | 'open'>(loc.booking_mode);
 
   // Re-sync local fields if the server value changes after a refetch.
   useEffect(() => {
@@ -24,6 +25,7 @@ function LocationRow({ loc }: { loc: LocationAdminRead }): JSX.Element {
     setClosesAt(loc.closes_at.slice(0, 5));
     setCutoff(loc.last_online_booking_start.slice(0, 5));
     setAllowLate(loc.allow_late_booking);
+    setBookingMode(loc.booking_mode);
   }, [loc]);
 
   const onSave = (e: React.FormEvent): void => {
@@ -35,6 +37,7 @@ function LocationRow({ loc }: { loc: LocationAdminRead }): JSX.Element {
         closes_at: closesAt,
         last_online_booking_start: cutoff,
         allow_late_booking: allowLate,
+        booking_mode: bookingMode,
       },
     });
   };
@@ -84,6 +87,18 @@ function LocationRow({ loc }: { loc: LocationAdminRead }): JSX.Element {
           onChange={(e) => setAllowLate(e.target.checked)}
         />
         Allow late online booking
+      </label>
+      <label className="text-xs text-gray-600">
+        Booking mode
+        <select
+          aria-label={`Booking mode for ${loc.name}`}
+          className={`${field} ml-1`}
+          value={bookingMode}
+          onChange={(e) => setBookingMode(e.target.value as 'slot' | 'open')}
+        >
+          <option value="slot">Slot picker</option>
+          <option value="open">Open (start + duration)</option>
+        </select>
       </label>
       <button
         type="submit"

@@ -82,6 +82,7 @@ def to_location_admin_read(location: Location) -> LocationAdminRead:
         closes_at=location.closes_at,
         last_online_booking_start=location.last_online_booking_start,
         allow_late_booking=location.allow_late_booking,
+        booking_mode=location.booking_mode,
         is_active=location.is_active,
     )
 

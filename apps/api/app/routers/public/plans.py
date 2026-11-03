@@ -8,8 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.errors import NotFoundError
-from app.schemas.catalog import PlanRead, SlotAvailabilityRead, SlotRead
+from app.schemas.catalog import (
+    OpenAvailabilityRead,
+    PlanDurationRead,
+    PlanRead,
+    SlotAvailabilityRead,
+    SlotRead,
+)
 from app.services import catalog
+from app.services import plan_pricing as plan_pricing_service
 
 router = APIRouter(prefix="/api/v1/public", tags=["public-catalog"])
 
@@ -17,6 +24,12 @@ router = APIRouter(prefix="/api/v1/public", tags=["public-catalog"])
 class AvailableSlotsRequest(BaseModel):
     location_id: int
     booking_date: date
+
+
+class OpenAvailabilityRequest(BaseModel):
+    location_id: int
+    booking_date: date
+    duration_minutes: int
 
 
 @router.get("/plans/{plan_id}", response_model=PlanRead)
@@ -47,6 +60,37 @@ def available_slots(
     """
     return catalog.list_slots_with_availability(
         db, plan_id, body.location_id, body.booking_date
+    )
+
+
+@router.get("/plans/{plan_id}/durations", response_model=list[PlanDurationRead])
+def plan_durations(plan_id: int, db: Session = Depends(get_db)) -> list[PlanDurationRead]:
+    """Bookable durations for a plan (open mode) with per-duration base price."""
+    return [
+        PlanDurationRead(
+            duration_minutes=d.duration_minutes,
+            price_paise=d.price_paise,
+            advance_paise=d.advance_paise,
+        )
+        for d in plan_pricing_service.list_plan_durations(db, plan_id, date.today())
+    ]
+
+
+@router.post(
+    "/plans/{plan_id}/open-availability",
+    response_model=list[OpenAvailabilityRead],
+)
+def open_availability(
+    plan_id: int, body: OpenAvailabilityRequest, db: Session = Depends(get_db)
+) -> list[OpenAvailabilityRead]:
+    """Candidate :00/:30 start times for OPEN-mode booking of the given duration.
+
+    Each start is flagged ``is_available`` using the public time rules and the
+    overlap + cleaning-buffer check. Used by the booking UIs only when the
+    location's booking_mode is 'open'; slot-mode locations use available-slots.
+    """
+    return catalog.generate_open_availability(
+        db, plan_id, body.location_id, body.booking_date, body.duration_minutes
     )
 
 

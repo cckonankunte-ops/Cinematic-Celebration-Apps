@@ -10,13 +10,22 @@ must normalize to a valid Indian mobile; email is optional.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.phone import normalize_indian_mobile
 from app.schemas.payment import PaymentRead
+
+
+def _validate_half_hour(value: time | None) -> time | None:
+    """Window start must be on the hour or half-hour with zero seconds (or None)."""
+    if value is None:
+        return None
+    if value.minute not in (0, 30) or value.second != 0 or value.microsecond != 0:
+        raise ValueError("start_time must be on the hour or half-hour (e.g. 3:00 or 3:30).")
+    return value
 
 
 # --- Shared selection + breakdown schemas ---
@@ -72,11 +81,19 @@ class PriceBreakdownRead(BaseModel):
 
 # --- Preview request schemas ---
 class PreviewBase(BaseModel):
-    """Shared preview request shape (compute, never persist)."""
+    """Shared preview request shape (compute, never persist).
+
+    The booking window comes from EITHER a slot (`slot_id`, slot mode) OR a raw
+    `start_time` + `duration_minutes` (open mode). The schema only enforces the
+    structural rule that both cannot be supplied at once; which one is required
+    is decided by the location's booking_mode in the service layer.
+    """
 
     location_id: int
     plan_id: int
-    slot_id: int
+    slot_id: int | None = None
+    start_time: time | None = None
+    duration_minutes: int | None = Field(default=None, gt=0)
     booking_date: date
     people: int = Field(ge=1)
     cake_id: int | None = None
@@ -86,6 +103,19 @@ class PreviewBase(BaseModel):
     led_name: str | None = None
     occasion_id: int | None = None
     coupon_code: str | None = None
+
+    _check_start = field_validator("start_time")(_validate_half_hour)
+
+    @model_validator(mode="after")
+    def _not_both_slot_and_window(self) -> PreviewBase:
+        if self.slot_id is not None and (
+            self.start_time is not None or self.duration_minutes is not None
+        ):
+            raise ValueError(
+                "Provide either slot_id (slot mode) or start_time + "
+                "duration_minutes (open mode), not both."
+            )
+        return self
 
 
 class AdminPreviewRequest(PreviewBase):
@@ -105,11 +135,18 @@ class PublicPreviewRequest(PreviewBase):
 
 
 class BookingCreate(BaseModel):
-    """Public customer booking request (IDs + details only, no money)."""
+    """Public customer booking request (IDs + details only, no money).
+
+    Window source is slot_id (slot mode) OR start_time + duration_minutes (open
+    mode); see PreviewBase for the structural rule. The location's booking_mode
+    decides which is required (service layer).
+    """
 
     location_id: int
     plan_id: int
-    slot_id: int
+    slot_id: int | None = None
+    start_time: time | None = None
+    duration_minutes: int | None = Field(default=None, gt=0)
     booking_date: date
     booking_name: str
     phone: str = Field(min_length=1)  # REQUIRED; validated as Indian mobile below
@@ -133,6 +170,19 @@ class BookingCreate(BaseModel):
         if normalize_indian_mobile(v) is None:
             raise ValueError("phone must be a valid Indian mobile number")
         return v  # store the raw value; normalize on demand
+
+    _check_start = field_validator("start_time")(_validate_half_hour)
+
+    @model_validator(mode="after")
+    def _not_both_slot_and_window(self) -> BookingCreate:
+        if self.slot_id is not None and (
+            self.start_time is not None or self.duration_minutes is not None
+        ):
+            raise ValueError(
+                "Provide either slot_id (slot mode) or start_time + "
+                "duration_minutes (open mode), not both."
+            )
+        return self
 
 
 class CustomerBookingResult(BaseModel):
@@ -187,9 +237,16 @@ class AdminBookingCreate(BookingCreate):
 
 
 class BookingUpdate(BaseModel):
-    """Partial update for an existing booking (all fields optional)."""
+    """Partial update for an existing booking (all fields optional).
+
+    start_time/duration_minutes may be edited for an OPEN-mode booking (slot_id
+    null). For slot-mode bookings the window is fixed by the slot and these are
+    ignored by the service.
+    """
 
     people: int | None = Field(default=None, ge=1)
+    start_time: time | None = None
+    duration_minutes: int | None = Field(default=None, gt=0)
     occasion_id: int | None = None
     cake_id: int | None = None
     cake_weight_half_kg: int | None = Field(default=None, ge=1)
@@ -207,6 +264,8 @@ class BookingUpdate(BaseModel):
     special_person_name: str | None = None
     name_on_cake: str | None = None
     message: str | None = None
+
+    _check_start = field_validator("start_time")(_validate_half_hour)
 
     @field_validator("phone")
     @classmethod
@@ -237,7 +296,7 @@ class BookingRead(BaseModel):
     public_token: str
     location_id: int
     plan_id: int
-    slot_id: int
+    slot_id: int | None  # null for open-mode bookings
     booking_date: date
     status: str
     booking_name: str

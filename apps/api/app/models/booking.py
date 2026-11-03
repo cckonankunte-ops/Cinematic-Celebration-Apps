@@ -53,8 +53,13 @@ class Booking(Base, TimestampMixin):
     plan_id: Mapped[int] = mapped_column(
         ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False
     )
-    slot_id: Mapped[int] = mapped_column(
-        ForeignKey("slots.id", ondelete="RESTRICT"), nullable=False
+    # Nullable: in 'open' booking mode a booking carries its time window
+    # (start_time + duration_minutes) directly with no slot row. In 'slot' mode
+    # this references the chosen Slot. The occupied-window overlap constraint
+    # keys on (location, plan, date, window), NOT slot_id, so both modes are
+    # enforced identically.
+    slot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("slots.id", ondelete="RESTRICT"), nullable=True
     )
     booking_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     # Snapshot of the slot's time at booking creation so later slot edits don't

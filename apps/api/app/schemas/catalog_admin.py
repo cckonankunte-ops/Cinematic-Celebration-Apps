@@ -126,6 +126,7 @@ class LocationHoursUpdate(BaseModel):
     closes_at: time | None = None
     last_online_booking_start: time | None = None
     allow_late_booking: bool | None = None
+    booking_mode: Literal["slot", "open"] | None = None
 
 
 class LocationAdminRead(BaseModel):
@@ -136,6 +137,7 @@ class LocationAdminRead(BaseModel):
     closes_at: time
     last_online_booking_start: time
     allow_late_booking: bool
+    booking_mode: str
     is_active: bool
 
 
