@@ -58,6 +58,9 @@ set_kv() {
 }
 
 set_kv CORS_ALLOWED_ORIGINS "$ORIGINS"
+# Local-dev image uploads (R2 fallback) must be reachable from the browser; in a
+# Codespace that's the forwarded 8000 URL, not localhost.
+set_kv LOCAL_UPLOAD_BASE_URL "$API_URL"
 
 if [ -n "$CODESPACE_NAME" ]; then
   # Cross-subdomain over HTTPS -> cookie must be SameSite=None; Secure.

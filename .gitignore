@@ -28,3 +28,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local-dev image uploads (R2 fallback; never committed)
+_dev_uploads/

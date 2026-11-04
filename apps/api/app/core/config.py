@@ -74,10 +74,38 @@ class Settings(BaseSettings):
     R2_PRIVATE_BUCKET: str = "cinematic-backups"
     IMG_CDN_DOMAIN: str = "img.cinematiccelebration.in"
 
+    # --- Local-dev image uploads (NON-PRODUCTION ONLY) ---
+    # When R2 is not configured in a dev/Codespace environment, admin image
+    # uploads fall back to local disk served by the API, so the catalog/themes
+    # UI can be exercised without Cloudflare R2. This path is NEVER used in
+    # production: it requires ENVIRONMENT != 'production' (see local_uploads_enabled).
+    # Public base URL the browser uses to PUT/GET local uploads (the API origin).
+    LOCAL_UPLOAD_BASE_URL: str = "http://localhost:8000"
+    # Directory (relative to the api app cwd) where dev uploads are written.
+    LOCAL_UPLOAD_DIR: str = "_dev_uploads"
+
     @property
     def cors_origins(self) -> list[str]:
         """Parse the comma-separated CORS allowlist into a list."""
         return [o.strip() for o in self.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def r2_configured(self) -> bool:
+        """True when real R2 credentials/endpoint are present."""
+        return bool(
+            self.R2_ENDPOINT_URL
+            and self.R2_ACCESS_KEY_ID
+            and self.R2_SECRET_ACCESS_KEY
+        )
+
+    @property
+    def local_uploads_enabled(self) -> bool:
+        """Dev-only disk fallback: active when NOT production and R2 is unset.
+
+        Hard guard: never enabled in production, even if R2 is somehow missing
+        (production must have R2; a missing presign should fail loudly there).
+        """
+        return self.ENVIRONMENT != "production" and not self.r2_configured
 
 
 @lru_cache

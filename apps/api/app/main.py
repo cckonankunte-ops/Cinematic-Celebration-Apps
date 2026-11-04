@@ -17,6 +17,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.ratelimit import limiter
 from app.routers import auth
+from app.routers import dev_uploads
 from app.routers.admin import analytics as admin_analytics
 from app.routers.admin import bookings as admin_bookings
 from app.routers.admin import catalog as admin_catalog
@@ -107,7 +108,12 @@ def create_app() -> FastAPI:
     app.include_router(admin_payments.router)
     app.include_router(admin_sheets.router)
     app.include_router(admin_analytics.router)
-    # Remaining admin routers are registered in later tasks.
+
+    # Local-dev image uploads: only when R2 is unconfigured in a non-production
+    # environment (e.g. a Codespace). Never mounted in production.
+    if settings.local_uploads_enabled:
+        app.include_router(dev_uploads.router)
+        log.info("dev_uploads_enabled", upload_dir=settings.LOCAL_UPLOAD_DIR)
 
     log.info("app_created", environment=settings.ENVIRONMENT)
     return app
