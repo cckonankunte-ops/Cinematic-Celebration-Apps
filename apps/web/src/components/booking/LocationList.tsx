@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { publicApi, type Location } from '../../lib/api';
+import BranchThemes from './BranchThemes';
 
 /**
  * Fetches active branches at runtime and links each to the booking flow
@@ -10,6 +11,8 @@ export default function LocationList() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Which branch's themes are expanded (one at a time keeps it tidy).
+  const [openThemes, setOpenThemes] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -90,12 +93,32 @@ export default function LocationList() {
                 </a>
               )}
             </div>
-            <a
-              href={`/book?location=${encodeURIComponent(loc.slug)}`}
-              className="mt-5 inline-block rounded-full bg-festive-hero px-5 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
-            >
-              Book this branch
-            </a>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <a
+                href={`/book?location=${encodeURIComponent(loc.slug)}`}
+                className="inline-block rounded-full bg-festive-hero px-5 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+              >
+                Book this branch
+              </a>
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenThemes((cur) => (cur === loc.id ? null : loc.id))
+                }
+                className="rounded-full border border-brand px-5 py-2.5 text-sm font-semibold text-brand transition hover:bg-brand/5"
+              >
+                {openThemes === loc.id ? 'Hide themes' : 'View themes'}
+              </button>
+            </div>
+
+            {openThemes === loc.id && (
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <p className="mb-3 text-sm font-semibold text-gray-700">
+                  Decoration themes at {loc.name}
+                </p>
+                <BranchThemes locationId={loc.id} slug={loc.slug} />
+              </div>
+            )}
           </li>
         );
       })}

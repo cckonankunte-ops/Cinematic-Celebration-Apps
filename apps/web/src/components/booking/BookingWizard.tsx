@@ -340,31 +340,56 @@ export default function BookingWizard() {
 
       {step === 1 && (
         <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900">Choose a plan and date</h2>
-          <ul className="grid gap-3">
+          <h2 className="text-lg font-bold text-gray-900">Choose a decoration theme</h2>
+          <ul className="grid gap-4 sm:grid-cols-2">
             {catalog.plans.map((plan) => {
               const selected = draft.plan?.id === plan.id;
+              const image = plan.gallery_urls?.[0];
               return (
                 <li key={plan.id}>
                   <button
                     type="button"
                     onClick={() => selectPlan(plan)}
                     aria-pressed={selected}
-                    className={`w-full rounded-xl border-2 px-4 py-3 text-left transition ${
+                    className={`group w-full overflow-hidden rounded-2xl border-2 text-left transition ${
                       selected
-                        ? 'border-brand bg-brand/10 shadow-sm'
-                        : 'border-gray-200 hover:border-brand hover:bg-brand/5'
+                        ? 'border-brand shadow-md'
+                        : 'border-gray-200 hover:border-brand hover:shadow'
                     }`}
                   >
-                    <span className="font-semibold text-gray-900">{plan.title}</span>
-                    <span className="float-right font-semibold text-brand">
-                      {formatRupees(plan.price_paise)}
-                    </span>
-                    {plan.description && (
-                      <p className="mt-1 text-sm text-gray-600">
-                        {plan.description}
-                      </p>
-                    )}
+                    {/* Theme image (first gallery image) or a festive placeholder. */}
+                    <div className="relative aspect-[16/10] w-full overflow-hidden bg-festive-hero">
+                      {image ? (
+                        <img
+                          src={image}
+                          alt={plan.title}
+                          loading="lazy"
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-4xl">
+                          🎀
+                        </div>
+                      )}
+                      {selected && (
+                        <span className="absolute right-2 top-2 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-brand shadow">
+                          ✓ Selected
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-semibold text-gray-900">{plan.title}</span>
+                        <span className="shrink-0 font-semibold text-brand">
+                          {formatRupees(plan.price_paise)}
+                        </span>
+                      </div>
+                      {plan.description && (
+                        <p className="mt-1 line-clamp-2 text-sm text-gray-600">
+                          {plan.description}
+                        </p>
+                      )}
+                    </div>
                   </button>
                 </li>
               );
