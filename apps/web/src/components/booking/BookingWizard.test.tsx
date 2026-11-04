@@ -60,7 +60,7 @@ describe('BookingWizard', () => {
     render(<BookingWizard />);
 
     await waitFor(() =>
-      expect(screen.getByText('Choose a plan and date')).toBeInTheDocument(),
+      expect(screen.getByText('Choose a decoration theme')).toBeInTheDocument(),
     );
     expect(screen.getByText('Starlight Package')).toBeInTheDocument();
     // Discounted chargeable price (450000 paise) is shown.
