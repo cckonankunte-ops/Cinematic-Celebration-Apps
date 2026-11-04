@@ -172,11 +172,13 @@ export default function BookingWizard() {
   // step is active (and whenever a priced input changes while there). Preview
   // errors (e.g. an invalid coupon) surface inline without blocking editing.
   useEffect(() => {
-    if (step !== 3) {
-      return;
-    }
+    // Price the draft as soon as it's priceable (plan + window), on ANY step,
+    // so the sticky bar can show a live running total from step 1 onward and
+    // update as add-ons change in step 2. When not yet priceable, clear the
+    // total so the bar falls back to the step indicator.
     const body = buildPreviewRequest();
     if (!body) {
+      setPreview(null);
       return;
     }
     let active = true;
@@ -202,10 +204,10 @@ export default function BookingWizard() {
     return () => {
       active = false;
     };
-    // `pricedInputs` captures every input that affects the price; `step` gates
-    // the fetch to the review step.
+    // `pricedInputs` captures every input that affects the price; re-price
+    // whenever any of them change (independent of the current step).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, pricedInputs]);
+  }, [pricedInputs]);
 
   async function submit() {
     if (!location || !draft.plan || !hasWindow) {
