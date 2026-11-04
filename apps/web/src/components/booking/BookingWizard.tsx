@@ -17,7 +17,7 @@ import OpenSlotPicker from './OpenSlotPicker';
 import SlotPicker from './SlotPicker';
 import { emptyDraft, type BookingDraft, type Catalog } from './types';
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3;
 
 /**
  * Multi-step booking wizard (client:load island).
@@ -172,7 +172,7 @@ export default function BookingWizard() {
   // step is active (and whenever a priced input changes while there). Preview
   // errors (e.g. an invalid coupon) surface inline without blocking editing.
   useEffect(() => {
-    if (step !== 5) {
+    if (step !== 3) {
       return;
     }
     const body = buildPreviewRequest();
@@ -298,7 +298,11 @@ export default function BookingWizard() {
     draft.plan !== null &&
     draft.people <= draft.plan.max_people_allowed;
 
-  const stepLabels = ['Plan', 'Time', 'Add-ons', 'Details', 'Review'];
+  // Mobile-first 3-step flow: celebration (plan+date+time), make-it-special
+  // (add-ons + your details), review & request.
+  const stepLabels = ['Celebration', 'Details', 'Review'];
+  const canNext =
+    (step === 1 && canNextFromPlan && canNextFromSlot) || step === 2;
 
   return (
     <div className="space-y-6">
@@ -374,36 +378,40 @@ export default function BookingWizard() {
               className="rounded-lg border border-gray-300 px-3 py-2 focus:border-brand focus:outline-none"
             />
           </label>
-        </section>
-      )}
 
-      {step === 2 && draft.plan && (
-        <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900">
-            {isOpenMode ? 'Choose a time' : 'Pick an available slot'}
-          </h2>
-          {isOpenMode ? (
-            <OpenSlotPicker
-              planId={draft.plan.id}
-              locationId={location.id}
-              bookingDate={draft.bookingDate}
-              selectedStart={draft.startTime}
-              selectedDuration={draft.durationMinutes}
-              onSelect={selectOpenWindow}
-            />
-          ) : (
-            <SlotPicker
-              planId={draft.plan.id}
-              locationId={location.id}
-              bookingDate={draft.bookingDate}
-              selectedSlotId={draft.slotId}
-              onSelect={selectSlot}
-            />
+          {/* Time appears right after plan + date (same step) so the first
+              screen captures the whole "when" in one place. */}
+          {draft.plan && (
+            <div className="border-t border-gray-100 pt-4">
+              <h3 className="font-semibold text-gray-900">
+                {isOpenMode ? 'Choose a time' : 'Pick an available slot'}
+              </h3>
+              <div className="mt-3">
+                {isOpenMode ? (
+                  <OpenSlotPicker
+                    planId={draft.plan.id}
+                    locationId={location.id}
+                    bookingDate={draft.bookingDate}
+                    selectedStart={draft.startTime}
+                    selectedDuration={draft.durationMinutes}
+                    onSelect={selectOpenWindow}
+                  />
+                ) : (
+                  <SlotPicker
+                    planId={draft.plan.id}
+                    locationId={location.id}
+                    bookingDate={draft.bookingDate}
+                    selectedSlotId={draft.slotId}
+                    onSelect={selectSlot}
+                  />
+                )}
+              </div>
+            </div>
           )}
         </section>
       )}
 
-      {step === 3 && (
+      {step === 2 && (
         <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900">Add-ons</h2>
           <AddonSelector
@@ -428,22 +436,26 @@ export default function BookingWizard() {
             onLedNameChange={(ledName) => patch({ ledName })}
             onCouponChange={(couponCode) => patch({ couponCode })}
           />
+
+          {/* Your details live on the same "make it special" step so there's
+              one screen between choosing and reviewing. */}
+          {draft.plan && (
+            <div className="border-t border-gray-100 pt-5">
+              <h3 className="font-semibold text-gray-900">Your details</h3>
+              <div className="mt-3">
+                <BookingForm
+                  draft={draft}
+                  occasions={catalog.occasions}
+                  maxPeople={draft.plan.max_people_allowed}
+                  onChange={patch}
+                />
+              </div>
+            </div>
+          )}
         </section>
       )}
 
-      {step === 4 && draft.plan && (
-        <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900">Your details</h2>
-          <BookingForm
-            draft={draft}
-            occasions={catalog.occasions}
-            maxPeople={draft.plan.max_people_allowed}
-            onChange={patch}
-          />
-        </section>
-      )}
-
-      {step === 5 && (
+      {step === 3 && (
         <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900">Review &amp; request</h2>
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
@@ -543,37 +555,56 @@ export default function BookingWizard() {
         </section>
       )}
 
-      <div className="flex justify-between pt-2">
-        <button
-          type="button"
-          disabled={step === 1}
-          onClick={() => setStep((s) => (s - 1) as Step)}
-          className="rounded-full border border-gray-300 px-6 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-40"
-        >
-          Back
-        </button>
-        {step < 5 ? (
-          <button
-            type="button"
-            onClick={() => setStep((s) => (s + 1) as Step)}
-            disabled={
-              (step === 1 && !canNextFromPlan) ||
-              (step === 2 && !canNextFromSlot)
-            }
-            className="rounded-full bg-festive-hero px-7 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
-          >
-            Next
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={submit}
-            disabled={submitting || !canSubmit}
-            className="rounded-full bg-festive-hero px-7 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
-          >
-            {submitting ? 'Submitting…' : 'Submit request'}
-          </button>
-        )}
+      {/* Spacer so content isn't hidden behind the sticky action bar. */}
+      <div className="h-20" aria-hidden="true"></div>
+
+      {/* Sticky bottom action bar: live total + primary action, always in thumb
+          reach on mobile. The total shows once the server has priced the draft. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/40 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+          <div className="min-w-0">
+            {preview ? (
+              <>
+                <p className="text-xs text-gray-500">Total</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {formatRupees(preview.total_paise)}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">Step {step} of 3</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {step > 1 && (
+              <button
+                type="button"
+                onClick={() => setStep((s) => (s - 1) as Step)}
+                className="rounded-full border border-gray-300 px-5 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Back
+              </button>
+            )}
+            {step < 3 ? (
+              <button
+                type="button"
+                onClick={() => setStep((s) => (s + 1) as Step)}
+                disabled={!canNext}
+                className="rounded-full bg-festive-hero px-7 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={submit}
+                disabled={submitting || !canSubmit}
+                className="rounded-full bg-festive-hero px-7 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
+              >
+                {submitting ? 'Submitting…' : 'Submit request'}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
