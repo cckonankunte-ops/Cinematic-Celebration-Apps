@@ -34,9 +34,9 @@ def test_admin_sets_worth_reflected_in_admin_and_public(
     client: TestClient, db: Session
 ) -> None:
     loc = make_location(db)
-    make_user(db, "admin", location_id=None)
+    admin = make_user(db, "admin", location_id=None)
     db.commit()
-    _login(client, "admin")
+    _login(client, admin.username)
 
     # Create with worth above price -> positive saving.
     create = client.post(
@@ -78,9 +78,9 @@ def test_admin_sets_worth_reflected_in_admin_and_public(
 
 def test_negative_worth_rejected(client: TestClient, db: Session) -> None:
     loc = make_location(db)
-    make_user(db, "admin", location_id=None)
+    admin = make_user(db, "admin", location_id=None)
     db.commit()
-    _login(client, "admin")
+    _login(client, admin.username)
 
     resp = client.post(
         "/api/v1/admin/combos",
@@ -100,9 +100,9 @@ def test_negative_worth_rejected(client: TestClient, db: Session) -> None:
 def test_staff_forbidden_from_combo_worth(client: TestClient, db: Session) -> None:
     loc = make_location(db)
     combo = make_combo(db, loc.id, price_paise=70000)
-    make_user(db, "staff", location_id=loc.id)
+    staff = make_user(db, "staff", location_id=loc.id)
     db.commit()
-    _login(client, "staff")
+    _login(client, staff.username)
 
     resp = client.patch(
         f"/api/v1/admin/combos/{combo.id}",
