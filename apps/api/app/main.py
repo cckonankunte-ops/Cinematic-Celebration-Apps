@@ -16,8 +16,7 @@ from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.ratelimit import limiter
-from app.routers import auth
-from app.routers import dev_uploads
+from app.routers import auth, dev_uploads
 from app.routers.admin import analytics as admin_analytics
 from app.routers.admin import bookings as admin_bookings
 from app.routers.admin import catalog as admin_catalog
