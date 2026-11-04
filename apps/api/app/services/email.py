@@ -49,8 +49,15 @@ def send_confirmation(booking_id: int) -> None:
             log.info("confirmation_skipped_already_sent", booking_id=booking_id)
             return
 
-        slot = db.get(Slot, booking.slot_id)
-        check_in = slot.description if slot is not None else ""
+        # Slot-mode bookings use the slot label; open-mode bookings (null
+        # slot_id) derive a time-range label from the booking's own window.
+        from app.services.catalog import time_range_label
+
+        if booking.slot_id is not None:
+            slot = db.get(Slot, booking.slot_id)
+            check_in = slot.description if slot is not None else ""
+        else:
+            check_in = time_range_label(booking.start_time, booking.duration_minutes)
         html = _render_confirmation_html(booking, check_in)
         send_email(
             to=booking.email,
