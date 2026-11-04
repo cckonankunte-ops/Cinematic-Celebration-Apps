@@ -9,12 +9,70 @@ import { Link } from 'react-router-dom';
 
 import { formatDate, todayIsoInIST } from '@/lib/dates';
 import { formatRupees } from '@/lib/money';
-import { buildWhatsappUrl } from '@/lib/whatsapp';
+import type { BookingLike } from '@/lib/whatsapp';
 import { useLocation } from '@/features/location/useLocation';
+import { BookingActions } from './BookingActions';
 import { BookingCard } from './BookingCard';
+import { PaymentDialog } from './PaymentDialog';
 import { StatusBadge } from './StatusBadge';
 import { useBookings } from './booking-queries';
-import type { BookingStatus } from './types';
+import type { BookingListItem, BookingStatus } from './types';
+
+/** Full action set for a desktop table row: payment + accept/reject + WhatsApp. */
+function BookingRowActions({ booking }: { booking: BookingListItem }): JSX.Element {
+  const [payOpen, setPayOpen] = useState(false);
+  const paid = booking.amount_paid_paise ?? 0;
+  const advance = booking.advance_paise ?? 0;
+  const canEdit = booking.status === 'pending' || booking.status === 'accepted';
+  const whatsapp: BookingLike = {
+    booking_name: booking.booking_name,
+    booking_reference: booking.booking_reference,
+    plan_title: booking.plan_title,
+    combos: booking.combos,
+    occasion_name: booking.occasion_name,
+    booking_date: booking.booking_date,
+    special_person_name: booking.special_person_name,
+    cakes: booking.cakes,
+    name_on_cake: booking.name_on_cake,
+    cake_weight_half_kg: booking.cake_weight_half_kg,
+    slot_description: booking.slot_description,
+    phone: booking.phone,
+    map_url: booking.map_url,
+  };
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setPayOpen(true)}
+          className="font-medium text-gray-700 underline hover:text-gray-900"
+        >
+          Record payment
+        </button>
+        {canEdit && (
+          <Link
+            to={`/bookings/${booking.id}/edit`}
+            className="font-medium text-gray-700 underline hover:text-gray-900"
+          >
+            Edit
+          </Link>
+        )}
+      </div>
+      <BookingActions
+        bookingId={booking.id}
+        status={booking.status}
+        advancePaise={advance}
+        amountPaidPaise={paid}
+        whatsapp={whatsapp}
+      />
+      <PaymentDialog
+        bookingId={booking.id}
+        open={payOpen}
+        onClose={() => setPayOpen(false)}
+      />
+    </div>
+  );
+}
 
 const STATUS_OPTIONS: Array<{ value: '' | BookingStatus; label: string }> = [
   { value: '', label: 'All statuses' },
@@ -148,25 +206,7 @@ export function BookingListPage(): JSX.Element {
                     <td className="py-2 pr-4">{b.special_person_name ?? '—'}</td>
                     <td className="py-2 pr-4">{formatDate(b.created_at)}</td>
                     <td className="py-2 pr-4">
-                      <div className="flex items-center gap-3">
-                        {(b.status === 'pending' || b.status === 'accepted') && (
-                          <Link
-                            to={`/bookings/${b.id}/edit`}
-                            className="font-medium text-gray-700 underline hover:text-gray-900"
-                          >
-                            Edit
-                          </Link>
-                        )}
-                        <a
-                          href={buildWhatsappUrl(b)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-green-700 underline hover:text-green-900"
-                          title="Send WhatsApp confirmation to the customer"
-                        >
-                          WhatsApp
-                        </a>
-                      </div>
+                      <BookingRowActions booking={b} />
                     </td>
                   </tr>
                 ))}
