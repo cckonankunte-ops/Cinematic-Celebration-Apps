@@ -1,0 +1,73 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'About Us — Cinematic Celebration Bangalore';
+const description =
+  'Cinematic Celebration brings private theatre celebrations to Bangalore — curated decoration themes, your favourite film or music, and every occasion made special across our branches.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'AboutPage',
+  name: title,
+  description,
+  url: 'https://cinematiccelebration.in/about',
+};
+
+const values = [
+  { emoji: '🎬', title: 'The big-screen moment', body: 'Your celebration on a private cinema screen — play your song, slideshow, or film.' },
+  { emoji: '🎨', title: 'Curated decor themes', body: 'Every branch sets up a handful of celebration themes, ready and waiting for you.' },
+  { emoji: '🤝', title: 'All occasions welcome', body: 'Birthdays, anniversaries, bride-to-be, groom-to-be, proposals, baby showers and more.' },
+];
+---
+
+<Base title={title} description={description} jsonLd={jsonLd}>
+  <section class="bg-festive-animated -mx-4 rounded-3xl px-6 py-14 text-center text-white shadow-lg">
+    <h1 class="text-4xl font-extrabold drop-shadow animate-fade-up">About Cinematic Celebration</h1>
+    <p class="mx-auto mt-4 max-w-2xl text-lg text-white/90 animate-fade-up" style="animation-delay:0.1s">
+      We turn a private theatre into your personal celebration space — big
+      screen, curated decor, and every detail set for your moment.
+    </p>
+  </section>
+
+  <section class="prose prose-lg mx-auto max-w-3xl py-12 text-gray-700">
+    <p>
+      Cinematic Celebration started with a simple idea: the best moments deserve
+      a big-screen welcome. Across our Bangalore branches, we give you a private
+      theatre, a decoration theme of your choice, and the freedom to play your
+      own film, music, or slideshow — so every birthday, anniversary, or surprise
+      feels larger than life.
+    </p>
+    <p>
+      Each branch is set up with its own curated decoration themes. You pick the
+      branch, choose a theme and a slot, add a cake and any extras, and we have
+      it ready for you. No crowds, no sharing — the theatre is yours.
+    </p>
+  </section>
+
+  <section class="py-6">
+    <div class="grid gap-5 sm:grid-cols-3">
+      {
+        values.map((v) => (
+          <div class="reveal card-lift rounded-2xl bg-white p-6 text-center shadow-sm">
+            <div class="text-4xl">{v.emoji}</div>
+            <h2 class="mt-3 font-semibold text-gray-900">{v.title}</h2>
+            <p class="mt-2 text-sm text-gray-600">{v.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="my-12 rounded-3xl bg-festive-hero px-6 py-12 text-center text-white shadow-lg">
+    <h2 class="text-2xl font-extrabold drop-shadow">Find your nearest branch</h2>
+    <p class="mx-auto mt-3 max-w-xl text-white/90">
+      Three branches across Bangalore, each with its own decoration themes.
+    </p>
+    <a
+      href="/locations"
+      class="mt-6 inline-block rounded-full bg-white px-8 py-3 font-semibold text-brand shadow transition hover:scale-105"
+    >
+      Explore branches
+    </a>
+  </section>
+</Base>

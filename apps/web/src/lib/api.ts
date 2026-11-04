@@ -111,6 +111,8 @@ export interface Location {
   slug: string;
   address: string | null;
   phone: string | null;
+  /** Google Maps share link for the branch (shown on Locations/Contact). */
+  map_url?: string | null;
   /** 'slot' (pick a configured slot) | 'open' (pick start + duration). */
   booking_mode?: 'slot' | 'open';
 }

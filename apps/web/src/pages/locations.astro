@@ -23,11 +23,14 @@ const jsonLd = {
 ---
 
 <Base title={title} description={description} jsonLd={jsonLd}>
-  <h1 class="text-3xl font-bold">Our branches</h1>
-  <p class="mt-2 text-gray-600">
-    Choose a location to see plans and book your slot.
-  </p>
-  <div class="mt-8">
+  <section class="bg-festive-animated -mx-4 rounded-3xl px-6 py-12 text-center text-white shadow-lg">
+    <h1 class="text-3xl font-extrabold drop-shadow animate-fade-up sm:text-4xl">Our branches</h1>
+    <p class="mx-auto mt-3 max-w-2xl text-white/90 animate-fade-up" style="animation-delay:0.1s">
+      Each branch has its own curated decoration themes. Choose a location to see
+      plans, themes, and available slots.
+    </p>
+  </section>
+  <div class="mt-10">
     <!-- Runtime fetch: static output can't know branches at build time. -->
     <LocationList client:visible />
   </div>

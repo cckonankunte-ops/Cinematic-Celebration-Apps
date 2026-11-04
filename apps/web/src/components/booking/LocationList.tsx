@@ -43,29 +43,62 @@ export default function LocationList() {
   }
 
   return (
-    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {locations.map((loc) => (
-        <li
-          key={loc.id}
-          className="rounded border border-gray-200 p-5 hover:border-brand"
-        >
-          <h2 className="text-lg font-semibold">{loc.name}</h2>
-          {loc.address && (
-            <p className="mt-1 text-sm text-gray-600">{loc.address}</p>
-          )}
-          {loc.phone && (
-            <p className="mt-1 text-sm text-gray-600">{loc.phone}</p>
-          )}
-          <div className="mt-4 flex gap-3">
+    <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {locations.map((loc) => {
+        // WhatsApp link from the branch phone (digits only; 10-digit numbers
+        // get the 91 country code).
+        const digits = (loc.phone ?? '').replace(/\D/g, '');
+        const waNumber = digits.length === 10 ? `91${digits}` : digits;
+        return (
+          <li
+            key={loc.id}
+            className="card-lift flex flex-col rounded-2xl border border-white/60 bg-white p-6 shadow-sm"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-2xl" aria-hidden="true">
+                🎪
+              </span>
+              <h2 className="text-lg font-bold text-gray-900">{loc.name}</h2>
+            </div>
+            {loc.address && (
+              <p className="mt-2 text-sm text-gray-600">{loc.address}</p>
+            )}
+            <div className="mt-3 space-y-1 text-sm">
+              {loc.phone && (
+                <a href={`tel:${digits}`} className="block text-brand hover:underline">
+                  📞 {loc.phone}
+                </a>
+              )}
+              {waNumber && (
+                <a
+                  href={`https://wa.me/${waNumber}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block text-festive-mint hover:underline"
+                >
+                  💬 WhatsApp
+                </a>
+              )}
+              {loc.map_url && (
+                <a
+                  href={loc.map_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block text-brand hover:underline"
+                >
+                  📍 View on map
+                </a>
+              )}
+            </div>
             <a
               href={`/book?location=${encodeURIComponent(loc.slug)}`}
-              className="rounded bg-brand px-4 py-2 text-sm text-white"
+              className="mt-5 inline-block rounded-full bg-festive-hero px-5 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
             >
-              Book now
+              Book this branch
             </a>
-          </div>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }

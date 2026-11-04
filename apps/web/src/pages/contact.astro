@@ -1,18 +1,47 @@
 ---
 import Base from '../layouts/Base.astro';
 import ContactForm from '../components/booking/ContactForm.tsx';
+import LocationList from '../components/booking/LocationList.tsx';
 
 const title = 'Contact Us — Cinematic Celebration Bangalore';
 const description =
-  'Have a question about booking a private theatre celebration? Send us a message and our Bangalore team will get back to you.';
+  'Reach Cinematic Celebration in Bangalore — find each branch address, phone, WhatsApp and map, or send us a message about booking a private theatre celebration.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'Cinematic Celebration',
+  url: 'https://cinematiccelebration.in/contact',
+  areaServed: 'Bangalore',
+};
 ---
 
-<Base title={title} description={description}>
-  <h1 class="text-3xl font-bold">Contact us</h1>
-  <p class="mt-2 text-gray-600">
-    Questions about plans, availability, or add-ons? Drop us a message.
-  </p>
-  <div class="mt-8 max-w-xl">
-    <ContactForm client:visible />
-  </div>
+<Base title={title} description={description} jsonLd={jsonLd}>
+  <section class="bg-festive-animated -mx-4 rounded-3xl px-6 py-12 text-center text-white shadow-lg">
+    <h1 class="text-3xl font-extrabold drop-shadow animate-fade-up sm:text-4xl">Contact us</h1>
+    <p class="mx-auto mt-3 max-w-2xl text-white/90 animate-fade-up" style="animation-delay:0.1s">
+      Questions about plans, themes, availability, or add-ons? Reach your nearest
+      branch or send us a message.
+    </p>
+  </section>
+
+  <!-- Per-branch contact details (address, phone, WhatsApp, map). -->
+  <section class="mt-10">
+    <h2 class="text-2xl font-bold text-gray-900">Our branches</h2>
+    <p class="mt-2 text-gray-600">Call, WhatsApp, or find us on the map.</p>
+    <div class="mt-6">
+      <LocationList client:visible />
+    </div>
+  </section>
+
+  <!-- General enquiry form. -->
+  <section class="mt-12 max-w-xl">
+    <h2 class="text-2xl font-bold text-gray-900">Send a message</h2>
+    <p class="mt-2 text-gray-600">
+      Prefer to write to us? We'll get back to you soon.
+    </p>
+    <div class="mt-6 rounded-2xl bg-white p-6 shadow-sm">
+      <ContactForm client:visible />
+    </div>
+  </section>
 </Base>
