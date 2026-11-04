@@ -23,6 +23,7 @@ from app.core.security import CurrentUser
 from app.models.plan_pricing import PlanPricing
 from app.schemas.booking import AdminBookingCreate
 from app.services import booking as booking_service
+from app.services import catalog as catalog_service
 from tests.factories import (
     FAR_FUTURE,
     FAR_PAST,
@@ -236,6 +237,37 @@ def test_mode_mismatch_open_payload_against_slot_location(db: Session) -> None:
         booking_service.create_admin_booking(
             db, _open_create(loc.id, plan.id, time(15, 0), 60, future_date()), admin
         )
+
+
+# --- open-mode bookings appear in the admin list ---------------------------
+def test_open_mode_booking_appears_in_list(db: Session) -> None:
+    """Regression: the bookings list must include open-mode (null slot_id) rows.
+
+    The list query LEFT-joins the slot; an inner join would silently drop
+    open-mode bookings (they showed in the time sheet but not the list).
+    """
+    admin = _admin(db)
+    loc = _open_location(db)
+    plan = make_plan(db, loc.id, max_people_allowed=10)
+    _price(db, plan.id, 60)
+    db.commit()
+
+    when = future_date()
+    created = booking_service.create_admin_booking(
+        db, _open_create(loc.id, plan.id, time(14, 0), 60, when), admin
+    )
+    rows = booking_service.list_bookings(db, admin, location_id=loc.id, on=when)
+    ids = [b.id for b in rows]
+    assert created.id in ids
+    # And the list item derives a time-range label from the window (no slot).
+    plan_title, slot_label = catalog_service.booking_plan_and_slot_labels(
+        db,
+        created.plan_id,
+        created.slot_id,
+        start_time=created.start_time,
+        duration_minutes=created.duration_minutes,
+    )
+    assert slot_label == "2:00 PM - 3:00 PM"
 
 
 # --- 6.5 time-rule parity (open mode) --------------------------------------

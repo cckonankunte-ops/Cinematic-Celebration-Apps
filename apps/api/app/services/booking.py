@@ -1340,15 +1340,19 @@ def list_bookings(
     on: date | None = None,
     status: str | None = None,
 ) -> list[Booking]:
-    """List bookings for a location, ordered by slot sort_order then slot id.
+    """List bookings for a location, ordered by window start time.
 
-    Staff are restricted to their location. Rejected bookings are excluded
-    unless a status filter is given explicitly.
+    Includes both slot-mode and open-mode bookings (the slot join is a LEFT
+    join). Staff are restricted to their location. Rejected bookings are
+    excluded unless a status filter is given explicitly.
     """
     assert_location_access(actor, location_id)
+    # LEFT join the slot so OPEN-mode bookings (null slot_id) are included; order
+    # by the booking's own start_time (both modes have it) with the slot's
+    # sort_order as a tiebreaker for slot-mode rows sharing a start time.
     stmt = (
         select(Booking)
-        .join(Slot, Slot.id == Booking.slot_id)
+        .outerjoin(Slot, Slot.id == Booking.slot_id)
         .where(Booking.location_id == location_id)
     )
     if on is not None:
@@ -1357,7 +1361,7 @@ def list_bookings(
         stmt = stmt.where(Booking.status == status)
     else:
         stmt = stmt.where(Booking.status != "rejected")
-    stmt = stmt.order_by(Slot.sort_order, Slot.id, Booking.id)
+    stmt = stmt.order_by(Booking.start_time, Slot.sort_order, Slot.id, Booking.id)
     return list(db.execute(stmt).scalars())
 
 
