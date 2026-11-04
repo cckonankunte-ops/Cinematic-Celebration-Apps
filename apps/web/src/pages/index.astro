@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import BranchPreview from '../components/booking/BranchPreview.tsx';
 
 const title = 'Cinematic Celebration — Private Theatre Celebrations in Bangalore';
 const description =
@@ -117,16 +118,13 @@ const why = [
       </a>
     </div>
     <p class="mt-2 max-w-2xl text-gray-600">
-      Three Bangalore branches, each with its own set of curated decoration
-      themes. Explore a branch to see its themes and available slots.
+      Each branch has its own set of curated decoration themes. Pick one to see
+      its themes and available slots.
     </p>
-    <div class="mt-6 rounded-2xl bg-white p-6 text-center shadow-sm">
-      <a
-        href="/locations"
-        class="inline-block rounded-full bg-festive-hero px-7 py-3 font-semibold text-white transition hover:opacity-90"
-      >
-        Explore branches &amp; themes
-      </a>
+    <div class="mt-6">
+      <!-- Live branch cards (runtime fetch). Fine for a few branches; switch to
+           a "see all" layout if the count grows. -->
+      <BranchPreview client:visible />
     </div>
   </section>
 

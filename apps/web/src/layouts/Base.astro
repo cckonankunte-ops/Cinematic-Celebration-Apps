@@ -86,10 +86,24 @@ const image = ogImage ?? new URL('/og-default.png', Astro.site).toString();
     </main>
 
     <footer class="mt-12 border-t border-white/40 bg-white/70">
-      <div class="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-8 text-sm text-gray-600 sm:flex-row sm:items-center sm:justify-between">
-        <p class="font-semibold text-gradient">Cinematic Celebration</p>
-        <p>Private theatre celebrations across Bangalore.</p>
-        <p>&copy; {new Date().getFullYear()} Cinematic Celebration.</p>
+      <div class="mx-auto max-w-5xl px-4 py-8 text-sm text-gray-600">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p class="font-semibold text-gradient">Cinematic Celebration</p>
+            <p class="mt-1 text-gray-500">Private theatre celebrations across Bangalore.</p>
+          </div>
+          <nav class="flex flex-wrap gap-x-5 gap-y-2">
+            <a href="/locations" class="hover:text-brand">Branches</a>
+            <a href="/about" class="hover:text-brand">About</a>
+            <a href="/contact" class="hover:text-brand">Contact</a>
+            <a href="/terms" class="hover:text-brand">Terms &amp; Conditions</a>
+            <a href="/refund-policy" class="hover:text-brand">Refund Policy</a>
+            <a href="/privacy-policy" class="hover:text-brand">Privacy Policy</a>
+          </nav>
+        </div>
+        <p class="mt-6 text-gray-400">
+          &copy; {new Date().getFullYear()} Cinematic Celebration, Bangalore.
+        </p>
       </div>
     </footer>
 
