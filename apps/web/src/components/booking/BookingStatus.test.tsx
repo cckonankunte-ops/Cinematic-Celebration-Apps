@@ -32,8 +32,10 @@ describe('BookingStatus', () => {
     render(<BookingStatus />);
 
     await waitFor(() =>
-      expect(screen.getByText(/Status:/i)).toBeInTheDocument(),
+      expect(screen.getByText('Booking status')).toBeInTheDocument(),
     );
+    // The status now renders as a colored badge (e.g. "accepted").
+    expect(screen.getByText('accepted')).toBeInTheDocument();
     expect(screen.getByText('Starlight Package')).toBeInTheDocument();
     expect(screen.getByText('9 AM - 12 PM')).toBeInTheDocument();
     // Total ₹4,500.00 derived from 450000 paise.
