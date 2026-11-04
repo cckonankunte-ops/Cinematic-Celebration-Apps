@@ -170,6 +170,7 @@ def make_combo(
     price_paise: int = 30000,
     cake_baseline_paise: int | None = None,
     led_baseline_paise: int | None = None,
+    compare_at_paise: int | None = None,
 ) -> ComboItem:
     combo = ComboItem(
         location_id=location_id,
@@ -181,6 +182,7 @@ def make_combo(
         effective_to=FAR_FUTURE,
         cake_baseline_paise=cake_baseline_paise,
         led_baseline_paise=led_baseline_paise,
+        compare_at_paise=compare_at_paise,
     )
     db.add(combo)
     db.flush()

@@ -577,12 +577,26 @@ function ComboForm({
   const [ledBaseline, setLedBaseline] = useState(
     existing?.led_baseline_paise != null ? String(existing.led_baseline_paise / 100) : '',
   );
+  const [worthRupees, setWorthRupees] = useState(
+    existing?.compare_at_paise != null ? String(existing.compare_at_paise / 100) : '',
+  );
   const fileRef = useRef<HTMLInputElement>(null);
   const update = useUpdateCombo(locationId, existing?.id ?? 0);
   const [busy, setBusy] = useState(false);
 
   const baseline = (raw: string): number | null =>
     raw.trim() === '' ? null : rupeesToPaise(Number(raw));
+
+  // Live, display-only savings preview: max(0, worth - price). Mirrors the
+  // server rule so staff see the saving they're configuring before saving.
+  const previewSavingsPaise = ((): number => {
+    const price = Number(priceRupees);
+    const worth = Number(worthRupees);
+    if (worthRupees.trim() === '' || !Number.isFinite(price) || !Number.isFinite(worth)) {
+      return 0;
+    }
+    return Math.max(0, rupeesToPaise(worth) - rupeesToPaise(price));
+  })();
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -603,6 +617,7 @@ function ComboForm({
           price_paise: rupeesToPaise(Number(priceRupees)),
           cake_baseline_paise: baseline(cakeBaseline),
           led_baseline_paise: baseline(ledBaseline),
+          compare_at_paise: baseline(worthRupees),
           ...(objectKey ? { object_key: objectKey } : {}),
           is_active: true,
           effective_to: FAR_FUTURE_DATE,
@@ -615,6 +630,7 @@ function ComboForm({
           price_paise: rupeesToPaise(Number(priceRupees)),
           cake_baseline_paise: baseline(cakeBaseline),
           led_baseline_paise: baseline(ledBaseline),
+          compare_at_paise: baseline(worthRupees),
           effective_from: EFFECTIVE_FROM,
           ...(objectKey ? { object_key: objectKey } : {}),
         });
@@ -623,6 +639,7 @@ function ComboForm({
         setPriceRupees('');
         setCakeBaseline('');
         setLedBaseline('');
+        setWorthRupees('');
         if (fileRef.current) {
           fileRef.current.value = '';
         }
@@ -681,6 +698,20 @@ function ComboForm({
         value={ledBaseline}
         onChange={(e) => setLedBaseline(e.target.value)}
       />
+      <input
+        className={field}
+        type="number"
+        min={0}
+        step="0.01"
+        placeholder="Worth / original in ₹, optional (for 'Save ₹X')"
+        value={worthRupees}
+        onChange={(e) => setWorthRupees(e.target.value)}
+      />
+      {previewSavingsPaise > 0 && (
+        <p className="text-xs font-medium text-green-700">
+          Saves ₹{previewSavingsPaise / 100}
+        </p>
+      )}
       <ImagePicker fileRef={fileRef} label="Image (optional)" />
       <div className="flex gap-2">
         <button

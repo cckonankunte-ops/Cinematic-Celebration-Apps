@@ -43,6 +43,7 @@ from app.schemas.catalog_admin import (
     SpecialDecorAdminRead,
     UserAdminRead,
 )
+from app.services.catalog import combo_savings_paise
 from app.services.slots import full_window_within_working_hours
 
 _FAR_FUTURE = date(2099, 12, 31)
@@ -635,6 +636,10 @@ def to_combo_admin_read(combo: ComboItem) -> ComboAdminRead:
         image_url=public_url(combo.object_key),
         cake_baseline_paise=combo.cake_baseline_paise,
         led_baseline_paise=combo.led_baseline_paise,
+        compare_at_paise=combo.compare_at_paise,
+        savings_paise=combo_savings_paise(
+            combo.price_paise, combo.compare_at_paise
+        ),
         effective_from=combo.effective_from,
         effective_to=combo.effective_to,
         is_active=combo.is_active,

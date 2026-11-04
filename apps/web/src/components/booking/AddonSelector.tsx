@@ -32,9 +32,12 @@ const CAKE_WEIGHT_OPTIONS: Array<{ halfKg: number; label: string }> = [
 ];
 
 /**
- * Step 3: optional add-ons. The customer picks IDs, quantities, a cake weight,
- * a LED name, and an optional coupon code; all pricing is computed server-side
- * (prices shown here are informational catalog prices only).
+ * Step 2 add-ons. Combos are shown FIRST as image-forward "savings" hero cards
+ * (strike-through worth + "Save ₹X" when the server reports a positive saving),
+ * then the individual add-ons (cake, decor, LED, coupon) in collapsible
+ * sections so the step stays short on mobile. The customer only sends IDs /
+ * quantities; all pricing (including the saving) is computed server-side —
+ * prices shown here are informational catalog values.
  */
 export default function AddonSelector({
   cakes,
@@ -73,10 +76,90 @@ export default function AddonSelector({
   };
 
   return (
-    <div className="space-y-6">
-      <section>
-        <h3 className="mb-2 font-semibold">Cake (optional)</h3>
-        <div className="flex flex-col gap-2 sm:flex-row">
+    <div className="space-y-5">
+      {/* Combos first: image-forward savings hero cards. */}
+      {showCombos && combos.length > 0 && (
+        <section>
+          <h3 className="mb-2 font-semibold text-gray-900">
+            Save with Combos
+          </h3>
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {combos.map((item) => {
+              const selected = comboIds.includes(item.id);
+              const saves = item.savings_paise > 0;
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleCombo(item.id)}
+                    aria-pressed={selected}
+                    className={`flex w-full overflow-hidden rounded-xl border text-left transition ${
+                      selected
+                        ? 'border-festive-magenta ring-2 ring-festive-magenta'
+                        : 'border-gray-200 hover:border-festive-magenta/60'
+                    }`}
+                  >
+                    {/* Theme/combo image or festive placeholder. */}
+                    <div className="relative h-24 w-24 flex-none overflow-hidden bg-festive-hero">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          className="flex h-full w-full items-center justify-center text-2xl"
+                        >
+                          🎀
+                        </span>
+                      )}
+                      {saves && (
+                        <span className="absolute left-1 top-1 rounded bg-green-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          Save {formatRupees(item.savings_paise)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-1 flex-col gap-0.5 p-2">
+                      <span className="font-semibold text-gray-900">
+                        {item.name}
+                      </span>
+                      {item.description && (
+                        <span className="text-xs text-gray-500">
+                          {item.description}
+                        </span>
+                      )}
+                      <span className="mt-auto flex items-baseline gap-2">
+                        {saves && item.worth_paise !== null && (
+                          <span className="text-xs text-gray-400 line-through">
+                            {formatRupees(item.worth_paise)}
+                          </span>
+                        )}
+                        <span className="font-bold text-festive-magenta">
+                          {formatRupees(item.price_paise)}
+                        </span>
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-[11px] text-gray-400">
+            Images are for representation only. Colours are subject to
+            availability. Prices are inclusive of taxes.
+          </p>
+        </section>
+      )}
+
+      {/* Individual add-ons, collapsible to keep the step short on mobile. */}
+      <details className="rounded-xl border border-gray-200 p-3">
+        <summary className="cursor-pointer font-semibold text-gray-900">
+          Add a cake
+        </summary>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <select
             className="w-full rounded border border-gray-300 px-3 py-2"
             value={cakeId ?? ''}
@@ -107,11 +190,13 @@ export default function AddonSelector({
             ))}
           </select>
         </div>
-      </section>
+      </details>
 
-      <section>
-        <h3 className="mb-2 font-semibold">Special decor (optional)</h3>
-        <ul className="space-y-2">
+      <details className="rounded-xl border border-gray-200 p-3">
+        <summary className="cursor-pointer font-semibold text-gray-900">
+          Add special decor
+        </summary>
+        <ul className="mt-3 space-y-2">
           {specialDecor.map((item) => {
             const selection = findDecor(item.id);
             const selected = selection !== undefined;
@@ -129,9 +214,7 @@ export default function AddonSelector({
                 </label>
                 {selected && (
                   <label className="flex items-center gap-1 text-sm">
-                    <span className="sr-only">
-                      Quantity for {item.name}
-                    </span>
+                    <span className="sr-only">Quantity for {item.name}</span>
                     <span aria-hidden="true">×</span>
                     <input
                       type="number"
@@ -149,11 +232,13 @@ export default function AddonSelector({
             );
           })}
         </ul>
-      </section>
+      </details>
 
-      <section>
-        <h3 className="mb-2 font-semibold">LED name (optional)</h3>
-        <label className="flex flex-col gap-1">
+      <details className="rounded-xl border border-gray-200 p-3">
+        <summary className="cursor-pointer font-semibold text-gray-900">
+          Add a LED name
+        </summary>
+        <label className="mt-3 flex flex-col gap-1">
           <input
             type="text"
             value={ledName}
@@ -163,40 +248,20 @@ export default function AddonSelector({
           />
           <span className="text-xs text-gray-500">₹40 per letter</span>
         </label>
-      </section>
+      </details>
 
-      <section>
-        <h3 className="mb-2 font-semibold">Coupon code (optional)</h3>
+      <details className="rounded-xl border border-gray-200 p-3">
+        <summary className="cursor-pointer font-semibold text-gray-900">
+          Have a coupon code?
+        </summary>
         <input
           type="text"
           value={couponCode}
           onChange={(e) => onCouponChange(e.target.value)}
           aria-label="Coupon code"
-          className="w-full rounded border border-gray-300 px-3 py-2"
+          className="mt-3 w-full rounded border border-gray-300 px-3 py-2"
         />
-      </section>
-
-      {showCombos && (
-        <section>
-          <h3 className="mb-2 font-semibold">Combos (optional)</h3>
-          <ul className="space-y-2">
-            {combos.map((item) => (
-              <li key={item.id}>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={comboIds.includes(item.id)}
-                    onChange={() => onToggleCombo(item.id)}
-                  />
-                  <span>
-                    {item.name} — {formatRupees(item.price_paise)}
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      </details>
     </div>
   );
 }

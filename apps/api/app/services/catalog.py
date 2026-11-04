@@ -44,6 +44,19 @@ from app.services.slots import (
 )
 
 
+def combo_savings_paise(price_paise: int, compare_at_paise: int | None) -> int:
+    """Display-only combo saving: ``max(0, worth - price)``.
+
+    Returns 0 when no worth is configured (``compare_at_paise is None``) or when
+    the worth is at/below the charged price. Never negative, never fabricated.
+    This does NOT affect what a combo is charged — it only drives the
+    strike-through "Save ₹X" shown on the booking page.
+    """
+    if compare_at_paise is None:
+        return 0
+    return max(0, compare_at_paise - price_paise)
+
+
 def chargeable_price_paise(plan: Plan) -> int:
     """Actual price a customer pays for a plan (discount applied if enabled)."""
     if plan.give_discount:
@@ -235,6 +248,8 @@ def list_combos(db: Session, location_id: int, on: date) -> list[ComboRead]:
             description=c.description,
             price_paise=c.price_paise,
             image_url=public_url(c.object_key),
+            worth_paise=c.compare_at_paise,
+            savings_paise=combo_savings_paise(c.price_paise, c.compare_at_paise),
         )
         for c in rows
     ]

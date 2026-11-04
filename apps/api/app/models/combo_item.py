@@ -41,6 +41,11 @@ class ComboItem(Base, TimestampMixin):
     cake_baseline_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     led_baseline_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
+    # Display-only "worth"/compare-at amount (paise). NULL means no worth is
+    # configured -> zero savings shown. Never affects what is charged; used only
+    # to compute the strike-through "Save ₹X" on the customer booking page.
+    compare_at_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
     __table_args__ = (
         CheckConstraint(
             "cake_baseline_paise IS NULL OR cake_baseline_paise >= 0",
@@ -49,5 +54,9 @@ class ComboItem(Base, TimestampMixin):
         CheckConstraint(
             "led_baseline_paise IS NULL OR led_baseline_paise >= 0",
             name="ck_combo_items_led_baseline_nonneg",
+        ),
+        CheckConstraint(
+            "compare_at_paise IS NULL OR compare_at_paise >= 0",
+            name="ck_combo_items_compare_at_nonneg",
         ),
     )

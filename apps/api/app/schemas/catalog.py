@@ -112,6 +112,11 @@ class ComboRead(BaseModel):
     description: str
     price_paise: int
     image_url: str
+    # Display-only savings. worth_paise is the combo's compare-at amount (None
+    # when unset); savings_paise = max(0, worth - price), computed server-side.
+    # Never affects what is charged; the client sends neither value.
+    worth_paise: int | None = None
+    savings_paise: int = 0
 
 
 class OccasionRead(BaseModel):

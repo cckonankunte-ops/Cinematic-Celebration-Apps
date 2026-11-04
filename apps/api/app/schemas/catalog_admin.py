@@ -251,6 +251,8 @@ class ComboCreate(BaseModel):
     object_key: str = "combo"
     cake_baseline_paise: int | None = Field(default=None, ge=0)
     led_baseline_paise: int | None = Field(default=None, ge=0)
+    # Display-only "worth"/compare-at amount (paise); None = no savings shown.
+    compare_at_paise: int | None = Field(default=None, ge=0)
     effective_from: date
     effective_to: date | None = None
 
@@ -262,6 +264,7 @@ class ComboUpdate(BaseModel):
     object_key: str | None = Field(default=None, min_length=1)
     cake_baseline_paise: int | None = Field(default=None, ge=0)
     led_baseline_paise: int | None = Field(default=None, ge=0)
+    compare_at_paise: int | None = Field(default=None, ge=0)
     effective_from: date | None = None
     effective_to: date | None = None
     is_active: bool | None = None
@@ -277,6 +280,9 @@ class ComboAdminRead(BaseModel):
     image_url: str
     cake_baseline_paise: int | None
     led_baseline_paise: int | None
+    # Display-only worth + derived saving = max(0, worth - price).
+    compare_at_paise: int | None
+    savings_paise: int
     effective_from: date
     effective_to: date
     is_active: bool

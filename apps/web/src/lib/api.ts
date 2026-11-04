@@ -190,6 +190,10 @@ export interface Combo {
   description: string;
   price_paise: number;
   image_url: string;
+  /** Compare-at "worth" in paise (null when unset). Display-only. */
+  worth_paise: number | null;
+  /** Server-computed max(0, worth - price). Display-only. */
+  savings_paise: number;
 }
 
 export interface Occasion {

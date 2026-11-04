@@ -123,6 +123,10 @@ export interface NamedAddonAdminRead extends AddonAdminRead {
   /** Combo-only: optional cake/LED baselines (paise). Null/absent otherwise. */
   cake_baseline_paise?: number | null;
   led_baseline_paise?: number | null;
+  /** Combo-only: display "worth"/compare-at (paise); null when unset. */
+  compare_at_paise?: number | null;
+  /** Combo-only: server-computed max(0, worth - price), paise. */
+  savings_paise?: number;
 }
 
 export interface GalleryImageRead {
@@ -152,6 +156,8 @@ export interface ComboCreateBody {
   effective_from: string;
   cake_baseline_paise?: number | null;
   led_baseline_paise?: number | null;
+  /** Optional display "worth"/compare-at (paise); null/omitted = no savings. */
+  compare_at_paise?: number | null;
   /** Optional image key; combos are not image tiles, so this may be omitted. */
   object_key?: string;
 }
