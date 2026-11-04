@@ -8,10 +8,12 @@ const description =
 ---
 
 <Base title={title} description={description}>
-  <h1 class="text-3xl font-bold">Your booking</h1>
-  <p class="mt-2 text-gray-600">
-    Status and payment details are looked up by your booking token.
-  </p>
+  <section class="bg-festive-animated -mx-4 rounded-3xl px-6 py-10 text-center text-white shadow-lg">
+    <h1 class="text-3xl font-extrabold drop-shadow sm:text-4xl">Your booking</h1>
+    <p class="mx-auto mt-3 max-w-xl text-white/90">
+      Status and payment details are looked up by your booking token.
+    </p>
+  </section>
   <div class="mt-8">
     <!-- Reads ?token= from the URL and fetches status at runtime. -->
     <BookingStatus client:load />

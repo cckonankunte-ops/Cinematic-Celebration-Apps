@@ -261,20 +261,26 @@ export default function BookingWizard() {
 
   if (result) {
     return (
-      <div className="rounded border border-green-300 bg-green-50 p-6">
-        <h2 className="text-xl font-semibold text-green-800">
+      <div className="animate-pop rounded-3xl border border-festive-mint/40 bg-white p-8 text-center shadow-lg">
+        <div className="text-5xl">🎉</div>
+        <h2 className="mt-3 text-2xl font-extrabold text-gradient">
           Booking request received!
         </h2>
-        <p className="mt-2">
+        <p className="mt-3 text-gray-700">
           Advance to pay:{' '}
-          <strong>{formatRupees(result.advance_paise)}</strong>
+          <strong className="text-brand">{formatRupees(result.advance_paise)}</strong>
         </p>
-        <p className="mt-2 whitespace-pre-line">{result.payment_instructions}</p>
-        <p className="mt-4 text-sm">
-          Your reference token: <code>{result.booking_token}</code>
+        <p className="mt-2 whitespace-pre-line text-sm text-gray-600">
+          {result.payment_instructions}
+        </p>
+        <p className="mt-4 text-sm text-gray-500">
+          Your reference token:{' '}
+          <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">
+            {result.booking_token}
+          </code>
         </p>
         <a
-          className="mt-4 inline-block rounded bg-brand px-4 py-2 text-white"
+          className="mt-6 inline-block rounded-full bg-festive-hero px-7 py-3 font-semibold text-white shadow transition hover:scale-105"
           href={`/booking-status?token=${encodeURIComponent(result.booking_token)}`}
         >
           Track this booking
@@ -292,15 +298,43 @@ export default function BookingWizard() {
     draft.plan !== null &&
     draft.people <= draft.plan.max_people_allowed;
 
+  const stepLabels = ['Plan', 'Time', 'Add-ons', 'Details', 'Review'];
+
   return (
     <div className="space-y-6">
-      <p className="text-sm text-gray-500">
-        Booking at <strong>{location.name}</strong> · Step {step} of 5
-      </p>
+      {/* Festive step header + progress */}
+      <div className="rounded-2xl bg-festive-hero px-5 py-4 text-white shadow-sm">
+        <p className="text-sm text-white/90">
+          Booking at <strong>{location.name}</strong>
+        </p>
+        <div className="mt-3 flex items-center gap-2">
+          {stepLabels.map((label, i) => {
+            const n = (i + 1) as Step;
+            const done = n < step;
+            const active = n === step;
+            return (
+              <div key={label} className="flex flex-1 flex-col items-center">
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition ${
+                    active
+                      ? 'bg-white text-brand'
+                      : done
+                        ? 'bg-white/80 text-brand'
+                        : 'bg-white/20 text-white'
+                  }`}
+                >
+                  {done ? '✓' : n}
+                </div>
+                <span className="mt-1 hidden text-xs text-white/90 sm:block">{label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {step === 1 && (
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Choose a plan and date</h2>
+        <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900">Choose a plan and date</h2>
           <ul className="grid gap-3">
             {catalog.plans.map((plan) => {
               const selected = draft.plan?.id === plan.id;
@@ -310,14 +344,14 @@ export default function BookingWizard() {
                     type="button"
                     onClick={() => selectPlan(plan)}
                     aria-pressed={selected}
-                    className={`w-full rounded border px-4 py-3 text-left ${
+                    className={`w-full rounded-xl border-2 px-4 py-3 text-left transition ${
                       selected
-                        ? 'border-brand bg-brand/10'
-                        : 'border-gray-300 hover:border-brand'
+                        ? 'border-brand bg-brand/10 shadow-sm'
+                        : 'border-gray-200 hover:border-brand hover:bg-brand/5'
                     }`}
                   >
-                    <span className="font-semibold">{plan.title}</span>
-                    <span className="float-right">
+                    <span className="font-semibold text-gray-900">{plan.title}</span>
+                    <span className="float-right font-semibold text-brand">
                       {formatRupees(plan.price_paise)}
                     </span>
                     {plan.description && (
@@ -331,21 +365,21 @@ export default function BookingWizard() {
             })}
           </ul>
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium">Booking date</span>
+            <span className="text-sm font-medium text-gray-700">Booking date</span>
             <input
               type="date"
               min={todayIsoInIST()}
               value={draft.bookingDate}
               onChange={(e) => patch({ bookingDate: e.target.value })}
-              className="rounded border border-gray-300 px-3 py-2"
+              className="rounded-lg border border-gray-300 px-3 py-2 focus:border-brand focus:outline-none"
             />
           </label>
         </section>
       )}
 
       {step === 2 && draft.plan && (
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">
+        <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900">
             {isOpenMode ? 'Choose a time' : 'Pick an available slot'}
           </h2>
           {isOpenMode ? (
@@ -370,8 +404,8 @@ export default function BookingWizard() {
       )}
 
       {step === 3 && (
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Add-ons</h2>
+        <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900">Add-ons</h2>
           <AddonSelector
             cakes={catalog.cakes}
             specialDecor={catalog.specialDecor}
@@ -398,8 +432,8 @@ export default function BookingWizard() {
       )}
 
       {step === 4 && draft.plan && (
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Your details</h2>
+        <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900">Your details</h2>
           <BookingForm
             draft={draft}
             occasions={catalog.occasions}
@@ -410,9 +444,9 @@ export default function BookingWizard() {
       )}
 
       {step === 5 && (
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Review &amp; request</h2>
-          <p className="rounded bg-amber-50 p-3 text-sm text-amber-800">
+        <section className="animate-fade-up space-y-4 rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900">Review &amp; request</h2>
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
             This is a booking <strong>request</strong>. The final price and
             advance are confirmed by our team. The total below is the
             authoritative amount calculated by the server.
@@ -509,12 +543,12 @@ export default function BookingWizard() {
         </section>
       )}
 
-      <div className="flex justify-between pt-4">
+      <div className="flex justify-between pt-2">
         <button
           type="button"
           disabled={step === 1}
           onClick={() => setStep((s) => (s - 1) as Step)}
-          className="rounded border border-gray-300 px-4 py-2 disabled:opacity-40"
+          className="rounded-full border border-gray-300 px-6 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-40"
         >
           Back
         </button>
@@ -526,7 +560,7 @@ export default function BookingWizard() {
               (step === 1 && !canNextFromPlan) ||
               (step === 2 && !canNextFromSlot)
             }
-            className="rounded bg-brand px-4 py-2 text-white disabled:opacity-40"
+            className="rounded-full bg-festive-hero px-7 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
           >
             Next
           </button>
@@ -535,7 +569,7 @@ export default function BookingWizard() {
             type="button"
             onClick={submit}
             disabled={submitting || !canSubmit}
-            className="rounded bg-brand px-4 py-2 text-white disabled:opacity-40"
+            className="rounded-full bg-festive-hero px-7 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
           >
             {submitting ? 'Submitting…' : 'Submit request'}
           </button>

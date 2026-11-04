@@ -59,11 +59,25 @@ export default function BookingStatus() {
     return null;
   }
 
+  const badge: Record<string, string> = {
+    pending: 'bg-amber-100 text-amber-800',
+    accepted: 'bg-green-100 text-green-800',
+    rejected: 'bg-red-100 text-red-800',
+    expired: 'bg-gray-200 text-gray-600',
+  };
+
   return (
-    <div className="rounded border border-gray-200 p-6">
-      <h2 className="text-xl font-semibold capitalize">
-        Status: {status.status}
-      </h2>
+    <div className="animate-fade-up rounded-2xl bg-white p-6 shadow-sm">
+      <div className="flex items-center gap-3">
+        <h2 className="text-lg font-bold text-gray-900">Booking status</h2>
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+            badge[status.status] ?? 'bg-gray-100 text-gray-700'
+          }`}
+        >
+          {status.status}
+        </span>
+      </div>
       <dl className="mt-4 space-y-2 text-sm">
         <Row label="Name" value={status.booking_name} />
         <Row label="Plan" value={status.plan_title} />
