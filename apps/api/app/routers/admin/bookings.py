@@ -70,6 +70,8 @@ def to_booking_read(db: Session, booking: Booking) -> BookingRead:
         location_id=booking.location_id,
         plan_id=booking.plan_id,
         slot_id=booking.slot_id,
+        start_time=booking.start_time,
+        duration_minutes=booking.duration_minutes,
         booking_date=booking.booking_date,
         status=booking.status,
         booking_name=booking.booking_name,

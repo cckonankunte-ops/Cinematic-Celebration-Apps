@@ -459,15 +459,36 @@ export function BookingForm({
               {...register('start_time')}
             >
               <option value="">Select a start time…</option>
-              {openStarts.data?.map((o) => {
-                const hhmm = o.start_time.slice(0, 5);
-                return (
-                  <option key={hhmm} value={hhmm} disabled={!o.is_available}>
-                    {formatTimeLabel(hhmm)}
-                    {!o.is_available ? ' — unavailable' : ''}
-                  </option>
-                );
-              })}
+              {(() => {
+                const opts = openStarts.data ?? [];
+                const currentStart = watched.start_time ?? null;
+                // In edit mode the booking's own start is held by itself, so it
+                // comes back "unavailable"; keep it selectable so the pre-fill
+                // stays valid. Also ensure it appears even if the generator
+                // omits it.
+                const hasCurrent =
+                  currentStart !== null &&
+                  opts.some((o) => o.start_time.slice(0, 5) === currentStart);
+                const rendered = opts.map((o) => {
+                  const hhmm = o.start_time.slice(0, 5);
+                  const isCurrent = hhmm === currentStart;
+                  const blocked = !o.is_available && !isCurrent;
+                  return (
+                    <option key={hhmm} value={hhmm} disabled={blocked}>
+                      {formatTimeLabel(hhmm)}
+                      {blocked ? ' — unavailable' : ''}
+                    </option>
+                  );
+                });
+                if (currentStart !== null && !hasCurrent) {
+                  rendered.unshift(
+                    <option key={currentStart} value={currentStart}>
+                      {formatTimeLabel(currentStart)}
+                    </option>,
+                  );
+                }
+                return rendered;
+              })()}
             </select>
           </label>
         )}

@@ -29,7 +29,10 @@ function toInitialValues(booking: BookingRead): Partial<BookingCreateInput> {
   return {
     location_id: booking.location_id,
     plan_id: booking.plan_id,
-    slot_id: booking.slot_id,
+    slot_id: booking.slot_id ?? undefined,
+    // Open-mode window pre-fill ("HH:MM:SS" -> "HH:MM"); null in slot mode.
+    start_time: booking.start_time ? booking.start_time.slice(0, 5) : undefined,
+    duration_minutes: booking.duration_minutes ?? undefined,
     booking_date: booking.booking_date,
     booking_name: booking.booking_name,
     phone: booking.phone ?? '',
@@ -76,13 +79,14 @@ function toApiMoney(
   } = values;
   void _ar;
   void _am;
-  return {
+  const mapped: Omit<CreateBookingBody, 'advance_amount_paise' | 'advance_method'> = {
     ...rest,
     discount_paise: rupeesToPaise(discount_rupees),
     food_paise: rupeesToPaise(food_rupees),
     other_paise: rupeesToPaise(other_rupees),
     cleaning_paise: rupeesToPaise(cleaning_rupees),
   };
+  return mapped;
 }
 
 export function BookingFormPage(): JSX.Element {

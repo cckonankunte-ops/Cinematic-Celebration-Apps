@@ -28,7 +28,9 @@ export interface BookingRead {
   public_token: string;
   location_id: number;
   plan_id: number;
-  slot_id: number;
+  slot_id: number | null; // null for open-mode bookings
+  start_time: string | null; // IST "HH:MM:SS" (window snapshot)
+  duration_minutes: number | null;
   booking_date: string;
   status: BookingStatus;
   booking_name: string;

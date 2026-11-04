@@ -297,6 +297,9 @@ class BookingRead(BaseModel):
     location_id: int
     plan_id: int
     slot_id: int | None  # null for open-mode bookings
+    # Window snapshot (both modes); open-mode edit pre-fills from these.
+    start_time: time | None
+    duration_minutes: int | None
     booking_date: date
     status: str
     booking_name: str
