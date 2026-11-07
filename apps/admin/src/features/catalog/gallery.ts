@@ -10,12 +10,39 @@
 
 import {
   useMutation,
+  useQuery,
   useQueryClient,
   type UseMutationResult,
+  type UseQueryResult,
 } from '@tanstack/react-query';
 
 import { api } from '@/api/client';
 import type { GalleryImageRead } from './types';
+
+/** Fetch a plan's saved gallery images (with ids), for admin management. */
+export function usePlanGallery(
+  planId: number,
+): UseQueryResult<GalleryImageRead[]> {
+  return useQuery<GalleryImageRead[]>({
+    queryKey: ['catalog', 'gallery', planId],
+    queryFn: () =>
+      api.get<GalleryImageRead[]>(`/api/v1/admin/plans/${planId}/gallery`),
+  });
+}
+
+/** Delete a gallery image by id; refreshes the plan's gallery list. */
+export function useDeleteGalleryImage(
+  planId: number,
+): UseMutationResult<void, unknown, number> {
+  const qc = useQueryClient();
+  return useMutation<void, unknown, number>({
+    mutationFn: (imageId) =>
+      api.del<void>(`/api/v1/admin/plans/${planId}/gallery/${imageId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'gallery', planId] });
+    },
+  });
+}
 
 /** Inputs for a single gallery upload. */
 export interface GalleryUploadArgs {

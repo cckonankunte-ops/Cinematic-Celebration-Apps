@@ -545,6 +545,18 @@ def add_gallery_image(
     return image
 
 
+def list_gallery_images(db: Session, plan_id: int) -> list[PlanGalleryImage]:
+    """Return a plan's gallery images (with ids) ordered by sort_order then id."""
+    _require_plan(db, plan_id)
+    return list(
+        db.execute(
+            select(PlanGalleryImage)
+            .where(PlanGalleryImage.plan_id == plan_id)
+            .order_by(PlanGalleryImage.sort_order, PlanGalleryImage.id)
+        ).scalars()
+    )
+
+
 def remove_gallery_image(db: Session, plan_id: int, image_id: int) -> None:
     """Delete a gallery image row. Raises NotFoundError if missing."""
     image = db.execute(

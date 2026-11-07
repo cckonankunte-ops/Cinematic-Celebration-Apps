@@ -97,6 +97,17 @@ def deactivate_plan(plan_id: int, db: Session = Depends(get_db)) -> PlanAdminRea
 
 
 # --- Plan gallery ---
+@router.get("/plans/{plan_id}/gallery", response_model=list[GalleryImageRead])
+def list_plan_gallery_images(
+    plan_id: int, db: Session = Depends(get_db)
+) -> list[GalleryImageRead]:
+    """List a plan's saved gallery images (with ids), for admin management."""
+    return [
+        catalog_admin.to_gallery_image_read(img)
+        for img in catalog_admin.list_gallery_images(db, plan_id)
+    ]
+
+
 @router.post("/plans/{plan_id}/gallery", response_model=GalleryImageRead, status_code=201)
 def add_plan_gallery_image(
     plan_id: int, body: GalleryUploadRequest, db: Session = Depends(get_db)
