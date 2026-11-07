@@ -13,8 +13,15 @@ so the catalog/themes UI works without R2. Guarded by
 from __future__ import annotations
 
 import boto3
+from botocore.config import Config
 
 from app.core.config import settings
+
+# R2 presigned URLs must use Signature Version 4 (SigV4). The boto3 default can
+# fall back to the legacy SigV2 query format (AWSAccessKeyId/Signature), which
+# R2 rejects on the browser CORS preflight (OPTIONS -> 401). SigV4 +
+# path-style addressing produces a presigned PUT URL R2 accepts cross-origin.
+_R2_CONFIG = Config(signature_version="s3v4", s3={"addressing_style": "path"})
 
 
 def public_url(object_key: str) -> str:
@@ -33,6 +40,8 @@ def _s3_client():  # pragma: no cover - requires real R2 credentials
         endpoint_url=settings.R2_ENDPOINT_URL,
         aws_access_key_id=settings.R2_ACCESS_KEY_ID,
         aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
+        region_name="auto",
+        config=_R2_CONFIG,
     )
 
 

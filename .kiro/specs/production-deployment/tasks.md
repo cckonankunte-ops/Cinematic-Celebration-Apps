@@ -46,13 +46,13 @@ Two kinds of tasks:
     (download latest dump → restore into a scratch DB → verify counts/record).
   - _Requirements: 1, 2, 3, 5, 6, 7, 8, 11, 12_
 
-- [ ] 5. [code] Verify the small edits don't break anything
+- [x] 5. [code] Verify the small edits don't break anything
   - Run `pytest` (API) and `vitest` (admin + web) — no app logic changed, so
     they must stay green. Run `ruff`/`eslint`. Confirm `docker compose config`
     parses with the new `API_HOST` wiring.
   - _Requirements: 5_
 
-- [ ] 6. [ops]* Provision the VPS (cheap 1 GB India VPS)
+- [x] 6. [ops]* Provision the VPS (cheap 1 GB India VPS)
   - Create a cheap, reliable 1 GB India-region VPS (CloudPe ~₹350/mo, or Vultr
     Bangalore / DO BLR1 ~₹450-550/mo), Ubuntu 24.04 LTS, x86_64, annual prepay.
     SSH key auth; non-root `deploy` user with Docker rights; ufw allow
@@ -63,13 +63,13 @@ Two kinds of tasks:
     `build` on the box). Do NOT use Oracle for production.
   - _Requirements: 1_
 
-- [ ] 7. [ops]* DNS + HTTPS for the staging API
+- [x] 7. [ops]* DNS + HTTPS for the staging API
   - Add `A api-staging → <VPS_IP>`; set `API_HOST=api-staging.cinematiccelebration.in`
     in `.env`; confirm Caddy issues a cert and `/healthz` is 200 over HTTPS.
     Leave the live apex and `admin.` records untouched.
   - _Requirements: 2_
 
-- [ ] 8. [ops]* Cloudflare account, R2 buckets, Pages projects
+- [x] 8. [ops]* Cloudflare account, R2 buckets, Pages projects
   - Create account + add the zone (keep legacy DNS intact); create public images
     bucket (+ `img.` CDN domain) and private backups bucket; create an R2 API
     token; create the two Pages projects building `apps/admin` and `apps/web`
