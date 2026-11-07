@@ -107,6 +107,90 @@ const image = ogImage ?? new URL('/og-default.png', Astro.site).toString();
       </div>
     </footer>
 
+    <!-- Floating WhatsApp: tap to pick a branch, then open a WhatsApp chat to
+         that branch's number. Branches + phones come from the public API at
+         runtime (no secrets; same data the Contact page uses). -->
+    <div id="wa-float" class="fixed bottom-4 right-4 z-50">
+      <div
+        id="wa-panel"
+        class="mb-2 hidden w-60 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+      >
+        <p class="border-b border-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">
+          Chat with a branch
+        </p>
+        <ul id="wa-branches" class="max-h-64 overflow-y-auto">
+          <li class="px-4 py-3 text-sm text-gray-500">Loading…</li>
+        </ul>
+      </div>
+      <button
+        id="wa-toggle"
+        type="button"
+        aria-label="Chat on WhatsApp"
+        class="flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:opacity-90"
+      >
+        <svg viewBox="0 0 24 24" class="h-7 w-7 fill-current" aria-hidden="true">
+          <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.82 11.82 0 018.413 3.488 11.82 11.82 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.82 9.82 0 001.511 5.26l-.999 3.648 3.736-.979zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.074-.148-.669-1.611-.916-2.206-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+        </svg>
+      </button>
+    </div>
+
+    <script is:inline define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE_URL }}>
+      (function () {
+        const toggle = document.getElementById('wa-toggle');
+        const panel = document.getElementById('wa-panel');
+        const list = document.getElementById('wa-branches');
+        if (!toggle || !panel || !list) return;
+        let loaded = false;
+
+        function waDigits(phone) {
+          const d = String(phone || '').replace(/\D/g, '');
+          if (d.length === 10) return '91' + d;        // bare 10-digit -> +91
+          return d.replace(/^0+/, '');                 // strip leading zeros
+        }
+
+        async function load() {
+          try {
+            const res = await fetch(apiBase + '/api/v1/public/locations');
+            const locs = await res.json();
+            const withPhone = locs.filter((l) => l.phone);
+            if (withPhone.length === 0) {
+              list.innerHTML =
+                '<li class="px-4 py-3 text-sm text-gray-500">No branches available.</li>';
+              return;
+            }
+            list.innerHTML = withPhone
+              .map(function (l) {
+                const wa = waDigits(l.phone);
+                return (
+                  '<li><a class="flex items-center justify-between px-4 py-3 text-sm text-gray-800 hover:bg-gray-50" ' +
+                  'href="https://wa.me/' + wa + '" target="_blank" rel="noopener">' +
+                  '<span>' + l.name + '</span>' +
+                  '<span aria-hidden="true" class="text-[#25D366]">›</span></a></li>'
+                );
+              })
+              .join('');
+          } catch (e) {
+            list.innerHTML =
+              '<li class="px-4 py-3 text-sm text-red-600">Could not load branches.</li>';
+          }
+        }
+
+        toggle.addEventListener('click', function () {
+          const hidden = panel.classList.toggle('hidden');
+          if (!hidden && !loaded) {
+            loaded = true;
+            load();
+          }
+        });
+        // Close when clicking outside.
+        document.addEventListener('click', function (e) {
+          if (!document.getElementById('wa-float').contains(e.target)) {
+            panel.classList.add('hidden');
+          }
+        });
+      })();
+    </script>
+
     <!-- Scroll-reveal: add `.is-visible` to `.reveal` elements as they enter the
          viewport. Pure vanilla JS, no dependency; the reduced-motion CSS guard
          already reveals everything for users who opt out. -->

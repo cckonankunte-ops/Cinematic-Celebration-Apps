@@ -2,6 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /* Mobile overflow guard: never let the page scroll sideways. A single wide
+     element (long string, fixed-width block, or a wide table) can otherwise
+     push the viewport and force a drag-right. Clip horizontal overflow at the
+     root and let long words/URLs wrap. Elements that legitimately need to
+     scroll horizontally (e.g. a wide data table) should opt in with their own
+     `overflow-x-auto` wrapper. */
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Break long unbroken strings (emails, URLs, references) instead of letting
+     them widen their container past the screen. */
+  p,
+  span,
+  a,
+  dt,
+  dd,
+  li,
+  h1,
+  h2,
+  h3 {
+    overflow-wrap: break-word;
+  }
+
+  /* Media never exceeds its container on small screens. */
+  img,
+  svg,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
 @layer components {
   /* Gradient text for festive headings. */
   .text-gradient {

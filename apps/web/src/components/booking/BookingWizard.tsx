@@ -9,7 +9,7 @@ import {
   type PublicPreviewRequest,
   type Slot,
 } from '../../lib/api';
-import { formatRupees, todayIsoInIST } from '../../lib/formatters';
+import { formatDate, formatRupees, todayIsoInIST } from '../../lib/formatters';
 import { isValidIndianMobile } from '../../lib/phone';
 import AddonSelector from './AddonSelector';
 import BookingForm from './BookingForm';
@@ -404,6 +404,11 @@ export default function BookingWizard() {
               onChange={(e) => patch({ bookingDate: e.target.value })}
               className="rounded-lg border border-gray-300 px-3 py-2 focus:border-brand focus:outline-none"
             />
+            {draft.bookingDate && (
+              <span className="text-sm font-medium text-brand">
+                {formatDate(draft.bookingDate)}
+              </span>
+            )}
           </label>
 
           {/* Time appears right after plan + date (same step) so the first
@@ -495,6 +500,12 @@ export default function BookingWizard() {
               <dt>Plan</dt>
               <dd>{draft.plan?.title}</dd>
             </div>
+            {draft.bookingDate && (
+              <div className="flex justify-between">
+                <dt>Date</dt>
+                <dd>{formatDate(draft.bookingDate)}</dd>
+              </div>
+            )}
             <div className="flex justify-between">
               <dt>People</dt>
               <dd>{draft.people}</dd>
