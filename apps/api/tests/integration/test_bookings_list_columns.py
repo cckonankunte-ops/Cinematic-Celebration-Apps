@@ -81,7 +81,8 @@ def test_list_includes_main_columns(client: TestClient, db: Session) -> None:
         f"/api/v1/admin/bookings?location_id={loc.id}", headers=_ORIGIN
     )
     assert resp.status_code == 200
-    rows = resp.json()
+    body = resp.json()
+    rows = body["items"]
     # Select this test's own booking by reference rather than assuming a single
     # row, so the test is robust whether the DB is empty or pre-populated.
     matches = [r for r in rows if r["booking_reference"] == reference]

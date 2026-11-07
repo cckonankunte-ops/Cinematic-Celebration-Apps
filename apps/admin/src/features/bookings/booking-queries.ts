@@ -58,29 +58,62 @@ export interface AdminPreviewBody {
   cleaning_paise: number;
 }
 
-function buildListQuery(
-  locationId: number,
-  date: string | null,
-  status: string | null,
-): string {
+/** A page of booking rows plus total count (server-paginated). */
+export interface BookingListPage {
+  items: BookingListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export type BookingSearchField =
+  | 'any'
+  | 'customer_name'
+  | 'phone'
+  | 'booking_ref'
+  | 'occasion_person'
+  | 'name_on_cake';
+
+/** All booking-list filters. Empty/null values are omitted from the query. */
+export interface BookingFilters {
+  q: string;
+  searchIn: BookingSearchField;
+  status: string | null;
+  dateFrom: string | null;
+  dateTo: string | null;
+  limit: number;
+  offset: number;
+}
+
+function buildListQuery(locationId: number, f: BookingFilters): string {
   const params = new URLSearchParams({ location_id: String(locationId) });
-  if (date) {
-    params.set('date', date);
+  // Only send the text query once it meets the 3-char minimum.
+  if (f.q.trim().length >= 3) {
+    params.set('q', f.q.trim());
+    params.set('search_in', f.searchIn);
   }
-  if (status) {
-    params.set('status', status);
+  if (f.status) {
+    params.set('status', f.status);
   }
+  if (f.dateFrom) {
+    params.set('date_from', f.dateFrom);
+  }
+  if (f.dateTo) {
+    params.set('date_to', f.dateTo);
+  }
+  params.set('limit', String(f.limit));
+  params.set('offset', String(f.offset));
   return `/api/v1/admin/bookings?${params.toString()}`;
 }
 
 export function useBookings(
   locationId: number | null,
-  date: string | null,
-  status: string | null,
-): UseQueryResult<BookingListItem[]> {
-  return useQuery<BookingListItem[]>({
-    queryKey: ['bookings', locationId, date, status],
-    queryFn: () => api.get<BookingListItem[]>(buildListQuery(locationId as number, date, status)),
+  filters: BookingFilters,
+): UseQueryResult<BookingListPage> {
+  return useQuery<BookingListPage>({
+    queryKey: ['bookings', locationId, filters],
+    queryFn: () =>
+      api.get<BookingListPage>(buildListQuery(locationId as number, filters)),
     enabled: locationId !== null,
   });
 }

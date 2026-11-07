@@ -7,6 +7,7 @@ BackgroundTasks (which opens its own session after the response).
 """
 
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from pydantic import BaseModel
@@ -21,6 +22,7 @@ from app.schemas.booking import (
     AdminPreviewRequest,
     BookingItemRead,
     BookingListItem,
+    BookingListPage,
     BookingRead,
     BookingUpdate,
     PriceBreakdownRead,
@@ -150,18 +152,42 @@ def _to_list_item(db: Session, booking: Booking) -> BookingListItem:
     )
 
 
-@router.get("/bookings", response_model=list[BookingListItem])
+@router.get("/bookings", response_model=BookingListPage)
 def list_bookings(
     location_id: int,
     booking_date: date | None = Query(default=None, alias="date"),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    q: str | None = Query(default=None),
+    search_in: Literal[
+        "any", "customer_name", "phone", "booking_ref",
+        "occasion_person", "name_on_cake",
+    ] = Query(default="any"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     actor: CurrentUser = Depends(require_role("admin", "staff")),
-) -> list[BookingListItem]:
-    bookings = booking_service.list_bookings(
-        db, actor, location_id=location_id, on=booking_date, status=status_filter
+) -> BookingListPage:
+    items, total = booking_service.list_bookings(
+        db,
+        actor,
+        location_id=location_id,
+        on=booking_date,
+        date_from=date_from,
+        date_to=date_to,
+        status=status_filter,
+        q=q,
+        search_in=search_in,
+        limit=limit,
+        offset=offset,
     )
-    return [_to_list_item(db, b) for b in bookings]
+    return BookingListPage(
+        items=[_to_list_item(db, b) for b in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/bookings/preview", response_model=PriceBreakdownRead)

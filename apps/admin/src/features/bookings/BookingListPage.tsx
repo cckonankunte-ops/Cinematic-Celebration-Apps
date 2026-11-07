@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { formatDate, todayIsoInIST } from '@/lib/dates';
+import { formatDate } from '@/lib/dates';
 import { formatRupees } from '@/lib/money';
 import type { BookingLike } from '@/lib/whatsapp';
 import { useLocation } from '@/features/location/useLocation';
@@ -15,7 +15,8 @@ import { BookingActions } from './BookingActions';
 import { BookingCard } from './BookingCard';
 import { PaymentDialog } from './PaymentDialog';
 import { StatusBadge } from './StatusBadge';
-import { useBookings } from './booking-queries';
+import { useDebounce } from '@/hooks/useDebounce';
+import { useBookings, type BookingFilters, type BookingSearchField } from './booking-queries';
 import type { BookingListItem, BookingStatus } from './types';
 
 /** Full action set for a desktop table row: payment + accept/reject + WhatsApp. */
@@ -82,16 +83,49 @@ const STATUS_OPTIONS: Array<{ value: '' | BookingStatus; label: string }> = [
   { value: 'expired', label: 'Expired' },
 ];
 
+const SEARCH_FIELDS: Array<{ value: BookingSearchField; label: string }> = [
+  { value: 'any', label: 'Any' },
+  { value: 'customer_name', label: 'Customer name' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'booking_ref', label: 'Booking ref' },
+  { value: 'occasion_person', label: 'Occasion / person' },
+  { value: 'name_on_cake', label: 'Name on cake' },
+];
+
+const PAGE_SIZES = [50, 100, 200];
+
 export function BookingListPage(): JSX.Element {
   const { selectedLocationId } = useLocation();
-  const [date, setDate] = useState<string>(todayIsoInIST());
+  const [q, setQ] = useState('');
+  const [searchIn, setSearchIn] = useState<BookingSearchField>('any');
   const [status, setStatus] = useState<'' | BookingStatus>('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [limit, setLimit] = useState(50);
+  const [offset, setOffset] = useState(0);
 
-  const { data, isLoading, isError } = useBookings(
-    selectedLocationId,
-    date === '' ? null : date,
-    status === '' ? null : status,
-  );
+  // Debounce the text query (min-3-char gate lives in the query builder).
+  const debouncedQ = useDebounce(q, 350);
+
+  const filters: BookingFilters = {
+    q: debouncedQ,
+    searchIn,
+    status: status === '' ? null : status,
+    dateFrom: dateFrom || null,
+    dateTo: dateTo || null,
+    limit,
+    offset,
+  };
+
+  const { data, isLoading, isError } = useBookings(selectedLocationId, filters);
+
+  // Any filter change resets to the first page.
+  const resetOffset = (): void => setOffset(0);
+
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const showingFrom = total === 0 ? 0 : offset + 1;
+  const showingTo = Math.min(offset + limit, total);
 
   return (
     <section className="space-y-4">
@@ -105,13 +139,58 @@ export function BookingListPage(): JSX.Element {
         </Link>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="mr-2 text-gray-600">Date</span>
+          <span className="mr-2 text-gray-600">Search</span>
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              resetOffset();
+            }}
+            placeholder="min 3 characters"
+            className="rounded border border-gray-300 px-2 py-1 text-sm"
+          />
+        </label>
+        <label className="text-sm">
+          <span className="mr-2 text-gray-600">In</span>
+          <select
+            value={searchIn}
+            onChange={(e) => {
+              setSearchIn(e.target.value as BookingSearchField);
+              resetOffset();
+            }}
+            className="rounded border border-gray-300 px-2 py-1 text-sm"
+          >
+            {SEARCH_FIELDS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="mr-2 text-gray-600">From</span>
           <input
             type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+            value={dateFrom}
+            onChange={(e) => {
+              setDateFrom(e.target.value);
+              resetOffset();
+            }}
+            className="rounded border border-gray-300 px-2 py-1 text-sm"
+          />
+        </label>
+        <label className="text-sm">
+          <span className="mr-2 text-gray-600">To</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => {
+              setDateTo(e.target.value);
+              resetOffset();
+            }}
             className="rounded border border-gray-300 px-2 py-1 text-sm"
           />
         </label>
@@ -119,7 +198,10 @@ export function BookingListPage(): JSX.Element {
           <span className="mr-2 text-gray-600">Status</span>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as '' | BookingStatus)}
+            onChange={(e) => {
+              setStatus(e.target.value as '' | BookingStatus);
+              resetOffset();
+            }}
             className="rounded border border-gray-300 px-2 py-1 text-sm"
           >
             {STATUS_OPTIONS.map((o) => (
@@ -129,19 +211,59 @@ export function BookingListPage(): JSX.Element {
             ))}
           </select>
         </label>
+        <label className="text-sm">
+          <span className="mr-2 text-gray-600">Per page</span>
+          <select
+            value={limit}
+            onChange={(e) => {
+              setLimit(Number(e.target.value));
+              resetOffset();
+            }}
+            className="rounded border border-gray-300 px-2 py-1 text-sm"
+          >
+            {PAGE_SIZES.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {isLoading && <p className="text-sm text-gray-500">Loading bookings…</p>}
       {isError && <p className="text-sm text-red-600">Failed to load bookings.</p>}
-      {data && data.length === 0 && (
+      {data && items.length === 0 && (
         <p className="text-sm text-gray-500">No bookings for these filters.</p>
       )}
 
-      {data && data.length > 0 && (
+      {data && items.length > 0 && (
         <>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
+            <span>
+              Showing {showingFrom}–{showingTo} of {total}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={offset === 0}
+                onClick={() => setOffset(Math.max(0, offset - limit))}
+                className="rounded border border-gray-300 px-2 py-1 disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                disabled={offset + limit >= total}
+                onClick={() => setOffset(offset + limit)}
+                className="rounded border border-gray-300 px-2 py-1 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
           {/* Mobile: card stack */}
           <div className="space-y-3 md:hidden">
-            {data.map((b) => (
+            {items.map((b) => (
               <BookingCard key={b.id} booking={b} />
             ))}
           </div>
@@ -172,7 +294,7 @@ export function BookingListPage(): JSX.Element {
                 </tr>
               </thead>
               <tbody>
-                {data.map((b) => (
+                {items.map((b) => (
                   <tr key={b.id} className="border-b border-gray-100 align-top">
                     <td className="py-2 pr-4">
                       <StatusBadge status={b.status} />

@@ -72,3 +72,33 @@ protection; pair with a strong contract. Strictly worse than hosting ourselves.
 
 **Status:** deferred by owner decision (recorded 2026) — "keep single-tenant for
 now; revisit later." Deploy the owner's own single business first. Not scheduled.
+
+## Deployment / data-migration follow-ups (staging trial, Nov 2026)
+
+Items surfaced during the first VPS deploy + MariaDB→Postgres migration. None
+block the staging trial; all must be handled before/at production cutover.
+
+1. **Catalog images not migrated.** `upload_images.py` was skipped, so plan/
+   cake/decor `object_key`s still point at legacy image references, not R2 — so
+   catalog images render blank. Before cutover: either run the image migration
+   (upload old images to R2 + rewrite keys) or re-upload key images in admin.
+2. **3 duplicate active bookings skipped** (old ids 2261, 2752, 3070). The old
+   MariaDB allowed two active bookings on the same (location, slot, date); the
+   new partial unique index does not, so these were skipped on load (validate.py
+   reports the resulting count + ₹4,500 payments-sum difference — fully
+   accounted for). Resolve these in the old system (cancel/reject the extras)
+   before the production cutover migration so nothing is silently dropped.
+3. **Migrated users have random passwords + must_reset_password=true.** Legacy
+   plain-text passwords were intentionally NOT copied. Staff cannot log in until
+   their passwords are reset (or accounts recreated). Provide a reset path or
+   create fresh admin/staff accounts before go-live. (The `owner` admin used in
+   staging was seeded separately.)
+4. **`seed_min` crashes when catalog already exists.** `_ensure_min_catalog`
+   uses `scalar_one_or_none()` to check for an existing plan; with migrated data
+   (many plans at a location) it raises `MultipleResultsFound`. Harmless (admin
+   is created first), but fix the check (use `.first()`/limit) so the job is
+   safe to re-run against populated DBs.
+5. **Rotate secrets before production.** DB password, JWT secret, R2 access/
+   secret keys, and the `owner` admin password were generated/entered during the
+   staging session and shared in plaintext over chat. Generate fresh values at
+   cutover and never reuse the staging ones for production.

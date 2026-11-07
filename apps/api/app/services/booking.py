@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -1332,37 +1332,106 @@ def get_booking(db: Session, booking_id: int, actor: CurrentUser) -> Booking:
     return _load_booking_for_actor(db, booking_id, actor)
 
 
+_SEARCH_FIELDS = frozenset(
+    {"any", "customer_name", "phone", "booking_ref", "occasion_person", "name_on_cake"}
+)
+_MIN_SEARCH_LEN = 3
+_MAX_PAGE = 200
+
+
+def _phone_digits(value: str) -> str:
+    """Reduce a phone string to digits, dropping a leading 91 country code."""
+    digits = "".join(ch for ch in value if ch.isdigit())
+    if len(digits) > 10 and digits.startswith("91"):
+        digits = digits[2:]
+    return digits
+
+
 def list_bookings(
     db: Session,
     actor: CurrentUser,
     *,
     location_id: int,
     on: date | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     status: str | None = None,
-) -> list[Booking]:
-    """List bookings for a location, ordered by window start time.
+    q: str | None = None,
+    search_in: str = "any",
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[Booking], int]:
+    """Search/list bookings for a location, paginated. Returns (items, total).
 
-    Includes both slot-mode and open-mode bookings (the slot join is a LEFT
-    join). Staff are restricted to their location. Rejected bookings are
-    excluded unless a status filter is given explicitly.
+    Includes both slot-mode and open-mode bookings (LEFT join on slot). Staff are
+    restricted to their location. Rejected bookings are excluded unless a status
+    filter is given explicitly. Text search (>=3 chars) matches the chosen field
+    (or any field); phone is matched digits-only. Date: none=all, one=that day,
+    both=inclusive range (swapped if reversed). Ordered newest-date first.
     """
     assert_location_access(actor, location_id)
-    # LEFT join the slot so OPEN-mode bookings (null slot_id) are included; order
-    # by the booking's own start_time (both modes have it) with the slot's
-    # sort_order as a tiebreaker for slot-mode rows sharing a start time.
+    limit = max(1, min(int(limit), _MAX_PAGE))
+    offset = max(0, int(offset))
+
+    conds = [Booking.location_id == location_id]
+
+    # Date range: legacy `on` maps to a single-day range when the new params are
+    # unset; one bound = that day; both = inclusive (swap if reversed).
+    lo, hi = date_from, date_to
+    if lo is None and hi is None and on is not None:
+        lo = hi = on
+    if lo is not None and hi is not None and lo > hi:
+        lo, hi = hi, lo
+    if lo is not None and hi is not None:
+        conds.append(Booking.booking_date.between(lo, hi))
+    elif lo is not None:
+        conds.append(Booking.booking_date == lo)
+    elif hi is not None:
+        conds.append(Booking.booking_date == hi)
+
+    if status is not None:
+        conds.append(Booking.status == status)
+    else:
+        conds.append(Booking.status != "rejected")
+
+    # Text search (ignored under the min length).
+    term = (q or "").strip()
+    if len(term) >= _MIN_SEARCH_LEN:
+        field = search_in if search_in in _SEARCH_FIELDS else "any"
+        like = f"%{term}%"
+        name_c = Booking.booking_name.ilike(like)
+        ref_c = Booking.booking_reference.ilike(like)
+        occ_c = Booking.special_person_name.ilike(like)
+        cake_c = Booking.name_on_cake.ilike(like)
+        phone_digits = _phone_digits(term)
+        phone_c = func.regexp_replace(Booking.phone, r"\D", "", "g").like(
+            f"%{phone_digits}%"
+        ) if phone_digits else false()
+        if field == "customer_name":
+            conds.append(name_c)
+        elif field == "booking_ref":
+            conds.append(ref_c)
+        elif field == "occasion_person":
+            conds.append(occ_c)
+        elif field == "name_on_cake":
+            conds.append(cake_c)
+        elif field == "phone":
+            conds.append(phone_c)
+        else:  # any
+            conds.append(or_(name_c, ref_c, occ_c, cake_c, phone_c))
+
+    total = db.execute(
+        select(func.count()).select_from(Booking).where(*conds)
+    ).scalar_one()
+
     stmt = (
         select(Booking)
-        .outerjoin(Slot, Slot.id == Booking.slot_id)
-        .where(Booking.location_id == location_id)
+        .where(*conds)
+        .order_by(Booking.booking_date.desc(), Booking.start_time, Booking.id)
+        .limit(limit)
+        .offset(offset)
     )
-    if on is not None:
-        stmt = stmt.where(Booking.booking_date == on)
-    if status is not None:
-        stmt = stmt.where(Booking.status == status)
-    else:
-        stmt = stmt.where(Booking.status != "rejected")
-    stmt = stmt.order_by(Booking.start_time, Slot.sort_order, Slot.id, Booking.id)
-    return list(db.execute(stmt).scalars())
+    return list(db.execute(stmt).scalars()), int(total)
 
 
 def expire_cutoff(now: datetime) -> datetime:

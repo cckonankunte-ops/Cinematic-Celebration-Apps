@@ -366,6 +366,15 @@ class BookingListItem(BaseModel):
     created_at: datetime
 
 
+class BookingListPage(BaseModel):
+    """A page of booking list rows plus the total match count for pagination."""
+
+    items: list[BookingListItem]
+    total: int
+    limit: int
+    offset: int
+
+
 class AcceptBookingRequest(BaseModel):
     """Body for the accept endpoint; admin-only advance override."""
 
