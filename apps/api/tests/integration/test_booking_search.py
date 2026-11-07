@@ -111,9 +111,7 @@ def test_min_three_chars_ignored(client: TestClient, db: Session) -> None:
 
 def test_limit_clamped_and_offset(client: TestClient, db: Session) -> None:
     loc = make_location(db)
-    plan = make_plan(db, loc.id, max_people_allowed=10)
     admin = make_user(db, "admin", location_id=None)
-    slot = make_slot(db, plan.id, description="9 AM - 12 PM")
     db.commit()
     _login(client, admin.username)
     # over-200 limit must be rejected by the query validator (le=200)
