@@ -76,7 +76,7 @@ Two kinds of tasks:
     with build-time API URL = the staging API; note the `*.pages.dev` URLs.
   - _Requirements: 3_
 
-- [ ] 9. [ops]* Fill production .env + first deploy + seed
+- [x] 9. [ops]* Fill production .env + first deploy + seed
   - Fill `.env` per the design table (staging values; SMTP blank; cookies
     `None`+`Secure`; CORS = the two `*.pages.dev` origins). Build the api image
     OFF the box (Codespace/CI → push to registry), then on the VPS:
@@ -85,14 +85,14 @@ Two kinds of tasks:
     with a chosen admin password.
   - _Requirements: 4, 5, 6_
 
-- [ ] 10. [ops]* Scheduled jobs + backups + restore drill
+- [x] 10. [ops]* Scheduled jobs + backups + restore drill
   - `mkdir -p /var/log/cc`; `chmod +x deploy/backup/backup.sh`; fix the repo path
     in `deploy/cron/crontab` and install it. Add the R2 lifecycle rule for
     14-daily/8-weekly retention. Perform ONE restore drill into a scratch DB and
     record it in `RESTORE.md`.
   - _Requirements: 7, 8_
 
-- [ ] 11. [ops]* Observability + security checklist
+- [x] 11. [ops]* Observability + security checklist
   - Uptime monitor on the staging `/healthz`; `docker stats` memory-fit check;
     confirm JSON logs with no PII/secrets; tick the security checklist (HTTPS
     only, cookie flags, CORS not `*`, no secrets in git/images, admin `noindex`,
