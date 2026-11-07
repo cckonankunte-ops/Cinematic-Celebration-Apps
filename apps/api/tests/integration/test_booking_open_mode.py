@@ -256,7 +256,9 @@ def test_open_mode_booking_appears_in_list(db: Session) -> None:
     created = booking_service.create_admin_booking(
         db, _open_create(loc.id, plan.id, time(14, 0), 60, when), admin
     )
-    rows = booking_service.list_bookings(db, admin, location_id=loc.id, on=when)
+    rows, _total = booking_service.list_bookings(
+        db, admin, location_id=loc.id, on=when
+    )
     ids = [b.id for b in rows]
     assert created.id in ids
     # And the list item derives a time-range label from the window (no slot).

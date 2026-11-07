@@ -1340,9 +1340,16 @@ _MAX_PAGE = 200
 
 
 def _phone_digits(value: str) -> str:
-    """Reduce a phone string to digits, dropping a leading 91 country code."""
+    """Reduce a phone string to national digits for matching.
+
+    Strips non-digits and a leading ``91`` country code (e.g. ``+91 98765...`` ->
+    ``98765...``) so a query typed with or without +91 matches a stored 10-digit
+    number. Applied to BOTH the stored phone and the query so they normalise the
+    same way. Indian mobiles are stored as 10 digits (no 91), so this only trims
+    a user-typed country code.
+    """
     digits = "".join(ch for ch in value if ch.isdigit())
-    if len(digits) > 10 and digits.startswith("91"):
+    if digits.startswith("91") and len(digits) > 2:
         digits = digits[2:]
     return digits
 
