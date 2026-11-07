@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { formatDate } from '@/lib/dates';
+import { formatDate, todayIsoInIST } from '@/lib/dates';
 import { formatRupees } from '@/lib/money';
 import type { BookingLike } from '@/lib/whatsapp';
 import { useLocation } from '@/features/location/useLocation';
@@ -96,13 +96,26 @@ const PAGE_SIZES = [50, 100, 200];
 
 export function BookingListPage(): JSX.Element {
   const { selectedLocationId } = useLocation();
+  // Default view: today's bookings (From = today, others empty).
+  const today = todayIsoInIST();
   const [q, setQ] = useState('');
   const [searchIn, setSearchIn] = useState<BookingSearchField>('any');
   const [status, setStatus] = useState<'' | BookingStatus>('');
-  const [dateFrom, setDateFrom] = useState('');
+  const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState('');
   const [limit, setLimit] = useState(50);
   const [offset, setOffset] = useState(0);
+
+  // Reset all filters back to the default (today's bookings).
+  const resetFilters = (): void => {
+    setQ('');
+    setSearchIn('any');
+    setStatus('');
+    setDateFrom(today);
+    setDateTo('');
+    setLimit(50);
+    setOffset(0);
+  };
 
   // Debounce the text query (min-3-char gate lives in the query builder).
   const debouncedQ = useDebounce(q, 350);
@@ -228,6 +241,16 @@ export function BookingListPage(): JSX.Element {
             ))}
           </select>
         </label>
+        <button
+          type="button"
+          onClick={resetFilters}
+          title="Reset filters to today"
+          aria-label="Reset filters"
+          className="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-sm text-gray-600 hover:bg-gray-50"
+        >
+          <span aria-hidden="true">↺</span>
+          <span>Reset</span>
+        </button>
       </div>
 
       {isLoading && <p className="text-sm text-gray-500">Loading bookings…</p>}
