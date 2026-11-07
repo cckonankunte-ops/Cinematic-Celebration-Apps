@@ -85,12 +85,25 @@ def build_records(config: MigrationConfig) -> dict[str, list[dict[str, Any]]]:
         int(r["id"]) for r in _read(data_dir, "occasion")
     }
 
+    # Slot window lookup (slot_id -> start_time/duration) so each booking can
+    # snapshot its slot's parsed time window (new-schema NOT NULL columns).
+    slots_transformed = [T.transform_slot(r) for r in _read(data_dir, "slot")]
+    slot_windows: dict[int, dict[str, Any]] = {
+        s["id"]: {
+            "start_time": s["start_time"],
+            "duration_minutes": s["duration_minutes"],
+        }
+        for s in slots_transformed
+    }
+
     bookings: list[dict[str, Any]] = []
     booking_items: list[dict[str, Any]] = []
     payments: list[dict[str, Any]] = []
     used_refs: set[str] = set()
     for b in _read(data_dir, "booking"):
-        booking = T.transform_booking(b, used_references=used_refs)
+        booking = T.transform_booking(
+            b, used_references=used_refs, slot_windows=slot_windows
+        )
         # Drop references to rows that don't exist in the target DB so FK
         # constraints don't reject otherwise-valid historical bookings.
         if booking.get("crm_user_id") not in valid_user_ids:
@@ -111,7 +124,7 @@ def build_records(config: MigrationConfig) -> dict[str, list[dict[str, Any]]]:
         "users": users,
         "plans": [T.transform_plan(r) for r in plans_raw],
         "plan_gallery_images": gallery,
-        "slots": [T.transform_slot(r) for r in _read(data_dir, "slot")],
+        "slots": slots_transformed,
         "occasions": [T.transform_occasion(r) for r in _read(data_dir, "occasion")],
         "cakes": cakes,
         "special_decor_items": decor,
@@ -157,7 +170,8 @@ _INSERT_COLUMNS: dict[str, tuple[str, ...]] = {
     ),
     "bookings": (
         "id", "booking_reference", "public_token", "location_id", "plan_id",
-        "slot_id", "booking_date", "booking_name", "email", "phone",
+        "slot_id", "start_time", "duration_minutes",
+        "booking_date", "booking_name", "email", "phone",
         "special_person_name", "name_on_cake", "message", "people", "occasion_id",
         "plan_price_paise", "subtotal_paise", "discount_paise", "food_paise",
         "other_paise", "cleaning_paise", "total_paise", "advance_paise", "status",

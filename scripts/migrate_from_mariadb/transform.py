@@ -457,6 +457,7 @@ def transform_booking(
     row: dict[str, Any],
     *,
     used_references: set[str],
+    slot_windows: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Map an old `booking` row to a new `bookings` record (money x100, status map).
 
@@ -464,17 +465,31 @@ def transform_booking(
     generated. The old bookingreference is kept, but regenerated on collision
     against `used_references` (which the caller mutates to stay unique). The
     historical advance snapshot is max(advanceamount x100, 0).
+
+    The new schema snapshots each booking's time window (start_time +
+    duration_minutes). ``slot_windows`` maps slot_id -> {start_time,
+    duration_minutes} (built from the transformed slots) so the booking inherits
+    its slot's parsed window; falls back to the documented slot default if the
+    slot is somehow missing.
     """
     total_paise = rupees_to_paise(row.get("amount"))
     reference = _unique_reference(row.get("bookingreference"), used_references)
     advance_snapshot = max(rupees_to_paise(row.get("advanceamount")), 0)
+    slot_id = int(row["slotid"])
+    window = (slot_windows or {}).get(slot_id)
+    start_time = window["start_time"] if window else _FALLBACK_SLOT_START
+    duration_minutes = (
+        window["duration_minutes"] if window else _FALLBACK_SLOT_DURATION
+    )
     return {
         "id": int(row["id"]),
         "booking_reference": reference,
         "public_token": generate_public_token(),
         "location_id": int(row["locationid"]),
         "plan_id": int(row["planid"]),
-        "slot_id": int(row["slotid"]),
+        "slot_id": slot_id,
+        "start_time": start_time,
+        "duration_minutes": duration_minutes,
         "booking_date": to_utc_isoformat(row.get("date")),
         "booking_name": row.get("bookingname") or "",
         "email": row.get("email") or "",
