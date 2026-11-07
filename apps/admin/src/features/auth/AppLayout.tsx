@@ -75,6 +75,11 @@ export function AppLayout(): JSX.Element {
               Coupons
             </NavLink>
           )}
+          {user?.role === 'admin' && (
+            <NavLink to="/users" className={navClass}>
+              Staff
+            </NavLink>
+          )}
           <div className="ml-auto flex items-center gap-3">
             <LocationSwitcher />
             <button

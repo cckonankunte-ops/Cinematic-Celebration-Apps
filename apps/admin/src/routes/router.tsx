@@ -11,6 +11,7 @@ import { CakesheetPage } from '@/features/cakesheet/CakesheetPage';
 import { AnalyticsPage } from '@/features/analytics/AnalyticsPage';
 import { CatalogPage } from '@/features/catalog/CatalogPage';
 import { CouponsPage } from '@/features/coupons/CouponsPage';
+import { UsersPage } from '@/features/users/UsersPage';
 
 /**
  * Route tree. `/login` is public; everything else is wrapped in
@@ -62,6 +63,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute requiredRole="admin">
             <CouponsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'users',
+        element: (
+          <ProtectedRoute requiredRole="admin">
+            <UsersPage />
           </ProtectedRoute>
         ),
       },
