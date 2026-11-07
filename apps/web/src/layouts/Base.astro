@@ -161,9 +161,15 @@ const image = ogImage ?? new URL('/og-default.png', Astro.site).toString();
             list.innerHTML = withPhone
               .map(function (l) {
                 const wa = waDigits(l.phone);
+                // Prefilled, editable opener so staff get a branch + intent
+                // instead of a blank "hi"; customers can still edit before send.
+                const msg = encodeURIComponent(
+                  'Hi Cinematic Celebration (' + l.name + ')! ' +
+                  "I'd like to know more about booking a celebration. \uD83C\uDFAC"
+                );
                 return (
                   '<li><a class="flex items-center justify-between px-4 py-3 text-sm text-gray-800 hover:bg-gray-50" ' +
-                  'href="https://wa.me/' + wa + '" target="_blank" rel="noopener">' +
+                  'href="https://wa.me/' + wa + '?text=' + msg + '" target="_blank" rel="noopener">' +
                   '<span>' + l.name + '</span>' +
                   '<span aria-hidden="true" class="text-[#25D366]">›</span></a></li>'
                 );
