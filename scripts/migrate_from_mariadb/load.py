@@ -138,7 +138,8 @@ _INSERT_COLUMNS: dict[str, tuple[str, ...]] = {
     ),
     "plan_gallery_images": ("plan_id", "object_key", "sort_order"),
     "slots": (
-        "id", "plan_id", "description", "show_combos", "sort_order",
+        "id", "plan_id", "description", "start_time", "duration_minutes",
+        "show_combos", "sort_order",
         "effective_from", "effective_to", "is_active",
     ),
     "occasions": ("id", "location_id", "name", "is_active"),

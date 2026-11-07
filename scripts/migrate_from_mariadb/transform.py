@@ -20,8 +20,10 @@ extracted JSON so this module stays side-effect free.
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
+import sys
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -30,6 +32,21 @@ from .config import (
     DEFAULT_ADVANCE_PAISE,
     EXTRA_GUEST_PAISE,
 )
+
+# Reuse the app's tested slot-description parser (legacy slots carry only a text
+# range like "10:00 AM - 12:00 PM"; the new schema needs start_time +
+# duration_minutes). Make the app package importable without importing the app.
+sys.path.insert(
+    0, os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api")
+)
+from app.services.slot_parse import parse_slot_description  # noqa: E402
+
+# Fallback window when a legacy slot description cannot be parsed. The new
+# schema requires start_time/duration NOT NULL; rather than drop the slot (which
+# would orphan its bookings), we apply this documented default and print a
+# warning so a human can correct it in admin after migration.
+_FALLBACK_SLOT_START = "10:00"
+_FALLBACK_SLOT_DURATION = 120
 
 # Old statusid -> new booking status enum value.
 STATUS_MAP: dict[int, str] = {1: "pending", 2: "accepted", 3: "rejected"}
@@ -233,11 +250,32 @@ def transform_plan_gallery(row: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def transform_slot(row: dict[str, Any]) -> dict[str, Any]:
-    """Map an old `slot` row to a new `slots` record."""
+    """Map an old `slot` row to a new `slots` record.
+
+    Parses the legacy text description ("10:00 AM - 12:00 PM") into the new
+    required start_time + duration_minutes via the app's slot parser. If a
+    description is unparseable, applies a documented fallback window and prints
+    a warning (never drops the slot, which would orphan its bookings).
+    """
+    description = row["description"]
+    parsed = parse_slot_description(description)
+    if parsed is None:
+        print(
+            f"  WARN slot {row.get('id')}: unparseable description "
+            f"{description!r} -> fallback {_FALLBACK_SLOT_START}/"
+            f"{_FALLBACK_SLOT_DURATION}min"
+        )
+        start_time: str = _FALLBACK_SLOT_START
+        duration_minutes: int = _FALLBACK_SLOT_DURATION
+    else:
+        start_time = parsed.start_time.strftime("%H:%M")
+        duration_minutes = parsed.duration_minutes
     return {
         "id": int(row["id"]),
         "plan_id": int(row["planid"]),
-        "description": row["description"],
+        "description": description,
+        "start_time": start_time,
+        "duration_minutes": duration_minutes,
         "show_combos": bool(int(row.get("showcombo", 1) or 0)),
         "sort_order": int(row.get("orderby", 0)),
         "effective_from": to_utc_isoformat(row.get("effectivedate")),
