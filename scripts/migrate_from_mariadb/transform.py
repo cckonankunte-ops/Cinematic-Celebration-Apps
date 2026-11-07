@@ -52,7 +52,18 @@ _FALLBACK_SLOT_DURATION = 120
 STATUS_MAP: dict[int, str] = {1: "pending", 2: "accepted", 3: "rejected"}
 
 # Old user_role.description (lowercased) -> new role name.
-ROLE_MAP: dict[str, str] = {"admin": "admin", "staff": "staff"}
+# The new schema recognises only two roles: 'admin' (all locations + analytics)
+# and 'staff' (location-scoped). Legacy role names map onto these:
+#   'super admin' / 'superadmin' -> 'admin'
+#   'manager'                     -> 'staff'
+# Any unmapped legacy role falls through to its lowercased name (review after).
+ROLE_MAP: dict[str, str] = {
+    "admin": "admin",
+    "super admin": "admin",
+    "superadmin": "admin",
+    "staff": "staff",
+    "manager": "staff",
+}
 
 
 # --------------------------------------------------------------------------

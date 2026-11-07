@@ -109,6 +109,13 @@ All constants live in `config.py`:
   paise with `× 100`.
 - **Status** `statusid` 1/2/3 → `pending`/`accepted`/`rejected`. No old value
   maps to `expired`.
+- **Roles (mapped to the new two-role model).** The new system has only `admin`
+  (all locations + analytics) and `staff` (location-scoped). Legacy
+  `user_role.description` values are mapped in `transform.ROLE_MAP`:
+  `admin`/`super admin`/`superadmin` → `admin`; `staff`/`manager` → `staff`.
+  Any other legacy role name falls through unchanged (lowercased) and should be
+  reviewed after migration. Add new legacy role names to `ROLE_MAP` as needed
+  before a future migration run.
 - **Passwords (force-reset, recommended).** Plain-text passwords are **never**
   copied. Each migrated user gets a fresh **random argon2 hash** (same params as
   the app: `m=19456, t=2, p=1`) and `must_reset_password = true`. All users must
