@@ -19,6 +19,11 @@ services:
       retries: 5
 
   api:
+    # Pull-based deploy: on a 1 GB VPS we build the image OFF the box (Codespace/
+    # CI) and push it to a registry, then `docker compose pull` here — building
+    # on a 1 GB box can OOM-kill Postgres. `build:` stays as a fallback for
+    # environments with enough RAM. Set API_IMAGE in .env to the registry tag.
+    image: ${API_IMAGE:-cineceleb-api:local}
     build:
       context: ../apps/api
     mem_limit: 220m
@@ -40,6 +45,9 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+    # API_HOST selects the TLS hostname in the Caddyfile (staging vs production).
+    environment:
+      API_HOST: ${API_HOST}
     ports:
       - "80:80"
       - "443:443"

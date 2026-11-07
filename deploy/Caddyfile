@@ -1,6 +1,11 @@
 # Automatic HTTPS for the API. Caddy obtains and renews certificates.
 # The customer site and admin panel are served by Cloudflare Pages, not here.
-api.cinematiccelebration.in {
+#
+# The hostname comes from the API_HOST env var so the SAME file serves the
+# staging host during the trial (api-staging.cinematiccelebration.in) and the
+# production host after cutover (api.cinematiccelebration.in) — just change
+# API_HOST in .env and restart. Caddy substitutes {$API_HOST} at load time.
+{$API_HOST} {
 	encode gzip
 	reverse_proxy api:8000
 }

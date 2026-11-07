@@ -49,3 +49,44 @@ stored in the private R2 bucket under `backups/daily/` or `backups/weekly/`).
 
 Perform a test restore into a throwaway database at least once (and after any
 major schema change) to confirm this runbook works end to end.
+
+## Restore drill into a SCRATCH database (non-destructive)
+
+Use this during go-live (production-deployment task 10) to prove a backup is
+restorable WITHOUT touching the live database. Do it at least once, and record
+the result below.
+
+1. Download the latest daily backup (as above) to `/tmp/restore.sql.gz`.
+2. Create a scratch database alongside the real one:
+
+   ```bash
+   docker compose exec -T postgres createdb -U "$POSTGRES_USER" cinematic_scratch
+   ```
+
+3. Restore the dump into the scratch DB (the live DB is untouched):
+
+   ```bash
+   gunzip -c /tmp/restore.sql.gz | \
+     docker compose exec -T postgres psql -U "$POSTGRES_USER" -d cinematic_scratch
+   ```
+
+4. Verify row counts / a known record against the scratch DB:
+
+   ```bash
+   docker compose exec -T postgres psql -U "$POSTGRES_USER" -d cinematic_scratch \
+     -c "SELECT count(*) FROM bookings; SELECT count(*) FROM locations;"
+   ```
+
+5. Drop the scratch DB when satisfied:
+
+   ```bash
+   docker compose exec -T postgres dropdb -U "$POSTGRES_USER" cinematic_scratch
+   ```
+
+### Drill log
+
+Record each drill so the "tested restore" requirement is auditable.
+
+| Date | Backup restored | Verified (counts / record) | By |
+|------|-----------------|----------------------------|----|
+|      |                 |                            |    |
