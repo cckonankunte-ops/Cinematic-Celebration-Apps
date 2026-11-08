@@ -215,19 +215,25 @@ def test_property_4_cake_weight_pricing(cake_price, weight) -> None:
 # 4.8 Property 5 — LED letter count.
 # ---------------------------------------------------------------------------
 @given(
-    letters=st.text(alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", max_size=20),
-    noise=st.text(alphabet=" .,!?-_0123456789", max_size=20),
+    # Billable LED characters are letters AND digits (bugfix: digits are charged).
+    chars=st.text(
+        alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        max_size=20,
+    ),
+    noise=st.text(alphabet=" .,!?-_", max_size=20),
 )
 @settings(max_examples=100)
-def test_property_5_led_letter_count(letters, noise) -> None:
-    """Feature: admin-booking-edit, Property 5: LED letter count and charge.
+def test_property_5_led_letter_count(chars, noise) -> None:
+    """Feature: admin-booking-edit, Property 5: LED character count and charge.
 
-    Validates: Requirements 16.3, 16.5
+    Billable LED characters are ASCII letters and digits; spaces/punctuation are
+    ignored. Validates: Requirements 16.3, 16.5 (digits now count — bugfix).
     """
-    # Interleave letters with non-letter noise; count must equal letter count.
-    led_name = "".join(a + b for a, b in zip(letters, noise + " " * len(letters)))
+    # Interleave billable chars with non-billable noise; count must equal the
+    # number of alphanumeric billable characters.
+    led_name = "".join(a + b for a, b in zip(chars, noise + " " * len(chars)))
     led_name += noise
-    expected_count = len(letters)
+    expected_count = len(chars)
     assert led_letter_count(led_name) == expected_count
 
     req = ValidatedRequest(plan=_plan(), people=1, led_name=led_name)

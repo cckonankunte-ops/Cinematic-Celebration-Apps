@@ -102,3 +102,43 @@ block the staging trial; all must be handled before/at production cutover.
    secret keys, and the `owner` admin password were generated/entered during the
    staging session and shared in plaintext over chat. Generate fresh values at
    cutover and never reuse the staging ones for production.
+
+## Safari / iOS cross-site cookie auth (fix at domain cutover)
+
+**Symptoms (staging, Apple devices only).** On iPhone/Mac Safari the admin panel
+logs out on refresh, and authenticated booking fetches fail ("booking loading
+failed"). Chrome/Android are unaffected.
+
+**Root cause.** During the staging trial the admin panel is on
+`cineceleb-admin.pages.dev` and the API is on `142.93.208.192.sslip.io` — two
+DIFFERENT registrable domains. The httpOnly auth cookie is therefore a
+third-party/cross-site cookie (`SameSite=None; Secure`). Safari's Intelligent
+Tracking Prevention blocks third-party cookies by default, so the cookie is not
+persisted/sent — every reload and every authenticated XHR is unauthenticated.
+
+**Why there's no small code fix.** No cookie flag makes a third-party cookie
+survive Safari ITP. `SameSite=None; Secure` is already correct for cross-site; the
+browser still drops it.
+
+**Proper fix (at production cutover).** Serve the admin and the API on the SAME
+registrable domain as subdomains, e.g. `admin.cinematiccelebration.in` +
+`api.cinematiccelebration.in`. The cookie then becomes same-site (set
+`COOKIE_SAMESITE=lax`, `COOKIE_SECURE=true`) and Safari keeps it. This is already
+part of the planned domain cutover — no app code change needed, just DNS + the
+Pages/Caddy host config and the `.env` cookie/CORS values.
+
+**Interim.** Known staging limitation; staff use Chrome/Android during the trial.
+
+**Alternative (only if Safari must work pre-cutover).** Add an Authorization:
+Bearer token path (JWT held in memory, refreshed on load) so auth doesn't depend
+on a third-party cookie. This is a real auth change (login response, admin client,
+and the `get_current_user` dependency) and should get its own small spec + tests.
+Not needed if the cutover is near.
+
+## LED number pricing (FIXED, Nov 2026)
+
+The LED charge counted only letters (A–Z), so digits in an LED name (e.g. "23",
+"ARUN 30") were not charged. Fixed in `services/pricing.py`: `led_letter_count`
+now counts ASCII letters AND digits (spaces/punctuation still ignored). Tests
+updated (`test_pricing_examples.py`, `test_pricing_extended.py`). The draft
+`led-number-pricing` spec stub is superseded by this fix and can be removed.

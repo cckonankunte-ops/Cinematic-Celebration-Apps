@@ -195,6 +195,20 @@ def test_example_led_letter_count_ignores_space() -> None:
     assert led_letter_count("HAPPY BIRTHDAY") == 13
 
 
+def test_example_led_count_includes_digits() -> None:
+    """Digits are billable LED characters (bugfix: numbers were not charged).
+
+    '23' -> 2 chars (₹80); 'ARUN 30' -> 6 chars (₹240, space ignored).
+    """
+    assert led_letter_count("23") == 2
+    assert led_letter_count("ARUN 30") == 6
+    # Charge flows through: a standalone LED line is count × ₹40.
+    req = ValidatedRequest(plan=_plan(), people=1, led_name="23")
+    bd = compute_booking_price(req, is_customer=True)
+    led_line = next(line for line in bd.addon_lines if line.kind == "led")
+    assert led_line.amount_paise == 2 * 4000  # ₹80
+
+
 # ---------------------------------------------------------------------------
 # Standalone cake weight examples (no combo absorbs the cake).
 # ---------------------------------------------------------------------------

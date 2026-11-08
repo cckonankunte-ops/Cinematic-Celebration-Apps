@@ -19,14 +19,22 @@ from app.models.combo_item import ComboItem
 from app.models.plan import Plan
 from app.models.special_decor_item import SpecialDecorItem
 
-LED_UNIT_PRICE_PAISE = 4000  # single documented constant; ₹40/letter
+LED_UNIT_PRICE_PAISE = 4000  # single documented constant; ₹40 per LED character
 
 
 def led_letter_count(led_name: str | None) -> int:
-    """A–Z only, case-insensitive, ignoring spaces/punctuation. '' / None -> 0."""
+    """Count billable LED characters: ASCII letters AND digits.
+
+    LED characters are physical rented glyphs, so digits (e.g. ages/dates like
+    "23" or "ARUN 30") are charged exactly like letters. Spaces and punctuation
+    are ignored. '' / None -> 0.
+
+    (Name kept for backward compatibility; it now counts letters + digits, not
+    letters only.)
+    """
     if not led_name:
         return 0
-    return sum(1 for ch in led_name if ch.isascii() and ch.isalpha())
+    return sum(1 for ch in led_name if ch.isascii() and ch.isalnum())
 
 
 # COMPONENT_KEYS fixes the vocabulary for coupon 'selected_components' bases and
