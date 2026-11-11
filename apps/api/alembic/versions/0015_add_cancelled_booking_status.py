@@ -12,12 +12,13 @@ booking to ``cancelled`` (distinct from ``rejected``) and frees its slot. Only
 ``pending`` and ``accepted`` hold a slot, so ``cancelled`` — like ``rejected``
 and ``expired`` — releases the active-slot/overlap constraint.
 
-Postgres note: ``ALTER TYPE ... ADD VALUE`` cannot run inside a transaction
-block, so the enum change is committed on its own connection
-(``connection.execution_options(isolation_level="AUTOCOMMIT")``) with
-``IF NOT EXISTS`` for idempotency. Enum values cannot be dropped in Postgres, so
-the downgrade leaves the ``cancelled`` value in place (documented no-op) and only
-restores the narrower booking_events CHECK.
+Postgres note: a new enum value added with ``ALTER TYPE ... ADD VALUE`` must be
+committed before it can be used, and Alembic runs the migration inside a
+transaction. We therefore ``COMMIT`` the migration's open transaction first,
+then add the value (``IF NOT EXISTS`` for idempotency); the CHECK changes run in
+the following autobegun transaction. Enum values cannot be dropped in Postgres,
+so the downgrade leaves the ``cancelled`` value in place (documented no-op) and
+only restores the narrower booking_events CHECK.
 """
 
 from __future__ import annotations
@@ -33,11 +34,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # ALTER TYPE ... ADD VALUE must run outside a transaction block.
-    conn = op.get_bind()
-    conn.execution_options(isolation_level="AUTOCOMMIT").execute(
-        _add_value_sql()
-    )
+    # Alembic runs migrations inside a transaction, but Postgres requires
+    # ALTER TYPE ... ADD VALUE to be committed before the new value can be used,
+    # and it cannot run while a transaction that will use it is open. Commit the
+    # migration's open transaction first, then add the enum value; the statement
+    # after COMMIT runs in its own (autobegun) transaction. IF NOT EXISTS keeps
+    # it idempotent if a prior partial run already added the value.
+    op.execute("COMMIT")
+    op.execute("ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'cancelled'")
 
     # Widen the booking_events type CHECK to include the 'cancelled' audit event.
     op.drop_constraint("ck_booking_events_type", "booking_events", type_="check")
@@ -58,9 +62,3 @@ def downgrade() -> None:
         "event_type IN ('created','accepted','rejected','edited',"
         "'payment_recorded','payment_voided','expired')",
     )
-
-
-def _add_value_sql():
-    from sqlalchemy import text
-
-    return text("ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'cancelled'")
