@@ -51,6 +51,7 @@ export function LateBookingToggle({
   const onToggle = async (): Promise<void> => {
     setError(null);
     try {
+      // Flip the underlying allow flag. Ticking "stop" sends allow=false.
       await setLate.mutateAsync({ allow: !allowLateBooking });
     } catch (err) {
       setError(
@@ -59,17 +60,27 @@ export function LateBookingToggle({
     }
   };
 
+  // Late booking is ON by default. The control is framed as "stop late
+  // booking": ticking it disables late online booking for the branch
+  // (allow = false). Unticking re-opens it.
+  const stopped = !allowLateBooking;
+
   return (
     <div className="flex flex-col gap-1">
       <label className="flex items-center gap-2 text-sm text-gray-700">
         <input
           type="checkbox"
-          checked={allowLateBooking}
+          checked={stopped}
           disabled={disabled}
           onChange={onToggle}
         />
-        Allow late online booking
+        Stop late online booking today
       </label>
+      {stopped && (
+        <span className="text-xs text-orange-700">
+          Late online booking is OFF for this branch.
+        </span>
+      )}
       {!isAdmin && !afterCutoff && (
         <span className="text-xs text-gray-500">
           Available after 9:15 PM

@@ -36,8 +36,11 @@ class Location(Base, TimestampMixin):
     last_online_booking_start: Mapped[time] = mapped_column(
         Time, nullable=False, server_default=text("'22:00'")
     )
+    # Late online booking is ALLOWED by default. Staff switch this OFF for a
+    # given day (via the admin "stop late bookings" toggle) before signing off
+    # when there's no late-night availability; it can be switched back on.
     allow_late_booking: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false")
+        Boolean, nullable=False, server_default=text("true")
     )
 
     # How this branch produces a booking's time window:
