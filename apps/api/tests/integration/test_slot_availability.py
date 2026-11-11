@@ -146,7 +146,8 @@ def test_same_day_cutoff_hides_late_slot_for_public(db: Session) -> None:
     endpoint can't inject `now`, so this rule is asserted at the service layer
     to stay deterministic.
     """
-    loc = make_location(db)  # cutoff 22:00, allow_late_booking False
+    loc = make_location(db)  # cutoff 22:00
+    loc.allow_late_booking = False  # late booking now defaults ON; switch it OFF
     plan = make_plan(db, loc.id)
     late = make_slot(
         db, plan.id, start_time=time(22, 30), duration_minutes=60, sort_order=1

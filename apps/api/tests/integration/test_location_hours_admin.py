@@ -126,7 +126,8 @@ def test_switch_affects_same_day_public_availability(
     start is still future yet same-day) to stay deterministic — the HTTP
     endpoint can't inject `now`. The admin flips the switch through the API.
     """
-    loc = make_location(db)  # cutoff 22:00, switch off
+    loc = make_location(db)  # cutoff 22:00
+    loc.allow_late_booking = False  # late booking now defaults ON; start OFF here
     plan = make_plan(db, loc.id)
     late = make_slot(
         db, plan.id, start_time=time(22, 30), duration_minutes=60, sort_order=1
