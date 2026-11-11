@@ -23,10 +23,6 @@ from app.core.errors import (
     ValidationFailedError,
 )
 from app.core.security import CurrentUser, assert_location_access, hash_password
-
-_IST = ZoneInfo("Asia/Kolkata")
-# Staff may flip the late-booking switch only after this IST wall-clock time.
-_LATE_BOOKING_STAFF_CUTOFF = time(21, 15)
 from app.integrations.storage import create_upload_url, public_url
 from app.models.cake import Cake
 from app.models.combo_item import ComboItem
@@ -52,6 +48,10 @@ from app.services.catalog import combo_savings_paise
 from app.services.slots import full_window_within_working_hours
 
 _FAR_FUTURE = date(2099, 12, 31)
+
+_IST = ZoneInfo("Asia/Kolkata")
+# Staff may flip the late-booking switch only after this IST wall-clock time.
+_LATE_BOOKING_STAFF_CUTOFF = time(21, 15)
 
 
 def _apply(model: object, data: dict[str, object]) -> None:
