@@ -16,7 +16,13 @@ import { BookingCard } from './BookingCard';
 import { PaymentDialog } from './PaymentDialog';
 import { StatusBadge } from './StatusBadge';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useBookings, type BookingFilters, type BookingSearchField } from './booking-queries';
+import {
+  useBookings,
+  useLocationsLateBooking,
+  type BookingFilters,
+  type BookingSearchField,
+} from './booking-queries';
+import { LateBookingToggle } from './LateBookingToggle';
 import type { BookingListItem, BookingStatus } from './types';
 
 /** Full action set for a desktop table row: payment + accept/reject + WhatsApp. */
@@ -131,6 +137,9 @@ export function BookingListPage(): JSX.Element {
   };
 
   const { data, isLoading, isError } = useBookings(selectedLocationId, filters);
+  const { data: locations } = useLocationsLateBooking();
+  const selectedLocation =
+    locations?.find((l) => l.id === selectedLocationId) ?? null;
 
   // Any filter change resets to the first page.
   const resetOffset = (): void => setOffset(0);
@@ -144,12 +153,20 @@ export function BookingListPage(): JSX.Element {
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-xl font-semibold text-gray-900">Bookings</h1>
-        <Link
-          to="/bookings/new"
-          className="rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
-        >
-          New booking
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          {selectedLocationId !== null && selectedLocation !== null && (
+            <LateBookingToggle
+              locationId={selectedLocationId}
+              allowLateBooking={selectedLocation.allow_late_booking}
+            />
+          )}
+          <Link
+            to="/bookings/new"
+            className="rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
+          >
+            New booking
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">

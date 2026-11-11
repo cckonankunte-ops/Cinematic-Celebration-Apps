@@ -25,11 +25,14 @@ from app.schemas.booking import (
     BookingListPage,
     BookingRead,
     BookingUpdate,
+    CancelBookingRequest,
     PriceBreakdownRead,
 )
-from app.schemas.catalog import OpenAvailabilityRead
+from app.schemas.catalog import OpenAvailabilityRead, SlotAvailabilityRead
+from app.schemas.catalog_admin import LocationAdminRead
 from app.services import booking as booking_service
 from app.services import catalog as catalog_service
+from app.services import catalog_admin as catalog_admin_service
 from app.services import email as email_service
 from app.services import payments as payments_service
 from app.services.slots import actor_kind_from_role
@@ -40,6 +43,23 @@ class AdminOpenAvailabilityRequest(BaseModel):
     location_id: int
     booking_date: date
     duration_minutes: int
+    # When editing an existing booking, exclude its own window so a shrink/move
+    # doesn't block its new selection.
+    booking_id: int | None = None
+
+
+class AdminSlotAvailabilityRequest(BaseModel):
+    plan_id: int
+    location_id: int
+    booking_date: date
+    # When editing an existing booking, exclude its own window from availability.
+    booking_id: int | None = None
+
+
+class LateBookingToggleRequest(BaseModel):
+    """Staff/admin toggle for a branch's late-online-booking switch."""
+
+    allow: bool
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -217,6 +237,28 @@ def open_availability(
         body.booking_date,
         body.duration_minutes,
         actor=actor_kind_from_role(actor.role),
+        exclude_booking_id=body.booking_id,
+    )
+
+
+@router.post("/bookings/slot-availability", response_model=list[SlotAvailabilityRead])
+def slot_availability(
+    body: AdminSlotAvailabilityRequest,
+    db: Session = Depends(get_db),
+    actor: CurrentUser = Depends(require_role("admin", "staff")),
+) -> list[SlotAvailabilityRead]:
+    """SLOT-mode availability for the admin booking form.
+
+    Uses the actor's role for time-rule exemptions and can exclude the booking
+    being edited so its own slot isn't shown as taken on the same date.
+    """
+    return catalog_service.list_slots_with_availability(
+        db,
+        body.plan_id,
+        body.location_id,
+        body.booking_date,
+        actor=actor_kind_from_role(actor.role),
+        exclude_booking_id=body.booking_id,
     )
 
 
@@ -276,3 +318,41 @@ def reject_booking(
 ) -> BookingRead:
     booking = booking_service.reject_booking(db, booking_id, actor=actor)
     return to_booking_read(db, booking)
+
+
+@router.post("/bookings/{booking_id}/cancel", response_model=BookingRead)
+def cancel_booking(
+    booking_id: int,
+    body: CancelBookingRequest | None = None,
+    db: Session = Depends(get_db),
+    # Admin-only (NOT staff): cancelling an accepted booking is an admin action.
+    actor: CurrentUser = Depends(require_role("admin")),
+) -> BookingRead:
+    """Cancel a pending/accepted booking (admin only, any time).
+
+    Sets status to 'cancelled' (frees the slot) and appends the optional reason
+    to the booking message. Distinct from reject.
+    """
+    reason = body.reason if body is not None else None
+    booking = booking_service.cancel_booking(
+        db, booking_id, reason=reason, actor=actor
+    )
+    return to_booking_read(db, booking)
+
+
+@router.patch(
+    "/locations/{location_id}/late-booking", response_model=LocationAdminRead
+)
+def set_late_booking(
+    location_id: int,
+    body: LateBookingToggleRequest,
+    db: Session = Depends(get_db),
+    # Staff-accessible (admin + staff); the service enforces the 21:15 IST gate
+    # for staff and the per-location access check.
+    actor: CurrentUser = Depends(require_role("admin", "staff")),
+) -> LocationAdminRead:
+    """Enable/disable late online booking for a branch (staff after 9:15 PM IST)."""
+    location = catalog_admin_service.set_location_late_booking(
+        db, location_id, allow=body.allow, actor=actor
+    )
+    return catalog_admin_service.to_location_admin_read(location)

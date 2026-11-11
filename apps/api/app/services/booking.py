@@ -929,52 +929,98 @@ def update_booking(
     #   effective phone used for the coupon customer_key.
     effective_phone = data.phone if data.phone is not None else booking.phone
 
-    # Open-mode window edit: only an open-mode booking (slot_id null) may change
-    # its start/duration. For a slot-mode booking the window is fixed by its
-    # slot, so start_time/duration_minutes in the payload are rejected.
-    window_changed = data.start_time is not None or data.duration_minutes is not None
-    if window_changed:
-        if booking.slot_id is not None:
-            raise ValidationFailedError(
-                "A slot-mode booking's time is fixed by its slot and cannot be "
-                "edited directly."
-            )
-        new_start = data.start_time if data.start_time is not None else booking.start_time
-        new_duration = (
-            data.duration_minutes
-            if data.duration_minutes is not None
-            else booking.duration_minutes
-        )
+    # Date and/or window edit.
+    #   - Changing the booking_date REQUIRES the caller to re-select the window
+    #     for the new date (slot_id in slot mode, or start_time + duration in open
+    #     mode); the time is not carried over silently.
+    #   - For a slot-mode booking, the window comes from the (re-)selected slot; a
+    #     raw start/duration is rejected.
+    #   - For an open-mode booking, start_time/duration_minutes set the window.
+    # Availability (time rules + overlap, excluding this booking) is re-checked
+    # against the effective date; a conflict raises SlotUnavailableError (409).
+    date_changed = (
+        data.booking_date is not None and data.booking_date != booking.booking_date
+    )
+    window_changed = (
+        data.slot_id is not None
+        or data.start_time is not None
+        or data.duration_minutes is not None
+    )
+    if date_changed or window_changed:
         location = db.get(Location, booking.location_id)
         if location is None:
             raise ItemInvalidError("The booking's location is no longer valid.")
-        if new_duration is None or not _active_pricing_duration_exists(
-            db, booking.plan_id, new_duration, booking.booking_date
-        ):
-            raise ItemInvalidError("The selected duration is not offered for this plan.")
+        effective_date = (
+            data.booking_date if data.booking_date is not None else booking.booking_date
+        )
+        if effective_date < _today_ist():
+            raise BookingDateInPastError()
+
+        is_slot_mode = location.booking_mode != "open"
+        if is_slot_mode:
+            # On a date change the prior slot_id no longer implies availability;
+            # the caller must re-pick a slot for the new date.
+            new_slot_id = data.slot_id if data.slot_id is not None else booking.slot_id
+            if date_changed and data.slot_id is None:
+                raise ValidationFailedError(
+                    "Changing the date requires re-selecting a slot for the new date."
+                )
+            if new_slot_id is None:
+                raise ValidationFailedError("A slot must be selected for this branch.")
+            resolved = resolve_booking_window(
+                db,
+                location,
+                booking.plan_id,
+                slot_id=new_slot_id,
+                start_time=None,
+                duration_minutes=None,
+                booking_date=effective_date,
+            )
+        else:
+            new_start = (
+                data.start_time if data.start_time is not None else booking.start_time
+            )
+            new_duration = (
+                data.duration_minutes
+                if data.duration_minutes is not None
+                else booking.duration_minutes
+            )
+            resolved = resolve_booking_window(
+                db,
+                location,
+                booking.plan_id,
+                slot_id=None,
+                start_time=new_start,
+                duration_minutes=new_duration,
+                booking_date=effective_date,
+            )
+
         actor_kind = ActorKind.ADMIN if actor.role == "admin" else ActorKind.STAFF
         _enforce_booking_time(
             db,
             location=location,
-            booking_date=booking.booking_date,
-            start=new_start,
-            duration_minutes=new_duration,
+            booking_date=effective_date,
+            start=resolved.start_time,
+            duration_minutes=resolved.duration_minutes,
             actor=actor_kind,
         )
         _assert_no_overlap(
             db,
             location_id=booking.location_id,
             plan_id=booking.plan_id,
-            booking_date=booking.booking_date,
-            start=new_start,
-            duration_minutes=new_duration,
+            booking_date=effective_date,
+            start=resolved.start_time,
+            duration_minutes=resolved.duration_minutes,
             exclude_booking_id=booking.id,
         )
-        booking.start_time = new_start
-        booking.duration_minutes = new_duration
+        booking.booking_date = effective_date
+        booking.slot_id = resolved.slot_id
+        booking.start_time = resolved.start_time
+        booking.duration_minutes = resolved.duration_minutes
 
     reprice = (
         window_changed
+        or date_changed
         or data.people is not None
         or data.cake_id is not None
         or data.special_decor is not None
@@ -1316,6 +1362,43 @@ def reject_booking(db: Session, booking_id: int, *, actor: CurrentUser) -> Booki
     return booking
 
 
+def cancel_booking(
+    db: Session, booking_id: int, *, reason: str | None, actor: CurrentUser
+) -> Booking:
+    """Cancel a booking (admin-only), appending an optional reason to the message.
+
+    Distinct from reject: cancellation is an admin action available at any time
+    for a pending or accepted booking. It sets status to 'cancelled' (which, like
+    rejected/expired, frees the slot via the active-slot index) and appends the
+    reason — when provided — to the booking's ``message`` so the context is kept
+    on the record. Writes a 'cancelled' audit event.
+    """
+    booking = _load_booking_for_actor(db, booking_id, actor)
+    if booking.status not in ("pending", "accepted"):
+        raise ValidationFailedError(
+            "Only a pending or accepted booking can be cancelled."
+        )
+
+    cleaned_reason = (reason or "").strip()
+    if cleaned_reason:
+        prefix = f"{booking.message}\n" if booking.message else ""
+        booking.message = f"{prefix}Cancelled: {cleaned_reason}"
+
+    old_snapshot = {"status": booking.status}
+    booking.status = "cancelled"
+    write_booking_event(
+        db,
+        booking.id,
+        "cancelled",
+        actor_user_id=actor.id,
+        old_value=old_snapshot,
+        new_value={"status": "cancelled", "reason": cleaned_reason or None},
+    )
+    db.commit()
+    db.refresh(booking)
+    return booking
+
+
 def list_booking_items(db: Session, booking_id: int) -> list[BookingItem]:
     """Return the add-on line items for a booking, oldest first."""
     return list(
@@ -1399,7 +1482,9 @@ def list_bookings(
     if status is not None:
         conds.append(Booking.status == status)
     else:
-        conds.append(Booking.status != "rejected")
+        # Default list hides terminal non-active statuses; they remain reachable
+        # by explicitly filtering on the status.
+        conds.append(Booking.status.notin_(("rejected", "cancelled")))
 
     # Text search (ignored under the min length).
     term = (q or "").strip()

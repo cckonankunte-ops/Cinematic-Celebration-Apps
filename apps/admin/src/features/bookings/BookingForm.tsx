@@ -137,6 +137,8 @@ export function BookingForm({
     isOpenMode ? null : planId,
     locationId,
     bookingDate ?? null,
+    // In edit mode, exclude this booking's own window from availability.
+    isEdit ? bookingId : null,
   );
 
   // Open mode: a Duration selector (plan's priced durations) + a Start-time
@@ -151,6 +153,8 @@ export function BookingForm({
     locationId,
     bookingDate ?? null,
     isOpenMode ? normalizedDuration : null,
+    // In edit mode, exclude this booking's own window so a shrink/move frees it.
+    isEdit ? bookingId : null,
   );
   const cakes = useCakes(locationId);
   const decor = useSpecialDecor(locationId);
@@ -203,6 +207,25 @@ export function BookingForm({
       setValue('slot_id', undefined as any);
     }
   }, [planId, setValue]);
+
+  // Reset the chosen time when the booking date changes so a stale slot/start
+  // from the old date can't be submitted — the backend also requires re-picking
+  // a slot on a date change. Seeded with the initial date so the first async
+  // hydration (undefined -> initial date) does NOT clear the pre-filled window.
+  const prevDate = useRef<string | null>(initial?.booking_date ?? null);
+  useEffect(() => {
+    if (bookingDate === prevDate.current) {
+      return;
+    }
+    const hadDate = prevDate.current !== null;
+    prevDate.current = bookingDate ?? null;
+    if (hadDate) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RHF reset to empty
+      const clear = undefined as any;
+      setValue('slot_id', clear);
+      setValue('start_time', clear);
+    }
+  }, [bookingDate, setValue]);
 
   // --- Live preview summary (server-authoritative) -------------------------
   const preview = usePreviewBooking();

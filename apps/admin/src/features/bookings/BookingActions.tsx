@@ -14,7 +14,11 @@ import { ApiError } from '@/api/client';
 import { formatRupees } from '@/lib/money';
 import { buildWhatsappUrl, type BookingLike } from '@/lib/whatsapp';
 import { useAuth } from '@/features/auth/useAuth';
-import { useAcceptBooking, useRejectBooking } from './booking-queries';
+import {
+  useAcceptBooking,
+  useCancelBooking,
+  useRejectBooking,
+} from './booking-queries';
 import type { BookingStatus } from './types';
 
 interface BookingActionsProps {
@@ -36,13 +40,32 @@ export function BookingActions({
   const isAdmin = user?.role === 'admin';
   const accept = useAcceptBooking(bookingId);
   const reject = useRejectBooking(bookingId);
+  const cancel = useCancelBooking(bookingId);
 
-  const [confirming, setConfirming] = useState<'accept' | 'reject' | null>(null);
+  const [confirming, setConfirming] = useState<'accept' | 'reject' | 'cancel' | null>(
+    null,
+  );
   const [override, setOverride] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const advanceMet = amountPaidPaise >= advancePaise;
   const isPending = status === 'pending';
+  // Cancel is admin-only and available any time for a live (pending/accepted)
+  // booking. It sets the booking to 'cancelled' and frees the slot.
+  const canCancel = isAdmin && (status === 'pending' || status === 'accepted');
+
+  const onCancel = async (): Promise<void> => {
+    setError(null);
+    try {
+      const reason = cancelReason.trim();
+      await cancel.mutateAsync(reason ? { reason } : {});
+      setConfirming(null);
+      setCancelReason('');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to cancel booking.');
+    }
+  };
 
   const onAccept = async (): Promise<void> => {
     setError(null);
@@ -84,6 +107,15 @@ export function BookingActions({
               Reject
             </button>
           </>
+        )}
+        {canCancel && (
+          <button
+            type="button"
+            onClick={() => setConfirming('cancel')}
+            className="rounded bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
+          >
+            Cancel booking
+          </button>
         )}
         <a
           href={buildWhatsappUrl(whatsapp)}
@@ -154,6 +186,42 @@ export function BookingActions({
               className="rounded px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
             >
               Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirming === 'cancel' && (
+        <div className="space-y-2 rounded border border-gray-200 p-3">
+          <p className="text-sm text-gray-700">
+            Cancel this booking? This frees the slot. Add an optional reason
+            (saved to the booking message).
+          </p>
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Reason (optional)"
+            rows={2}
+            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={cancel.isPending}
+              className="rounded bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-60"
+            >
+              Confirm cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(null);
+                setCancelReason('');
+              }}
+              className="rounded px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Back
             </button>
           </div>
         </div>

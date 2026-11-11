@@ -7,7 +7,12 @@
  * API is up. These hand-written types mirror that generated schema until then.
  */
 
-export type BookingStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
+export type BookingStatus =
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'expired'
+  | 'cancelled';
 
 export type PaymentMethod = 'cash' | 'upi' | 'card' | 'other';
 

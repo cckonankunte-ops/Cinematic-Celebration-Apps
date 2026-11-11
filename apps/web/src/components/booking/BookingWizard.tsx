@@ -119,8 +119,6 @@ export default function BookingWizard() {
     ? draft.startTime !== null && draft.durationMinutes !== null
     : draft.slotId !== null;
 
-  const toggleId = (list: number[], id: number): number[] =>
-    list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
   // Build the preview request body from the current draft (priced inputs only,
   // never money). Returns null when the draft isn't ready to price.
@@ -463,7 +461,9 @@ export default function BookingWizard() {
             }
             onChangeDecor={(specialDecor) => patch({ specialDecor })}
             onToggleCombo={(id) =>
-              patch({ comboIds: toggleId(draft.comboIds, id) })
+              // Single combo only: selecting a combo replaces any previously
+              // chosen one; tapping the selected combo again clears it.
+              patch({ comboIds: draft.comboIds.includes(id) ? [] : [id] })
             }
             onLedNameChange={(ledName) => patch({ ledName })}
             onCouponChange={(couponCode) => patch({ couponCode })}

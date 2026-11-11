@@ -7,6 +7,7 @@ const STYLES: Record<BookingStatus, string> = {
   accepted: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
   expired: 'bg-gray-200 text-gray-600',
+  cancelled: 'bg-orange-100 text-orange-800',
 };
 
 export function StatusBadge({ status }: { status: BookingStatus }): JSX.Element {

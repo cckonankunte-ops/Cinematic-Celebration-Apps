@@ -287,20 +287,35 @@ def list_available_slots(
 
 
 def _active_occupied_windows(
-    db: Session, location_id: int, plan_id: int, on: date, buffer_minutes: int
+    db: Session,
+    location_id: int,
+    plan_id: int,
+    on: date,
+    buffer_minutes: int,
+    *,
+    exclude_booking_id: int | None = None,
 ) -> list[OccupiedWindow]:
-    """Occupied windows of active bookings for (location, plan, date)."""
+    """Occupied windows of active bookings for (location, plan, date).
+
+    ``exclude_booking_id`` omits one booking's own window so that, when
+    recomputing availability while editing that booking (e.g. shrinking its
+    duration), its current window does not block the new selection.
+    """
     from app.models.booking import Booking
 
+    conds = [
+        Booking.location_id == location_id,
+        Booking.plan_id == plan_id,
+        Booking.booking_date == on,
+        Booking.status.in_(("pending", "accepted")),
+        Booking.start_time.is_not(None),
+        Booking.duration_minutes.is_not(None),
+    ]
+    if exclude_booking_id is not None:
+        conds.append(Booking.id != exclude_booking_id)
+
     rows = db.execute(
-        select(Booking.start_time, Booking.duration_minutes).where(
-            Booking.location_id == location_id,
-            Booking.plan_id == plan_id,
-            Booking.booking_date == on,
-            Booking.status.in_(("pending", "accepted")),
-            Booking.start_time.is_not(None),
-            Booking.duration_minutes.is_not(None),
-        )
+        select(Booking.start_time, Booking.duration_minutes).where(*conds)
     ).all()
     return [
         occupied_window(on, start, duration, buffer_minutes)
@@ -316,6 +331,7 @@ def list_slots_with_availability(
     *,
     actor: ActorKind = ActorKind.PUBLIC,
     now: datetime | None = None,
+    exclude_booking_id: int | None = None,
 ) -> list[SlotAvailabilityRead]:
     """All active slots for a plan on a date, each annotated with availability.
 
@@ -337,7 +353,9 @@ def list_slots_with_availability(
         if location is not None
         else None
     )
-    held = _active_occupied_windows(db, location_id, plan_id, on, buffer)
+    held = _active_occupied_windows(
+        db, location_id, plan_id, on, buffer, exclude_booking_id=exclude_booking_id
+    )
 
     out: list[SlotAvailabilityRead] = []
     for s in list_active_slots(db, plan_id, on):
@@ -393,6 +411,7 @@ def generate_open_availability(
     *,
     actor: ActorKind = ActorKind.PUBLIC,
     now: datetime | None = None,
+    exclude_booking_id: int | None = None,
 ) -> list[OpenAvailabilityRead]:
     """Candidate :00/:30 start times for OPEN-mode booking, each flagged.
 
@@ -412,7 +431,9 @@ def generate_open_availability(
         last_online_booking_start=location.last_online_booking_start,
         allow_late_booking=location.allow_late_booking,
     )
-    held = _active_occupied_windows(db, location_id, plan_id, on, buffer)
+    held = _active_occupied_windows(
+        db, location_id, plan_id, on, buffer, exclude_booking_id=exclude_booking_id
+    )
     open_dt, close_dt = working_window(on, location.opens_at, location.closes_at)
 
     out: list[OpenAvailabilityRead] = []

@@ -11,7 +11,8 @@ Services own transactions and business rules; routers stay thin.
 from __future__ import annotations
 
 import secrets
-from datetime import date, time
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +22,11 @@ from app.core.errors import (
     OutsideWorkingHoursError,
     ValidationFailedError,
 )
-from app.core.security import hash_password
+from app.core.security import CurrentUser, assert_location_access, hash_password
+
+_IST = ZoneInfo("Asia/Kolkata")
+# Staff may flip the late-booking switch only after this IST wall-clock time.
+_LATE_BOOKING_STAFF_CUTOFF = time(21, 15)
 from app.integrations.storage import create_upload_url, public_url
 from app.models.cake import Cake
 from app.models.combo_item import ComboItem
@@ -69,6 +74,38 @@ def update_location_hours(
     if location is None:
         raise NotFoundError("Location not found.")
     _apply(location, data)
+    db.commit()
+    db.refresh(location)
+    return location
+
+
+def set_location_late_booking(
+    db: Session, location_id: int, *, allow: bool, actor: CurrentUser
+) -> Location:
+    """Toggle a branch's ``allow_late_booking`` (staff-accessible, time-gated).
+
+    Lets on-floor staff enable/disable late online booking when they log off for
+    the day. Guard rails:
+
+    - Location access is enforced (staff may only toggle their own branch);
+      admins may toggle any branch.
+    - Staff may only use this after ``LATE_BOOKING_STAFF_CUTOFF`` (21:15 IST),
+      the point by which the day's late-night availability is known. Admins are
+      exempt from the time gate.
+    """
+    location = db.get(Location, location_id)
+    if location is None:
+        raise NotFoundError("Location not found.")
+    assert_location_access(actor, location_id)
+
+    if actor.role != "admin":
+        now_ist = datetime.now(_IST).time()
+        if now_ist < _LATE_BOOKING_STAFF_CUTOFF:
+            raise ValidationFailedError(
+                "The late-booking switch is available to staff only after 9:15 PM."
+            )
+
+    location.allow_late_booking = allow
     db.commit()
     db.refresh(location)
     return location

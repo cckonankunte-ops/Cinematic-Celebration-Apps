@@ -245,6 +245,12 @@ class BookingUpdate(BaseModel):
     """
 
     people: int | None = Field(default=None, ge=1)
+    # Moving the booking to a different date. When set, the client MUST also send
+    # the re-selected window (slot_id for slot mode, or start_time +
+    # duration_minutes for open mode) for the new date; the service re-checks
+    # availability and rejects a conflict.
+    booking_date: date | None = None
+    slot_id: int | None = None
     start_time: time | None = None
     duration_minutes: int | None = Field(default=None, gt=0)
     occasion_id: int | None = None
@@ -379,3 +385,9 @@ class AcceptBookingRequest(BaseModel):
     """Body for the accept endpoint; admin-only advance override."""
 
     override_advance: bool = False
+
+
+class CancelBookingRequest(BaseModel):
+    """Body for the cancel endpoint; an optional reason appended to message."""
+
+    reason: str | None = None

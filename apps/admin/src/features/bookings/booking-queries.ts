@@ -214,6 +214,52 @@ export function useRejectBooking(
   });
 }
 
+/** Minimal location shape exposing the late-booking switch. */
+export interface LocationLateBooking {
+  id: number;
+  name: string;
+  allow_late_booking: boolean;
+}
+
+/** Public locations list (includes allow_late_booking) for the toggle state. */
+export function useLocationsLateBooking(): UseQueryResult<LocationLateBooking[]> {
+  return useQuery<LocationLateBooking[]>({
+    queryKey: ['locations'],
+    queryFn: () => api.get<LocationLateBooking[]>('/api/v1/public/locations'),
+  });
+}
+
+/** Toggle a branch's late online-booking switch (staff after 21:15 IST). */
+export function useSetLateBooking(
+  locationId: number,
+): UseMutationResult<LocationLateBooking, unknown, { allow: boolean }> {
+  const qc = useQueryClient();
+  return useMutation<LocationLateBooking, unknown, { allow: boolean }>({
+    mutationFn: (body) =>
+      api.patch<LocationLateBooking>(
+        `/api/v1/admin/locations/${locationId}/late-booking`,
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['locations'] });
+    },
+  });
+}
+
+export function useCancelBooking(
+  id: number,
+): UseMutationResult<BookingRead, unknown, { reason?: string }> {
+  const qc = useQueryClient();
+  return useMutation<BookingRead, unknown, { reason?: string }>({
+    mutationFn: (body) =>
+      api.post<BookingRead>(`/api/v1/admin/bookings/${id}/cancel`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['bookings'] });
+      void qc.invalidateQueries({ queryKey: ['booking', id] });
+    },
+  });
+}
+
 export function useBookingPayments(id: number | null): UseQueryResult<PaymentRead[]> {
   return useQuery<PaymentRead[]>({
     queryKey: ['booking', id, 'payments'],

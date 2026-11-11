@@ -78,14 +78,24 @@ export function useSlotAvailability(
   planId: number | null,
   locationId: number | null,
   bookingDate: string | null,
+  bookingId?: number | null,
 ): UseQueryResult<SlotAvailabilityOption[]> {
   return useQuery<SlotAvailabilityOption[]>({
-    queryKey: ['slot-availability', planId, locationId, bookingDate],
+    queryKey: ['slot-availability', planId, locationId, bookingDate, bookingId ?? null],
     queryFn: () =>
-      api.post<SlotAvailabilityOption[]>(
-        `/api/v1/public/plans/${planId}/available-slots`,
-        { location_id: locationId, booking_date: bookingDate },
-      ),
+      // When editing (bookingId set) use the admin endpoint so the booking's
+      // own window is excluded; otherwise the public availability endpoint.
+      bookingId != null
+        ? api.post<SlotAvailabilityOption[]>('/api/v1/admin/bookings/slot-availability', {
+            plan_id: planId,
+            location_id: locationId,
+            booking_date: bookingDate,
+            booking_id: bookingId,
+          })
+        : api.post<SlotAvailabilityOption[]>(
+            `/api/v1/public/plans/${planId}/available-slots`,
+            { location_id: locationId, booking_date: bookingDate },
+          ),
     enabled: planId !== null && locationId !== null && !!bookingDate,
   });
 }
@@ -183,18 +193,37 @@ export function useOpenAvailability(
   locationId: number | null,
   bookingDate: string | null,
   durationMinutes: number | null,
+  bookingId?: number | null,
 ): UseQueryResult<OpenStartOption[]> {
   return useQuery<OpenStartOption[]>({
-    queryKey: ['open-availability', planId, locationId, bookingDate, durationMinutes],
+    queryKey: [
+      'open-availability',
+      planId,
+      locationId,
+      bookingDate,
+      durationMinutes,
+      bookingId ?? null,
+    ],
     queryFn: () =>
-      api.post<OpenStartOption[]>(
-        `/api/v1/public/plans/${planId}/open-availability`,
-        {
-          location_id: locationId,
-          booking_date: bookingDate,
-          duration_minutes: durationMinutes,
-        },
-      ),
+      // When editing (bookingId set) use the admin endpoint so the booking's
+      // own window is excluded (e.g. shrinking 2h -> 1h frees its own slots);
+      // otherwise the public availability endpoint.
+      bookingId != null
+        ? api.post<OpenStartOption[]>('/api/v1/admin/bookings/open-availability', {
+            plan_id: planId,
+            location_id: locationId,
+            booking_date: bookingDate,
+            duration_minutes: durationMinutes,
+            booking_id: bookingId,
+          })
+        : api.post<OpenStartOption[]>(
+            `/api/v1/public/plans/${planId}/open-availability`,
+            {
+              location_id: locationId,
+              booking_date: bookingDate,
+              duration_minutes: durationMinutes,
+            },
+          ),
     enabled:
       planId !== null &&
       locationId !== null &&

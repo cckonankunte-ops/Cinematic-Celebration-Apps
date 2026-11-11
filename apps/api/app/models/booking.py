@@ -33,7 +33,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.models._mixins import TimestampMixin
 
-BOOKING_STATUS_VALUES = ("pending", "accepted", "rejected", "expired")
+BOOKING_STATUS_VALUES = ("pending", "accepted", "rejected", "expired", "cancelled")
 
 booking_status_enum = SAEnum(
     *BOOKING_STATUS_VALUES, name="booking_status", create_constraint=True
