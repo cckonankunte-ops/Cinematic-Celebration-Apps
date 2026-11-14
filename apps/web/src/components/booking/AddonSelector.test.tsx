@@ -118,4 +118,25 @@ describe('AddonSelector special-decor quantity field', () => {
       { id: decorItem.id, quantity: 1 },
     ]);
   });
+
+  it('keeps the committed quantity when the field is focused but not changed', () => {
+    const onChangeDecor = vi.fn();
+    render(
+      <AddonSelector
+        {...baseProps}
+        combos={[]}
+        specialDecor={[decorItem]}
+        decor={[{ id: decorItem.id, quantity: 6 }]}
+        onChangeDecor={onChangeDecor}
+      />,
+    );
+    const qty = screen.getByLabelText(`Quantity for ${decorItem.name}`);
+    expect((qty as HTMLInputElement).value).toBe('6');
+
+    // Focus and blur without editing: a no-op blur must not reset 6 back to 1.
+    fireEvent.focus(qty);
+    fireEvent.blur(qty);
+    expect(onChangeDecor).not.toHaveBeenCalled();
+    expect((qty as HTMLInputElement).value).toBe('6');
+  });
 });

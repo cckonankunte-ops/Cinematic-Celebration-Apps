@@ -97,21 +97,24 @@ export default function AddonSelector({
     }
   };
 
-  // On blur, resolve the field: a valid number sticks (and clears the draft);
-  // an empty or invalid value resets to 1 so a ticked decor always has qty ≥ 1.
+  // On blur, resolve the field. If there's no active draft (the user focused
+  // the field but didn't change it), keep the already-committed quantity — a
+  // no-op blur must never clobber a valid value like 6 back to 1. Only an
+  // actually-edited field that ends empty/invalid falls back to 1 so a ticked
+  // decor always keeps qty ≥ 1. Either way, drop the draft.
   const onQuantityBlur = (id: number) => {
     const raw = qtyDrafts[id];
-    const parsed = Number(raw);
-    const resolved =
-      raw !== undefined && raw !== '' && Number.isInteger(parsed) && parsed >= 1
-        ? parsed
-        : 1;
-    commitQuantity(id, resolved);
-    setQtyDrafts((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+    if (raw !== undefined) {
+      const parsed = Number(raw);
+      const resolved =
+        raw !== '' && Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
+      commitQuantity(id, resolved);
+      setQtyDrafts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
   };
 
   return (
