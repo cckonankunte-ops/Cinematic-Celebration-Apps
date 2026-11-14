@@ -141,30 +141,34 @@ image only contains `apps/api` (app + alembic) and does NOT include the
 migration also needs to reach Postgres, which is internal-only in compose — so
 we temporarily publish its port to localhost for the migration, then remove it.
 
-### 5a. Temporarily expose Postgres to localhost
+### 5a. Find the Postgres container's network IP
 
-Create a one-off compose override so Postgres is reachable on `127.0.0.1:5432`
-during the migration. This does NOT expose it to the internet (bound to
-localhost only).
+Postgres is internal-only (not published to the host). Rather than publish a
+port, we connect to the container's Docker-network IP directly via
+`NEW_DATABASE_URL` (which `config.py` honors as an override). No compose
+override, no cleanup needed.
 
 ```bash
-cd ~/Cinematic-Celebration-Apps/deploy
-cat > docker-compose.migrate.yml <<'YML'
-services:
-  postgres:
-    ports:
-      - "127.0.0.1:5432:5432"
-YML
-docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.migrate.yml up -d postgres
+PG_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deploy-postgres-1)
+echo "PG_IP=$PG_IP"   # e.g. 172.18.0.x
 ```
+
+If `PG_IP` is empty, the container name differs — list it with
+`docker ps --format '{{.Names}}'` and use the postgres one.
 
 ### 5b. Set up the migration venv on the host
 
 Needs Python 3.12 on the droplet (`python3 --version`). If missing:
 `sudo apt-get update && sudo apt-get install -y python3-venv`.
 
+> **Repo layout note:** on the droplet the repo root is
+> `~/Cinematic-Celebration-Apps` with `apps/`, `deploy/`, `scripts/` directly
+> under it (there is NO `New_Application/` subfolder — that only exists in the
+> local dev checkout). All migration commands run from the repo ROOT, and the
+> `.env` lives at the repo root too.
+
 ```bash
-cd ~/Cinematic-Celebration-Apps/New_Application
+cd ~/Cinematic-Celebration-Apps
 python3 -m venv .mig && . .mig/bin/activate
 pip install -r scripts/migrate_from_mariadb/requirements.txt
 ```
@@ -172,7 +176,8 @@ pip install -r scripts/migrate_from_mariadb/requirements.txt
 ### 5c. Parse the dump into JSON (no DB needed)
 
 ```bash
-cd ~/Cinematic-Celebration-Apps/New_Application
+cd ~/Cinematic-Celebration-Apps
+rm -rf ./_data            # start clean (removes any leftover JSON from a prior run)
 MIGRATION_DATA_DIR=./_data \
   python -m scripts.migrate_from_mariadb.dump_to_json \
     scripts/cine_celebration_data.sql ./_data
@@ -188,25 +193,25 @@ Pull the DB password from the root `.env` into a shell variable, then run load.
 (`NEW_DB_HOST=127.0.0.1` reaches the port we published in 5a.)
 
 ```bash
-cd ~/Cinematic-Celebration-Apps/New_Application
-export PGPW="$(grep -E '^POSTGRES_PASSWORD=' ../.env | cut -d= -f2-)"
+cd ~/Cinematic-Celebration-Apps
+export PGPW="$(grep -E '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)"
+echo "pw length: ${#PGPW}"   # must be non-zero
 
 MIGRATION_DATA_DIR=./_data \
-NEW_DB_HOST=127.0.0.1 NEW_DB_PORT=5432 \
-NEW_DB_USER=cinematic NEW_DB_NAME=cinematic NEW_DB_PASSWORD="$PGPW" \
+NEW_DATABASE_URL="postgresql://cinematic:${PGPW}@${PG_IP}:5432/cinematic" \
   python -m scripts.migrate_from_mariadb.load
 ```
 
 Expected: `loaded N rows into ...` for each table, a note of any skipped
-duplicate-active-slot bookings, and "reset identity sequences".
+duplicate-active-slot bookings (the Nov-7 trial skipped ids 2261, 2752, 3070 —
+similar skips are normal and fine), and "reset identity sequences".
 
 ### 5e. Validate
 
 ```bash
-cd ~/Cinematic-Celebration-Apps/New_Application
+cd ~/Cinematic-Celebration-Apps
 MIGRATION_DATA_DIR=./_data \
-NEW_DB_HOST=127.0.0.1 NEW_DB_PORT=5432 \
-NEW_DB_USER=cinematic NEW_DB_NAME=cinematic NEW_DB_PASSWORD="$PGPW" \
+NEW_DATABASE_URL="postgresql://cinematic:${PGPW}@${PG_IP}:5432/cinematic" \
   python -m scripts.migrate_from_mariadb.validate
 ```
 
@@ -215,17 +220,16 @@ If it prints `validate FAILED`, STOP and review the mismatches before going
 further (the DB is already loaded; you can re-wipe from step 4 and retry, or
 restore the step-3 backup).
 
-### 5f. Remove the temporary Postgres port exposure
-
-Security hygiene — put Postgres back to internal-only:
+### 5f. Clean up the migration venv
 
 ```bash
-cd ~/Cinematic-Celebration-Apps/deploy
+cd ~/Cinematic-Celebration-Apps
 deactivate 2>/dev/null || true
-rm -f docker-compose.migrate.yml
-docker compose --env-file ../.env up -d postgres   # recreates without the published port
-docker compose --env-file ../.env ps
+# optional: rm -rf .mig _data   (keep _data if you want the parsed JSON around)
 ```
+
+> Nothing to undo on Postgres — we never published a port; we connected over the
+> internal Docker network IP, so the container stays internal-only.
 
 > **Images note:** the dump contains **no image bytes** (the `image` columns are
 > empty and there are no base64 blobs). So the image-upload script
@@ -269,6 +273,36 @@ To list the migrated admin usernames first:
 cd ~/Cinematic-Celebration-Apps/deploy && docker compose --env-file ../.env exec -T postgres \
   psql -U cinematic -d cinematic \
   -c "SELECT u.username, r.name AS role FROM users u JOIN user_roles r ON r.id=u.role_id ORDER BY r.name, u.username;"
+```
+
+---
+
+## 6b. Collapse legacy roles (only if needed)
+
+The migrator maps legacy role names, but older legacy data can still leave
+extra `user_roles` rows (e.g. `super admin`, `manager`). Check first:
+
+```bash
+cd ~/Cinematic-Celebration-Apps/deploy && docker compose --env-file ../.env exec -T postgres \
+  psql -U cinematic -d cinematic -c "SELECT id, name FROM user_roles ORDER BY id;"
+```
+
+If you see only `admin` and `staff`, skip this. If you see legacy rows, repoint
+users off them then delete the empty rows (FK is `ON DELETE RESTRICT`, so order
+matters — adjust the IDs to match the output above):
+
+```bash
+cd ~/Cinematic-Celebration-Apps/deploy && docker compose --env-file ../.env exec -T postgres \
+  psql -U cinematic -d cinematic <<'SQL'
+BEGIN;
+UPDATE users SET role_id = 2 WHERE role_id = 1;  -- super admin -> admin
+UPDATE users SET role_id = 4 WHERE role_id = 3;  -- manager -> staff
+DELETE FROM user_roles WHERE id IN (1, 3);
+SELECT ur.id, ur.name, count(u.id) AS users
+FROM user_roles ur LEFT JOIN users u ON u.role_id = ur.id
+GROUP BY ur.id, ur.name ORDER BY ur.id;
+COMMIT;
+SQL
 ```
 
 ---
