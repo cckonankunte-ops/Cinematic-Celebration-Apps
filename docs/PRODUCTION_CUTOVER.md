@@ -189,22 +189,34 @@ cake, combos, special_decor, occasion, users, user_role, contact_form_leads).
 
 ### 5d. Load the JSON into Postgres
 
-Pull the DB password from the root `.env` into a shell variable, then run load.
-(`NEW_DB_HOST=127.0.0.1` reaches the port we published in 5a.)
+Set the two shell variables, then run load. We connect via the container's
+Docker-network IP (`$PG_IP` from 5a) using `NEW_DATABASE_URL`, which
+`config.py` honors as an override. Re-run the two `export`/`PG_IP` lines in any
+fresh shell (or after a `git pull`) — a lost `$PG_IP` causes a
+`connection refused` on `127.0.0.1`.
 
 ```bash
 cd ~/Cinematic-Celebration-Apps
 export PGPW="$(grep -E '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)"
-echo "pw length: ${#PGPW}"   # must be non-zero
+PG_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deploy-postgres-1)
+echo "pw=${#PGPW}  ip=$PG_IP"   # expect: pw=32  ip=172.18.0.x (both non-empty)
 
 MIGRATION_DATA_DIR=./_data \
 NEW_DATABASE_URL="postgresql://cinematic:${PGPW}@${PG_IP}:5432/cinematic" \
   python -m scripts.migrate_from_mariadb.load
 ```
 
-Expected: `loaded N rows into ...` for each table, a note of any skipped
-duplicate-active-slot bookings (the Nov-7 trial skipped ids 2261, 2752, 3070 —
-similar skips are normal and fine), and "reset identity sequences".
+> Do NOT use `NEW_DB_HOST=127.0.0.1` — Postgres is internal-only (not published
+> to the host), so that form fails with `connection refused`. Always use
+> `NEW_DATABASE_URL` with `$PG_IP`.
+
+Expected (real production run, Nov 14): loaded 3 locations, 2 user_roles
+(4 legacy roles collapsed to admin/staff), 8 users, 19 plans,
+31 plan_gallery_images, 96 slots, 21 occasions, 71 cakes,
+52 special_decor_items, 0 combo_items, 3159 bookings (5 skipped as duplicate
+active: ids 2261, 2752, 3070, 3106, 3138), 5768 booking_items, 3423 payments,
+3159 booking_events, then "reset identity sequences". Skipped duplicates are
+normal and fine.
 
 ### 5e. Validate
 
@@ -251,7 +263,7 @@ from app.core.security import hash_password
 from app.models.user import User
 from sqlalchemy import select
 
-username = "owner"           # <-- set to a real migrated admin username
+username = "sanjay_admin"           # <-- set to a real migrated admin username
 new_password = "Cinematic@2025"  # <-- choose a strong password
 
 with SessionLocal() as db:
@@ -446,13 +458,16 @@ weeks as rollback insurance.
 
 ## Appendix A — troubleshooting the migration
 
-- **`ModuleNotFoundError: scripts`** — you must run from the
-  `New_Application/` directory (so the `scripts` package resolves), with the
-  venv activated. Re-run `cd ~/Cinematic-Celebration-Apps/New_Application` and
-  `. .mig/bin/activate`.
-- **`connection refused` on load/validate** — the temporary Postgres port
-  (step 5a) isn't up. Re-run the 5a `up -d postgres` with both `-f` files and
-  confirm `docker compose ... ps` shows `127.0.0.1:5432->5432`.
+- **`ModuleNotFoundError: scripts`** — run from the repo ROOT
+  (`cd ~/Cinematic-Celebration-Apps`, NOT a `New_Application/` subfolder — that
+  doesn't exist on the droplet) with the venv active (`. .mig/bin/activate`).
+- **`connection refused` on load/validate** — `$PG_IP` is unset or you used
+  `NEW_DB_HOST=127.0.0.1` (Postgres is internal-only, not published). Re-run
+  `PG_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deploy-postgres-1)`
+  and connect via `NEW_DATABASE_URL="postgresql://cinematic:${PGPW}@${PG_IP}:5432/cinematic"`.
+- **`duplicate key ... user_roles_name_key (admin)`** — the schema wasn't empty,
+  OR you're on an old `load.py` without the legacy-role de-dupe. Confirm the DB
+  is empty (step 4), `git pull` the latest `load.py`, and retry.
 - **`password authentication failed`** — `$PGPW` didn't capture the password.
   Check `echo "$PGPW"` is non-empty and matches `POSTGRES_PASSWORD` in `.env`.
 - **`validate FAILED` with a count mismatch** — the DB is already loaded. Re-run
@@ -467,6 +482,39 @@ weeks as rollback insurance.
 ## Appendix B — quick rollback
 
 If the new live site misbehaves after DNS cutover and you need the OLD site back
-fast: in Hostinger, switch the nameservers back to Hostinger's defaults (from
-your 9a notes), or in Cloudflare point the apex/`www` records back at the old
-Hostinger server IP. Because you recorded everything in 9a, this is reversible.
+fast: in Hostinger, switch the nameservers back to Hostinger's defaults, or in
+Cloudflare point the apex/`www` records back at the old Hostinger server IP
+(below). Because everything is recorded here, this is reversible.
+
+### Recorded legacy Hostinger DNS (rollback source of truth)
+
+Captured from Hostinger hPanel → Domains → `cinematiccelebration.in` → DNS
+records, before the Cloudflare cutover. The OLD site runs on Hostinger at
+**IPv4 `82.29.167.116`** / **IPv6 `2a02:4780:12bd7::1`**.
+
+| Type  | Name | Content / Value          | TTL   | Priority |
+|-------|------|--------------------------|-------|----------|
+| A     | @    | 82.29.167.116            | 14400 | 0        |
+| AAAA  | @    | 2a02:4780:12bd7::1       | 14400 | 0        |
+| A     | *    | 82.29.167.116            | 14400 | 0        |
+| AAAA  | *    | 2a02:4780:12bd7::1       | 14400 | 0        |
+| CNAME | www  | cinematiccelebration.in  | 14400 | 0        |
+
+> ⚠️ **MX / TXT not yet confirmed.** The capture above shows only A/AAAA/CNAME.
+> Before switching nameservers, check Hostinger for **MX** (email routing) and
+> **TXT** (SPF/DKIM/verification) records and add them here AND into the
+> Cloudflare zone — otherwise domain email breaks on cutover. If there are none,
+> note "no MX/TXT present" here explicitly.
+>
+> _MX records:_ _TODO — fill in or mark "none"._
+> _TXT records:_ _TODO — fill in or mark "none"._
+
+**To roll back to the old site:** recreate the five rows above in whichever DNS
+is authoritative (Cloudflare if nameservers already moved; Hostinger if you
+revert nameservers). Within one TTL (14400s = 4h, or faster if you lowered TTLs
+first) the domain points back at Hostinger `82.29.167.116` and the old site
+serves again.
+
+> **Tip for a faster, safer cutover:** a day before, lower the TTL on the apex/
+> `www`/wildcard records from 14400 to e.g. 300 (5 min) at Hostinger. Then both
+> cutover and rollback propagate in minutes instead of up to 4 hours.
