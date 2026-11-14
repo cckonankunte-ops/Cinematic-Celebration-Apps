@@ -118,9 +118,23 @@ def build_records(config: MigrationConfig) -> dict[str, list[dict[str, Any]]]:
         for pay in T.build_payments(b):
             payments.append({"booking_id": booking["id"], **pay})
 
+    # Collapse legacy roles to UNIQUE names. The old schema has separate rows
+    # (Super Admin, Admin, Manager, Staff) that ROLE_MAP folds onto two names
+    # (admin, staff); inserting both would violate uq user_roles.name. Keep the
+    # first-seen id per final name; users are repointed by name in
+    # _resolve_role_ids, so dropped role ids don't orphan anyone.
+    unique_roles: list[dict[str, Any]] = []
+    seen_role_names: set[str] = set()
+    for r in roles_raw:
+        role = T.transform_user_role(r)
+        if role["name"] in seen_role_names:
+            continue
+        seen_role_names.add(role["name"])
+        unique_roles.append(role)
+
     return {
         "locations": [T.transform_location(r) for r in _read(data_dir, "location")],
-        "user_roles": [T.transform_user_role(r) for r in roles_raw],
+        "user_roles": unique_roles,
         "users": users,
         "plans": [T.transform_plan(r) for r in plans_raw],
         "plan_gallery_images": gallery,
