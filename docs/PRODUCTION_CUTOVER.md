@@ -9,6 +9,17 @@ serves the new app.
 > happens in a web dashboard (DigitalOcean / Cloudflare / Hostinger), the clicks
 > are spelled out.
 
+> ## ✅ CUTOVER COMPLETE — Nov 14, 2026
+> The new app is LIVE on the real domain, verified end-to-end (step 10):
+> - Customer site: `https://cinematiccelebration.in` (Cloudflare Pages `cineceleb-web`)
+> - Admin panel: `https://admin.cinematiccelebration.in` (Pages `cineceleb-admin`)
+> - API: `https://api.cinematiccelebration.in` (droplet `142.93.208.192`, Caddy TLS)
+> - Data: migrated from the Nov 14 legacy dump (3159 bookings, 5 duplicates skipped)
+> - Registrar GoDaddy; DNS on Cloudflare (`irma`/`patryk` nameservers); DNSSEC off
+> - Cookies `SameSite=lax; Secure` → iPhone Safari admin login works
+>
+> See "Post-cutover loose ends" at the end for remaining follow-ups.
+
 ---
 
 ## 0. The map — who hosts what (read this first)
@@ -366,6 +377,24 @@ customers, so there's no time pressure.
 - The 5 legacy DNS records are recorded in **Appendix B**.
 - **No MX/TXT records exist** (no email configured) — nothing email-related can
   break on the move.
+- **Registrar = GoDaddy (NOT Hostinger).** On Hostinger the domain appears under
+  "External domains" (DNS-only), confirming it is registered elsewhere.
+  Cloudflare detected the registrar as **GoDaddy**; current nameservers are
+  `ns1.dns-parking.com` / `ns2.dns-parking.com`. **Nameservers must be changed in
+  the GoDaddy account**, not Hostinger.
+- **Cloudflare nameservers assigned:** `irma.ns.cloudflare.com` and
+  `patryk.ns.cloudflare.com`.
+- **DNSSEC: OFF (confirmed Nov 14).** GoDaddy → DNS → DS Records tab is empty
+  (no DS records). Safe to switch nameservers — no signature mismatch risk.
+- **GoDaddy subdomain forwards (`google`, `instagram`): NOT USED — dropped
+  intentionally.** They were 301 forwards served by GoDaddy/dns-parking DNS and
+  stop after the nameserver move. Owner confirmed they are not needed, so they
+  are deliberately NOT recreated in Cloudflare.
+- **Nameserver switch: DONE (Nov 14).** GoDaddy nameservers changed from
+  `ns1/ns2.dns-parking.com` to `irma.ns.cloudflare.com` /
+  `patryk.ns.cloudflare.com`. Cloudflare zone is in "Waiting for registrar to
+  propagate" state — becomes **Active** once propagation finishes (1–2h typical,
+  up to 24h). Do NOT attach Pages custom domains (9e) until the zone is Active.
 
 ### 9a. (Day before) Lower TTLs for a fast, reversible cutover
 
@@ -398,11 +427,24 @@ In Cloudflare **DNS → Records**, add:
 > that HTTP-01 challenge until configured. Leave the apex and `admin` records
 > alone — the Pages custom-domain step (9e) creates them.
 
-### 9d. Switch nameservers at Hostinger (the actual "move")
+### 9d. Switch nameservers at GoDaddy (the actual "move")
 
-In Hostinger: **hPanel → Domains → `cinematiccelebration.in` → Nameservers →
-Change / Use custom nameservers.** Replace Hostinger's nameservers with the two
-from 9b. Save.
+> The domain is registered at **GoDaddy**, so the nameserver change happens
+> there — NOT Hostinger. Hostinger only hosts the old site and manages records
+> as an "external domain"; it cannot change the authoritative nameservers.
+
+In GoDaddy: **Sign in → My Products → Domains → `cinematiccelebration.in` →
+Manage DNS / Nameservers → Change Nameservers → "I'll use my own nameservers
+(Custom)".** Replace `ns1.dns-parking.com` / `ns2.dns-parking.com` with:
+
+- `irma.ns.cloudflare.com`
+- `patryk.ns.cloudflare.com`
+
+Save.
+
+> ⚠️ **Check DNSSEC first.** In GoDaddy, under the domain's settings, confirm
+> **DNSSEC is OFF** before saving the nameserver change. If DNSSEC is on,
+> switching nameservers breaks the domain (signature mismatch) until disabled.
 
 **Then WAIT for Cloudflare to mark the zone "Active"** (Cloudflare emails you;
 the Overview page shows the status). Do NOT proceed to 9e until it's Active —
@@ -472,11 +514,40 @@ In UptimeRobot, change the monitored URL from the `sslip.io` staging URL to
 - [ ] `https://admin.cinematiccelebration.in` serves the admin panel; login works.
 - [ ] `https://api.cinematiccelebration.in/healthz` → `{"status":"ok"}`.
 - [ ] A real booking request on the live domain holds a slot and returns a token.
-- [ ] Email to the domain still works (MX records carried over).
+- [x] Email: N/A this phase (no email configured).
 - [ ] Nightly backup cron is installed and the next run lands in R2.
 
-Keep the step-3 DB backup and the recorded Hostinger DNS values for at least two
-weeks as rollback insurance.
+Keep the step-3 DB backup and the recorded legacy DNS values (Appendix B) for at
+least two weeks as rollback insurance.
+
+> **Status Nov 14:** steps verified working end-to-end. Customer site, admin
+> login (incl. iPhone Safari), API, and migrated data all confirmed.
+
+---
+
+## Post-cutover loose ends (follow-ups)
+
+Not blocking — the app is live — but close these out:
+
+1. **Catalog images** — re-upload plan gallery / cake / decor / combo images via
+   the admin panel (step 7). The dump carried no image bytes.
+2. **Nightly backups** — confirm the `pg_dump → R2` cron is installed on the
+   droplet and the next run lands in the private R2 bucket; do one restore drill.
+3. **UptimeRobot** — confirm the monitor now points at
+   `https://api.cinematiccelebration.in/healthz` (not the old `sslip.io`).
+4. **Remove migration temp files** — on the droplet: `rm -rf ~/Cinematic-Celebration-Apps/.mig`
+   (and `_data` if you don't want the parsed JSON kept). Also remove the stray
+   `neon_pre_0002_backup.dump` from the repo root if it's not needed.
+5. **Duplicate bookings** — ids 2261, 2752, 3070, 3106, 3138 were skipped as
+   duplicate active slots; review/clean them in the old data if those bookings
+   matter (otherwise leave them dropped).
+6. **Rotate secrets** — the staging DB password / JWT secret were handled in
+   plaintext during setup; rotate them now that it's production (OPS_RUNBOOK
+   note).
+7. **Commit the docs** — `PRODUCTION_CUTOVER.md` (this file) and the `load.py`
+   legacy-role fix should be committed to `main` so the repo matches reality.
+8. **Keep the old Hostinger site read-only** for ~2 weeks as a fallback before
+   archiving.
 
 ---
 
