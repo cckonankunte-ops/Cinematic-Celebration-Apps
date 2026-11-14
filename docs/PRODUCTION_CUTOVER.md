@@ -359,57 +359,72 @@ customers, so there's no time pressure.
 > carefully.** Moving DNS is FREE. You keep the domain registered at Hostinger;
 > you only change *who answers DNS queries* to Cloudflare.
 
-### 9a. Record the current (Hostinger) DNS first — rollback insurance
+**Known facts for this cutover (confirmed Nov 14):**
+- Old site (Hostinger): IPv4 `82.29.167.116`, IPv6 `2a02:4780:12bd7::1`.
+- New API (droplet): `142.93.208.192`.
+- Pages projects: customer `cineceleb-web`, admin `cineceleb-admin`.
+- The 5 legacy DNS records are recorded in **Appendix B**.
+- **No MX/TXT records exist** (no email configured) — nothing email-related can
+  break on the move.
 
-In Hostinger: **hPanel → Domains → `cinematiccelebration.in` → DNS / Nameservers
-→ DNS records.** Take a screenshot / copy EVERY record (A, CNAME, MX, TXT). You
-will recreate these in Cloudflare so nothing (email, old site) breaks.
+### 9a. (Day before) Lower TTLs for a fast, reversible cutover
 
-Especially note:
-- The **MX** records (email) — missing these breaks email to the domain.
-- Any **TXT** records (SPF/DKIM/domain verification).
-- The current **A/CNAME** for the apex and `www` (the old live site).
+In Hostinger DNS, edit the apex (`@`), `www`, and wildcard (`*`) records and set
+TTL from `14400` to `300` (5 min). Save. This makes both the cutover AND any
+rollback propagate in ~5 minutes instead of up to 4 hours. Do this a few hours
+(ideally a day) ahead so the old 14400 TTL has expired everywhere first.
+
+> The legacy records to preserve for rollback are already captured in
+> **Appendix B** — no need to re-record them here.
 
 ### 9b. Add the domain as a zone in Cloudflare
 
-In Cloudflare: **Add a site / Add a domain → enter `cinematiccelebration.in`**
-→ choose the **Free** plan. Cloudflare scans and imports existing records.
-**Verify** the imported list matches what you saved in 9a — add any missing MX /
-TXT records manually so email and verification keep working.
+In Cloudflare: **Add a site / Add a domain → `cinematiccelebration.in`** →
+**Free** plan. Cloudflare scans and imports the existing records. **Verify** the
+imported list matches Appendix B (the 5 A/AAAA/CNAME rows). There are no MX/TXT
+to add. Cloudflare then shows **two nameservers** (e.g. `xxx.ns.cloudflare.com`,
+`yyy.ns.cloudflare.com`) — note them.
 
-Cloudflare then shows **two nameservers**, e.g.
-`xxx.ns.cloudflare.com` and `yyy.ns.cloudflare.com`. Keep this page open.
-
-### 9c. Add the NEW app's records in Cloudflare (before switching nameservers)
+### 9c. Add the NEW API record in Cloudflare (before switching nameservers)
 
 In Cloudflare **DNS → Records**, add:
 
-| Type | Name | Target | Proxy |
-|---|---|---|---|
-| A | `api` | `142.93.208.192` | DNS only (grey cloud) first; can proxy later |
+| Type | Name  | Target           | Proxy                                   |
+|------|-------|------------------|-----------------------------------------|
+| A    | `api` | `142.93.208.192` | **DNS only (grey cloud)** — see note    |
 
-> Leave the apex and `admin` for the Pages custom-domain step (9e), which adds
-> their records for you.
+> Keep `api` on **DNS only** (grey cloud). Caddy on the droplet issues the TLS
+> cert via Let's Encrypt; a Cloudflare proxy (orange cloud) can interfere with
+> that HTTP-01 challenge until configured. Leave the apex and `admin` records
+> alone — the Pages custom-domain step (9e) creates them.
 
 ### 9d. Switch nameservers at Hostinger (the actual "move")
 
 In Hostinger: **hPanel → Domains → `cinematiccelebration.in` → Nameservers →
 Change / Use custom nameservers.** Replace Hostinger's nameservers with the two
-Cloudflare gave you in 9b. Save.
+from 9b. Save.
 
-- Propagation takes anywhere from minutes to a few hours.
-- Until it finishes, DNS may resolve via either provider — which is why 9b/9c
-  recreated all records in Cloudflare first, so nothing goes dark.
+**Then WAIT for Cloudflare to mark the zone "Active"** (Cloudflare emails you;
+the Overview page shows the status). Do NOT proceed to 9e until it's Active —
+minutes to a few hours. Because the zone already mirrors the old records (9b),
+the domain keeps resolving to the old site throughout, so nothing goes dark.
+
+Quick check that nameservers moved:
+```bash
+dig +short NS cinematiccelebration.in   # should list the Cloudflare nameservers
+```
 
 ### 9e. Attach the real domains to the Cloudflare Pages sites
 
-In Cloudflare **Workers & Pages**:
+Only after the zone is **Active**. In Cloudflare **Workers & Pages**:
 
-- Open **cineceleb-web** → **Custom domains** → add `cinematiccelebration.in`
-  and `www.cinematiccelebration.in`. Cloudflare creates the needed DNS records
-  automatically.
-- Open **cineceleb-admin** → **Custom domains** → add
-  `admin.cinematiccelebration.in`.
+- **cineceleb-web** → **Custom domains** → add `cinematiccelebration.in` AND
+  `www.cinematiccelebration.in`. Cloudflare creates/overrides the apex + www
+  records automatically — **this is the moment the customer site flips to the
+  new app.**
+- **cineceleb-admin** → **Custom domains** → add `admin.cinematiccelebration.in`.
+
+Wait for each custom domain to show **Active** (cert issued) before testing.
 
 ### 9f. Point the frontends and API at the production hostnames
 
@@ -428,12 +443,21 @@ Apply it and let Caddy issue the real certificate:
 ```bash
 cd ~/Cinematic-Celebration-Apps/deploy
 docker compose --env-file ../.env up -d
+# Caddy needs the `api` A record (9c) to resolve publicly to get a Let's Encrypt
+# cert, so run this only AFTER the Cloudflare zone is Active (9d).
+sleep 20
 curl -s https://api.cinematiccelebration.in/healthz   # expect {"status":"ok"} over real HTTPS
 ```
 
-Rebuild the Pages sites so they call the production API (set the build-time API
-URL to `https://api.cinematiccelebration.in` in each Pages project's settings,
-then trigger a redeploy / push a commit).
+> If the curl fails with a TLS/cert error on the first try, give Caddy a minute
+> (cert issuance via the ACME HTTP-01 challenge needs the `api` record live and
+> port 80 reachable) and retry. Check progress with
+> `docker compose --env-file ../.env logs --tail=50 caddy`.
+
+Rebuild the Pages sites so they call the production API: in each Pages project's
+**Settings → Environment variables / build config**, set the build-time API base
+URL to `https://api.cinematiccelebration.in`, then trigger a redeploy (or push a
+commit). Both `cineceleb-web` and `cineceleb-admin` need this.
 
 ### 9g. Move the uptime monitor
 
@@ -500,14 +524,18 @@ records, before the Cloudflare cutover. The OLD site runs on Hostinger at
 | AAAA  | *    | 2a02:4780:12bd7::1       | 14400 | 0        |
 | CNAME | www  | cinematiccelebration.in  | 14400 | 0        |
 
-> ⚠️ **MX / TXT not yet confirmed.** The capture above shows only A/AAAA/CNAME.
-> Before switching nameservers, check Hostinger for **MX** (email routing) and
-> **TXT** (SPF/DKIM/verification) records and add them here AND into the
-> Cloudflare zone — otherwise domain email breaks on cutover. If there are none,
-> note "no MX/TXT present" here explicitly.
+> **MX / TXT: NONE (confirmed Nov 14).** The domain currently has no email
+> configured — no MX and no TXT records exist on Hostinger. So the nameserver
+> move to Cloudflare cannot break domain email (there is none to break), and no
+> MX/TXT need to be copied into the Cloudflare zone.
 >
-> _MX records:_ _TODO — fill in or mark "none"._
-> _TXT records:_ _TODO — fill in or mark "none"._
+> _MX records:_ none.
+> _TXT records:_ none.
+>
+> **Future email note:** when transactional/business email is set up later, add
+> the provider's MX + SPF/DKIM TXT records in the **Cloudflare** zone (DNS is on
+> Cloudflare after cutover, not Hostinger). The app's SMTP settings live in the
+> droplet `.env` (`SMTP_*`, `BUSINESS_EMAIL`), currently blank = email disabled.
 
 **To roll back to the old site:** recreate the five rows above in whichever DNS
 is authoritative (Cloudflare if nameservers already moved; Hostinger if you
