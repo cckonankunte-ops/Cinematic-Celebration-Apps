@@ -43,7 +43,12 @@ In scope:
 - Kids/adults guest split with a per-plan kids percentage, priced server-side.
 - Special-decor category field + admin editing + category-grouped Addons display.
 - Admin-configurable disallowed booking time ranges per branch.
-- Minimal home-page showcase of active coupon offers (safe public fields).
+- Home-page showcase of admin-curated PUBLIC coupon offers (code, name,
+  description, validity) with a per-coupon public/private flag.
+- Admin-configurable, threshold-based advance rules per branch (final total →
+  advance), falling back to the plan's minimum advance when no rule matches; the
+  resolved advance flows through preview/create and is the seam for the future
+  payment gateway.
 - Guest count (adults + kids) shown in the summary/review.
 
 Out of scope (explicitly deferred):
@@ -98,7 +103,9 @@ the WhatsApp button, so that I can reach the venue quickly.
    button, fixed in the viewport.
 2. WHEN the customer taps the floating Call button THEN the system SHALL present
    the branch list (same pattern as the WhatsApp button) and, on selecting a
-   branch, SHALL initiate a call to that branch's stored phone number.
+   branch, SHALL initiate a call to that branch's stored phone number (from the
+   locations table). There is no separate default-number config — the number
+   always comes from a branch row.
 3. WHEN a branch has no phone number THEN that branch SHALL NOT offer a call
    action.
 
@@ -163,20 +170,26 @@ discount codes, so that I know I can save and how.
 #### Acceptance Criteria
 
 1. WHEN the home page loads THEN the system SHALL display the currently active,
-   customer-visible offers (e.g. coupon code + short description) fetched at
-   runtime from a public endpoint.
-2. WHERE an offer is a coupon THEN the showcase SHALL show only safe, public
-   fields (code, human description, and validity), never internal usage limits or
-   per-customer data.
-3. WHEN there are no active offers THEN the system SHALL omit the showcase without
-   layout breakage.
-4. WHEN an offer is shown THEN any monetary value SHALL be formatted for display
+   PUBLIC coupon offers (coupon code + admin-written name + description +
+   validity) fetched at runtime from a public endpoint.
+2. WHERE a coupon exists THEN the system SHALL store an admin-written `name` and
+   `description` (plain text) and an `is_public` flag; the admin SHALL set all
+   three from the coupon admin page.
+3. WHEN the showcase renders a coupon THEN it SHALL show only safe, public fields
+   (code, name, description, validity), never internal usage limits, caps, value,
+   percentage base, or per-customer data.
+4. WHEN there are no active PUBLIC coupons THEN the system SHALL omit the showcase
+   widget entirely (no empty widget, no layout breakage).
+5. WHEN an offer is shown THEN any monetary value SHALL be formatted for display
    only; the client SHALL NOT compute discounts (the server remains authoritative
    at booking time).
+6. WHERE a coupon's `is_public` is false THEN it SHALL NOT appear on the home page,
+   regardless of active/validity state.
 
 > Note: the richer scrolling headline/offers banner and its admin management are a
-> SEPARATE feature spec (`offers-headline-banner`). Requirement 11 is the minimal
-> home-page showcase of already-existing coupon offers, using safe public fields.
+> SEPARATE feature spec (`offers-headline-banner`). Requirement 11 here is the
+> home-page showcase of admin-curated PUBLIC coupon offers (name, description,
+> code, validity).
 
 ### Requirement 4 — Five-step booking wizard with skippable steps
 
@@ -230,7 +243,9 @@ venue.
 4. WHEN the server preview fails (e.g. invalid coupon) THEN the system SHALL show
    the error inline without blocking the customer from editing inputs.
 5. WHEN the summary shows Balance amount THEN Balance SHALL equal Total minus
-   Advance payable, and the system SHALL label it "payable at the venue".
+   Advance payable, and the system SHALL label it "payable at the venue". The
+   Advance payable SHALL be the server-resolved advance (Requirement 12), returned
+   by the pricing preview so it is correct on every step.
 6. WHERE any amount is displayed THEN it SHALL be formatted in rupees for display
    only, derived from paise returned by the server.
 7. WHEN the summary or Review is shown THEN it SHALL display the number of guests,
@@ -312,9 +327,9 @@ clear payment instructions, so that I can pay the advance to confirm.
    409 "Slot not available" message and SHALL prompt the customer to pick another
    slot/date.
 5. WHERE online payment is not yet integrated THEN the system SHALL NOT require
-   payment to submit, AND the minimum advance shown SHALL be read from the plan
-   (`advance_paise`); the design SHALL leave a clear seam so a later phase can make
-   advance payment mandatory without reworking this flow.
+   payment to submit, AND the advance shown SHALL be the server-resolved advance
+   (Requirement 12); the design SHALL leave a clear seam so a later phase can make
+   advance payment of exactly that amount mandatory without reworking this flow.
 
 ### Requirement 9 — Mobile-first, accessible, small bundle
 
@@ -332,6 +347,42 @@ and load fast, so that booking is effortless.
 3. WHEN interactive controls are rendered THEN they SHALL have accessible labels
    and visible focus states, and selected states SHALL be conveyed non-visually
    (e.g. `aria-pressed`).
+
+### Requirement 12 — Admin-configurable, threshold-based advance rules per branch
+
+**User Story:** As the owner, I want to set advance amounts by total value per
+branch (e.g. total ≥ ₹1000 → ₹500 advance; ≥ ₹2000 → ₹750; ≥ ₹2500 → ₹1000), so
+that the advance scales with the booking value and, later, is charged via the
+payment gateway.
+
+#### Acceptance Criteria
+
+1. WHERE a branch exists THEN the system SHALL let an admin configure zero or more
+   advance rules for that branch, each a pair (minimum final total, advance
+   amount), both in integer paise and non-negative.
+2. WHEN the admin saves a rule THEN the system SHALL validate non-negative values
+   and SHALL reject a second rule with the SAME minimum-total threshold for the
+   same branch (unique per branch) with a clear error.
+3. WHEN pricing a booking THEN the server SHALL compute the advance by selecting
+   exactly one rule: the one with the HIGHEST `min_total` that the booking's FINAL
+   total (after admin discount AND coupon) meets or exceeds; ties are impossible
+   because thresholds are unique per branch.
+4. WHEN no rule matches (the final total is below every threshold, or the branch
+   has no rules) THEN the system SHALL fall back to the plan's existing minimum
+   advance (`plans.advance_paise`).
+5. WHEN the advance is computed THEN the server SHALL return it in the pricing
+   breakdown for BOTH preview and create, and the customer summary SHALL display
+   that amount as "Advance payable" with Balance = Total − Advance payable.
+6. WHEN the final total changes (e.g. a coupon lowers it below a threshold) THEN
+   the matched rule SHALL be recomputed so the advance always reflects the current
+   final total.
+7. WHERE the payment gateway is added in a later phase THEN it SHALL charge exactly
+   this resolved advance; this spec SHALL leave that seam without implementing any
+   gateway.
+8. WHEN advance rules change THEN existing bookings SHALL NOT be altered (the
+   resolution is applied at preview/creation time only).
+9. WHEN an advance rule is created, listed, or deleted THEN the endpoint SHALL be
+   admin-only; staff SHALL be rejected with 403.
 
 ## Test Cases (mandatory — touches money & pricing)
 
@@ -376,9 +427,24 @@ are server-side unless noted.
 - T3: changing disallowed ranges does not alter existing bookings.
 
 ### Offers showcase (integration + component)
-- O1: the public offers endpoint returns only safe fields (code, description,
-  validity) for active, customer-visible coupons and excludes inactive ones.
-- O2: the home showcase omits cleanly when there are no active offers (component).
+- O1: the public offers endpoint returns only safe fields (code, name, description,
+  validity) for active AND public, in-validity coupons; it excludes private
+  coupons, inactive coupons, out-of-validity coupons, and never includes usage
+  limits, caps, value, or percentage-base fields.
+- O2: the home showcase omits cleanly when there are no public offers (component),
+  including when coupons exist but none are public.
+
+### Advance rules (unit + integration)
+- A1: `resolve_advance_paise` — highest matching threshold wins over a table of
+  totals/rule-sets; no match → plan-advance fallback; empty rule set → fallback
+  (unit, property-friendly).
+- A2: the resolved advance is identical in preview and create breakdowns for the
+  same draft (integration, real Postgres).
+- A3: admin create of a duplicate threshold for one branch → rejected; distinct
+  thresholds allowed; same threshold on a DIFFERENT branch allowed; negative values
+  → 422; non-admin → 403.
+- A4: advance resolves against the FINAL total — a coupon that drops the total
+  below a threshold lowers the matched advance accordingly.
 
 ### Guests in review (component)
 - G1: the summary/review shows adults and kids counts and a kids charge line only
@@ -410,9 +476,17 @@ are server-side unless noted.
 - The time-selection UX is unchanged from today: fixed-slot branches show
   predefined slots; open-mode branches pick duration then start window. This spec
   only re-skins/relocates that control into the new screen, not its logic.
-- `advance_paise` already exists on `plans`; this spec only ensures the admin form
-  exposes it and the summary reads it. Mandatory-advance enforcement is deferred to
-  the PhonePe spec.
-- No new runtime infrastructure. Changes are schema (two columns + migration),
-  pricing logic, admin form fields, public catalog fields, and the Astro booking
-  island(s).
+- `advance_paise` already exists on `plans` and stays as the per-plan minimum
+  advance; the CUSTOMER-FACING advance comes from the per-branch advance rules
+  (Requirement 12) and falls back to `plans.advance_paise` when no rule matches.
+  Mandatory-advance enforcement is deferred to the PhonePe spec, which will charge
+  the resolved advance.
+- Advance rules are per-branch, stored in a new `advance_rules` table; thresholds
+  are unique per branch so exactly one rule can win ("highest threshold the final
+  total meets").
+- Coupons gain admin-written `name` and `description` (plain text) and an
+  `is_public` flag; only public coupons show on the home page. Existing coupons
+  default to private so nothing is exposed on deploy until an admin opts in.
+- No new runtime infrastructure. Changes are schema (new columns + two new tables +
+  migrations 0017–0022), pricing logic (kids + advance resolution), admin form
+  fields, public catalog/offers fields, and the Astro booking island(s).

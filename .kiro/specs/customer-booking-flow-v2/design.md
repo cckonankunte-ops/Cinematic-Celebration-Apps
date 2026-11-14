@@ -17,11 +17,16 @@ sends only IDs, quantities, and guest counts. No online payment is added
 (Phase 1); the final step submits a `pending` booking request.
 
 The work spans four layers, in dependency order:
-1. **Schema**: `plans.kid_price_pct`, `special_decor_items.category` (+ migrations).
-2. **Pricing + validation**: kids charge in `pricing.py`; adults/kids in requests.
-3. **API schemas + catalog**: carry `kids` and decor `category`.
-4. **Frontends**: admin fields; Astro home widget, branch screen, 5-step wizard,
-   sticky summary, floating Call button.
+1. **Schema**: `plans.kid_price_pct`, `special_decor_items.category`,
+   `bookings.kids`, `location_disallowed_times`, `coupons.name/description/is_public`,
+   and `advance_rules` (+ migrations).
+2. **Pricing + validation**: kids charge in `pricing.py`; adults/kids in requests;
+   threshold-based advance resolution.
+3. **API schemas + catalog**: carry `kids`, decor `category`, the computed advance,
+   and public coupon offers.
+4. **Frontends**: admin fields (kids %, category, disallowed times, coupon
+   name/description/public, advance rules); Astro home widget, branch screen,
+   5-step wizard, sticky summary, floating Call button, offers showcase.
 
 ## Steering alignment
 
@@ -89,17 +94,25 @@ __table_args__ = (
 )
 ```
 
-### Migrations (Alembic, two revisions on top of 0014)
+### Migrations (Alembic, six revisions on top of 0016)
 
-- `0015_add_kid_price_pct_to_plans`: add column with `server_default='50'` and the
+> The live DB is at **0016** (`0015_add_cancelled_booking_status`,
+> `0016_default_allow_late_booking_true`). All new revisions chain off 0016.
+
+- `0017_add_kid_price_pct_to_plans`: add column with `server_default='50'` and the
   range CHECK. Downgrade drops both.
-- `0016_add_category_to_special_decor_items`: add column with
+- `0018_add_category_to_special_decor_items`: add column with
   `server_default='extra_decoration'` and the value CHECK. Downgrade drops both.
-
-- `0017_add_kids_to_bookings`: add `kids SMALLINT NOT NULL DEFAULT 0` with CHECK
+- `0019_add_kids_to_bookings`: add `kids SMALLINT NOT NULL DEFAULT 0` with CHECK
   `kids >= 0`. Downgrade drops both.
-- `0018_create_location_disallowed_times`: create the table above with its FK and
-  CHECK. Downgrade drops the table.
+- `0020_create_location_disallowed_times`: create the disallowed-times table with
+  its FK and CHECK. Downgrade drops the table.
+- `0021_add_name_description_public_to_coupons`: add `name TEXT NULL`,
+  `description TEXT NULL`, and `is_public BOOLEAN NOT NULL DEFAULT false`
+  (`server_default='false'`). Downgrade drops the three columns.
+- `0022_create_advance_rules`: create the `advance_rules` table (per-location
+  threshold → advance) with its FK, CHECKs, and the per-location-threshold unique
+  index. Downgrade drops the table.
 
 All are additive, backfill via `server_default`, and are safe on the populated
 staging/production DB. Keeping `server_default` on each column means inserts that
@@ -119,11 +132,52 @@ New table `location_disallowed_times` (one row per blocked range per branch):
 - CHECK `ck_location_disallowed_times_order`: `start_time < end_time`
 
 Model in `app/models/location_disallowed_time.py`. Migration
-`0018_create_location_disallowed_times`.
+`0020_create_location_disallowed_times`.
 
 > A separate table (not JSON on `locations`) keeps real FKs and lets staff manage
 > ranges individually, consistent with structure.md ("real foreign keys
 > everywhere").
+
+### 4. Coupon offer fields (`coupons.name/description/is_public`)
+
+To support an admin-written home-page offers showcase, `coupons` gains three
+columns (migration `0021_add_name_description_public_to_coupons`):
+
+- `name TEXT NULL` — short admin-written label (e.g. "Weekday Special").
+- `description TEXT NULL` — plain-text blurb shown to customers.
+- `is_public BOOLEAN NOT NULL DEFAULT false` (`server_default='false'`) — only
+  public coupons appear in the home showcase. Existing coupons default to private
+  (not shown) so nothing leaks on deploy; the admin opts each one in.
+
+Model (`app/models/coupon.py`) adds the three mapped columns. No new CHECK needed
+(free text + boolean). `name`/`description` are display-only; they never affect the
+server-authoritative discount math.
+
+### 5. Threshold-based advance rules (`advance_rules`)
+
+Advance payable is resolved from admin-configured, per-location rules instead of a
+flat per-plan value. New table `advance_rules` (migration `0022_create_advance_rules`):
+
+- `id` bigint PK
+- `location_id` FK → `locations.id`, `ON DELETE CASCADE`, indexed
+- `min_total_paise BIGINT NOT NULL` — the rule matches when the booking's
+  **final total** (after all discounts and coupons) is `>= min_total_paise`
+- `advance_paise BIGINT NOT NULL` — the advance to charge when this rule wins
+- `is_active BOOLEAN NOT NULL DEFAULT true`
+- CHECK `ck_advance_rules_min_total_nonneg`: `min_total_paise >= 0`
+- CHECK `ck_advance_rules_advance_nonneg`: `advance_paise >= 0`
+- unique `uq_advance_rules_location_threshold` on `(location_id, min_total_paise)`
+  so two rules can't share a threshold at one branch (keeps "one rule wins"
+  deterministic)
+
+Model in `app/models/advance_rule.py`. When no rule matches, the advance falls
+back to the **plan's `advance_paise`** (the per-plan minimum advance already
+stored on `plans`). The resolver takes that fallback as an explicit argument so
+`pricing.py` stays pure.
+
+> A table (not JSON) keeps real FKs, lets staff add/remove individual rules, and
+> keeps each threshold queryable. Per-location, consistent with all other
+> money-related config.
 
 ### Booking guest storage
 
@@ -182,6 +236,47 @@ Worked examples (kid_price_pct=50): extra ₹150 → 7500 paise → ₹75; extra
 > helper so there is exactly one rounding step for the kid amount. The existing
 > `_round_half_up` is reused for the percentage math; a thin `_round_to_whole_rupee`
 > wraps the final whole-rupee step.
+
+### Advance resolution (threshold rules, per-location)
+
+Advance payable is derived from the booking's **final total** (after admin
+discount AND coupon), not from the plan. A pure helper picks exactly one rule:
+
+```python
+def resolve_advance_paise(
+    rules: list[AdvanceRule], final_total_paise: int, *, fallback_paise: int
+) -> int:
+    """Highest threshold the final total meets wins. Rules are per-location and
+    active-only. When no rule's min_total_paise <= final_total_paise (or there are
+    no rules), return `fallback_paise` — the plan's `advance_paise`. Ties are
+    impossible: a per-location unique index on min_total_paise guarantees distinct
+    thresholds."""
+    matched = [r for r in rules if final_total_paise >= r.min_total_paise]
+    if not matched:
+        return fallback_paise
+    winner = max(matched, key=lambda r: r.min_total_paise)
+    return winner.advance_paise
+```
+
+- Pure function → unit-testable with no DB.
+- `compute_booking_price` is extended to call `resolve_advance_paise` after the
+  final total is known, passing the plan's `advance_paise` as the fallback, and
+  `PriceBreakdown` gains `advance_paise: int` so the same authoritative figure flows
+  through **preview and create** (this is the "advance in preview wiring"). The
+  summary's "Advance payable" and "Balance = Total − Advance" read this field; the
+  client computes nothing.
+- The rules list (active rules for the booking's location) and the plan's
+  `advance_paise` fallback are loaded by the service and passed into pricing,
+  keeping `pricing.py` pure (no DB access inside it).
+- **PhonePe seam:** when the gateway lands, it charges exactly this
+  `advance_paise`. No change to the resolution rule is needed — only the submit
+  handler swaps "Submit request" for "Pay ₹{advance} and book".
+
+> When a rule matches, the advance comes from the rule; when none matches it falls
+> back to the plan's `advance_paise`. So `plans.advance_paise` stays meaningful as
+> the baseline advance and is not removed; the rules only override it upward/by
+> total band when configured. When the
+> PhonePe spec makes advance mandatory, it enforces the resolved advance.
 
 ### `ValidatedRequest` + `compute_booking_price`
 
@@ -247,6 +342,9 @@ existing client/test working unchanged.
 
 - `PriceBreakdownRead` gains `kid_extra_guest_paise: int = 0` (additive, default 0)
   so the UI can render a kids line. `extra_guest_paise` stays the combined total.
+- `PriceBreakdownRead` gains `advance_paise: int` — the resolved advance from the
+  threshold rules (or the plan's `advance_paise` when no rule matches). Returned by
+  both preview and create so the summary's Advance/Balance are server-authoritative.
 
 ### Booking read
 
@@ -265,24 +363,44 @@ existing client/test working unchanged.
   "extra_decoration", "gifts", "special_service"]` (validated; unknown → 422).
 - Plan create/update schema gains `kid_price_pct: int = Field(ge=0, le=100)`.
 - Plan admin schema also surfaces `advance_paise` (min advance) for editing
-  (Requirement 6.6) — if it is not already editable, add it here.
+  (Requirement 6.6) — if it is not already editable, add it here. Note: the
+  customer-facing advance now comes from `advance_rules`; `plans.advance_paise`
+  remains a per-plan minimum reference.
+
+### Admin coupon + advance-rule + disallowed-time schemas
+
+- Coupon create/update schemas gain `name: str | None`, `description: str | None`,
+  `is_public: bool = False`. `CouponRead` exposes them to the admin UI.
+- `PublicOfferRead` (public) in `schemas/coupon.py`: `code`, `name`, `description`,
+  `effective_from`, `effective_to` only.
+- `AdvanceRuleCreate` / `AdvanceRuleRead` in `schemas/advance_rule.py`:
+  `min_total_paise: int = Field(ge=0)`, `advance_paise: int = Field(ge=0)`,
+  `is_active: bool = True`. Create rejects a duplicate threshold for the location
+  (unique index → 409) with a clear message.
+- `DisallowedTimeCreate` / `DisallowedTimeRead` in `schemas/location_admin.py`
+  (unchanged from before).
 
 ## Public offers showcase design
 
-A minimal, read-only showcase of already-existing coupon offers (the richer
-scrolling banner is the separate `offers-headline-banner` spec).
+A read-only, admin-curated showcase of coupon offers on the home page. Admins
+write the offer `name` + `description` (plain text) and flip `is_public` per
+coupon; only public coupons appear.
 
 - New public endpoint `GET /api/v1/public/offers` returning a list of safe fields
-  only: `code`, `description` (a human blurb; reuse an existing coupon description
-  field or a short derived label), and validity dates. It MUST NOT expose usage
-  limits, per-customer redemption data, caps, or percentage-base internals.
-- Service `coupon.py` gains `list_public_offers(db, *, on)` selecting active,
-  currently-valid, customer-visible coupons. "Customer-visible" is gated by an
-  existing active/validity flag; if a dedicated "showcase on home" flag is wanted,
-  it is added in the `offers-headline-banner` spec, not here.
-- Schema `PublicOfferRead` in `schemas/coupon.py`.
+  only: `code`, `name`, `description` (admin-written), and validity dates
+  (`effective_from`/`effective_to`). It MUST NOT expose usage limits, per-customer
+  redemption data, caps, `value`, or percentage-base internals.
+- Service `coupon.py` gains `list_public_offers(db, *, on)` selecting coupons that
+  are `is_active = true` AND `is_public = true` AND currently within their validity
+  window (`effective_from <= on <= effective_to`, treating NULLs as open-ended).
+- Schema `PublicOfferRead` in `schemas/coupon.py` (`code`, `name`, `description`,
+  `effective_from`, `effective_to`).
 - The server stays authoritative: the showcase is informational; the real discount
   is still validated and computed at booking time.
+- Admin coupon create/edit schemas gain `name`, `description`, and `is_public`;
+  the coupon admin UI exposes all three. `name`/`description` are plain text.
+- When the public list is empty, the home `OffersShowcase` island renders nothing
+  (no widget, no layout shift).
 
 ## Service + router wiring
 
@@ -290,8 +408,19 @@ scrolling banner is the separate `offers-headline-banner` spec).
   special-decor reads. No new endpoints; existing public catalog endpoints just
   return the extra fields.
 - `catalog_admin.py` validates and persists `category` and `kid_price_pct`.
-- `booking.py` preview + create pass `kids` through to validation/pricing.
-- No change to routing, auth, rate limits, or the double-booking guard.
+- `booking.py` preview + create pass `kids` through to validation/pricing, load the
+  location's active `advance_rules`, and pass them into `compute_booking_price` so
+  the resolved `advance_paise` is in every breakdown.
+- `coupon.py` gains `list_public_offers`; the admin coupon CRUD persists
+  `name`/`description`/`is_public`.
+- New admin CRUD for advance rules:
+  `GET/POST/DELETE /api/v1/admin/locations/{id}/advance-rules` (admin-only via the
+  router-level role dependency). Create validates non-negative values and returns
+  409 on a duplicate threshold for that location. A small `services/advance_rule.py`
+  (or a section of `services/catalog_admin.py`) owns the transaction.
+- New public endpoint `GET /api/v1/public/offers` (public allowlist, read-only).
+- New admin disallowed-times CRUD (as previously specified).
+- No change to auth model, rate limits, or the double-booking guard.
 
 ## Frontend design — Admin (`apps/admin`)
 
@@ -306,10 +435,18 @@ Feature folders already exist under `src/features/catalog/`.
 - **Disallowed times**: a small manager UI under the location/branch settings to
   list, add, and remove disallowed time ranges (start, end, optional max duration,
   note). Uses the new admin endpoints via TanStack Query mutations. Admin-only.
+- **Advance rules**: a per-branch manager UI under branch settings to list, add,
+  and remove advance rules (min total ₹ → advance ₹), showing them sorted by
+  threshold. Mirrors the API validation (non-negative; duplicate threshold → 409
+  surfaced inline). Admin-only. A helper line explains "highest matching threshold
+  wins; no match → the plan's minimum advance."
+- **Coupon offer fields**: the coupon create/edit form (feature `coupons/`) gains a
+  Name, a Description (plain text), and a Public toggle; the coupon list shows which
+  coupons are public.
 
 No new top-level routes beyond the branch-settings area; these extend existing
-catalog/branch forms. TanStack Query mutations reuse
-the existing catalog admin hooks.
+catalog/branch/coupon forms. TanStack Query mutations reuse the existing admin
+hooks.
 
 ## Frontend design — Customer site (`apps/web`)
 
@@ -349,8 +486,9 @@ then start window).
   today, a primary "Book Now", and a "Call now" button.
 - "Book Now": if no branch chosen, show an inline prompt and don't navigate; else
   navigate to `/book?location={slug}&date={date}`.
-- "Call now": `tel:` link to the selected branch's phone (or a default contact
-  number from a branch when none selected).
+- "Call now": `tel:` link to the selected branch's phone (from the locations
+  table). When no branch is selected, prompt the customer to pick a branch first;
+  the number always comes from a branch row (no separate default-number config).
 
 ### Branch booking screen (`BranchBookingScreen.tsx`)
 
@@ -394,9 +532,10 @@ Guest counts flow into both the preview request and the create request as `peopl
 ### Offers showcase (`OffersShowcase.tsx`)
 
 - Mounted in the home hero. Fetches `GET /public/offers` at runtime and renders
-  active offers as compact cards/chips (code + short description + validity). Omits
-  itself entirely when the list is empty (no layout shift). Money is display-only;
-  no client-side discount math.
+  public offers as compact cards/chips (coupon code + admin-written name +
+  description + validity). Omits itself entirely when the list is empty — including
+  when no coupons are public — so there is no empty widget and no layout shift. No
+  client-side discount math.
 
 ### Collapsible booking summary (`BookingSummary.tsx`)
 
@@ -409,8 +548,10 @@ Guest counts flow into both the preview request and the create request as `peopl
   Advance payable, and **Balance = Total − Advance payable** labeled "payable at the
   venue".
 - Shown on every step from Basic Details onward; sticky at the bottom within thumb
-  reach. Advance payable = plan `advance_paise` for the resolved duration (already
-  returned by the create path; for preview the UI reads the plan's advance).
+  reach. Advance payable = `breakdown.advance_paise`, resolved server-side from the
+  branch's threshold rules against the final total (falls back to the plan's
+  `advance_paise` when no rule matches). Both preview and create return this field,
+  so the summary is correct on every step with no client-side advance math.
 - Guest display (Requirement 5.7): the expanded summary and the Review step show
   "People (above 10 yrs): N" and "Kids (3–10 yrs): M", and a "Kids (M)" charge line
   when `kid_extra_guest_paise > 0` (from the breakdown field added above).
@@ -439,6 +580,9 @@ plan (`advance_paise`); making payment mandatory is a later-phase switch.
 ## Error handling
 
 - Invalid category / kid_price_pct on admin writes → 422 (Pydantic + DB CHECK).
+- Duplicate advance-rule threshold for a location → 409 (unique index), surfaced
+  with a clear "a rule for this amount already exists" message.
+- Negative advance-rule values → 422 (Pydantic + DB CHECK).
 - Guest total over `max_people_allowed` → 422 ValidationFailedError, no booking.
 - Slot conflict on submit → 409 SlotUnavailableError; UI prompts to pick another
   slot/date (existing behavior).
@@ -489,9 +633,24 @@ in `tests/unit`; integration tests in `tests/integration`.
 - T3 adding a range does not change existing bookings.
 
 ### Offers showcase (integration + component)
-- O1 `GET /public/offers` returns only safe fields for active offers; inactive
-  excluded; no usage-limit/redemption fields present in the response.
-- O2 `OffersShowcase` omits cleanly when empty (vitest).
+- O1 `GET /public/offers` returns only safe fields (`code`, `name`, `description`,
+  validity) for active+public, in-validity coupons; private coupons, inactive
+  coupons, and out-of-validity coupons are excluded; no usage-limit/redemption/
+  cap/value fields present in the response.
+- O2 `OffersShowcase` omits cleanly when the list is empty, including when no
+  coupons are public (vitest).
+
+### Advance rules (unit + integration)
+- A1 `resolve_advance_paise` pure helper: highest matching threshold wins across a
+  table of totals and rule sets; no match → the provided plan-advance fallback;
+  empty rules → fallback.
+- A2 the resolved advance appears identically in preview and create breakdowns for
+  the same draft (integration, real Postgres).
+- A3 admin create of a duplicate threshold for one location → 409; distinct
+  thresholds and cross-location same-threshold are allowed; negative values → 422;
+  non-admin → 403.
+- A4 advance is resolved against the FINAL total (after discount + coupon): a coupon
+  that lowers the total below a threshold lowers the matched advance accordingly.
 
 ### Guests in review (component)
 - G1 summary/review shows adults + kids and a kids charge line only when
@@ -510,7 +669,13 @@ in `tests/unit`; integration tests in `tests/integration`.
 - `kids` defaults to 0 everywhere, so existing clients, the admin panel, analytics,
   and the MariaDB migrator keep working with no change (migrated bookings = adults,
   kids 0).
-- `.env.example` unchanged (no new config). If a default contact number for the
-  "Call now" button (when no branch selected) is desired as config, add
-  `PUBLIC_DEFAULT_CALL_NUMBER` to web env + `.env.example`; otherwise derive from the
-  first active branch.
+- `.env.example` unchanged (no new config). The "Call now" number always comes from
+  the selected branch's `phone` in the locations table; when no branch is selected
+  the UI prompts the customer to pick one, so no default-number config is needed.
+- New schema: `advance_rules` and the three `coupons` columns are additive with
+  server defaults (`is_public` defaults false, so no coupon leaks to the home page
+  until an admin opts it in). Safe to `alembic upgrade head` on live data.
+- Advance source change: the customer-facing advance now derives from
+  `advance_rules`, falling back to the plan's `advance_paise` when no rule matches.
+  Existing bookings are unaffected; this only changes what the preview/create
+  breakdown reports going forward.
