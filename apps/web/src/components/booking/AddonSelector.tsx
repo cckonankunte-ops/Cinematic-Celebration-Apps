@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Cake, Combo, DecorSelection, SpecialDecor } from '../../lib/api';
 import { formatRupees } from '../../lib/formatters';
 
@@ -60,19 +61,57 @@ export default function AddonSelector({
   const findDecor = (id: number): DecorSelection | undefined =>
     decor.find((d) => d.id === id);
 
+  // Raw text per decor id while the quantity field is being edited. Keeping the
+  // field as a free string (not the coerced number) lets the user clear "1" and
+  // type a replacement on mobile, where the number stepper arrows aren't shown.
+  // The committed DecorSelection.quantity stays a valid number ≥ 1 at all times.
+  const [qtyDrafts, setQtyDrafts] = useState<Record<number, string>>({});
+
   const toggleDecor = (id: number) => {
     if (findDecor(id)) {
       onChangeDecor(decor.filter((d) => d.id !== id));
+      setQtyDrafts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     } else {
       onChangeDecor([...decor, { id, quantity: 1 }]);
     }
   };
 
-  const setDecorQuantity = (id: number, quantity: number) => {
-    const safe = Number.isFinite(quantity) && quantity >= 1 ? quantity : 1;
+  const commitQuantity = (id: number, quantity: number) => {
     onChangeDecor(
-      decor.map((d) => (d.id === id ? { ...d, quantity: safe } : d)),
+      decor.map((d) => (d.id === id ? { ...d, quantity } : d)),
     );
+  };
+
+  // While typing, hold the raw text (including empty). Digits that parse to a
+  // valid quantity are committed live so the price preview stays in sync; an
+  // empty/invalid value is allowed to persist in the field until blur.
+  const onQuantityInput = (id: number, raw: string) => {
+    setQtyDrafts((prev) => ({ ...prev, [id]: raw }));
+    const parsed = Number(raw);
+    if (raw !== '' && Number.isInteger(parsed) && parsed >= 1) {
+      commitQuantity(id, parsed);
+    }
+  };
+
+  // On blur, resolve the field: a valid number sticks (and clears the draft);
+  // an empty or invalid value resets to 1 so a ticked decor always has qty ≥ 1.
+  const onQuantityBlur = (id: number) => {
+    const raw = qtyDrafts[id];
+    const parsed = Number(raw);
+    const resolved =
+      raw !== undefined && raw !== '' && Number.isInteger(parsed) && parsed >= 1
+        ? parsed
+        : 1;
+    commitQuantity(id, resolved);
+    setQtyDrafts((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   return (
@@ -218,11 +257,13 @@ export default function AddonSelector({
                     <span aria-hidden="true">×</span>
                     <input
                       type="number"
+                      inputMode="numeric"
                       min={1}
-                      value={selection.quantity}
+                      value={qtyDrafts[item.id] ?? String(selection.quantity)}
                       onChange={(e) =>
-                        setDecorQuantity(item.id, Number(e.target.value))
+                        onQuantityInput(item.id, e.target.value)
                       }
+                      onBlur={() => onQuantityBlur(item.id)}
                       aria-label={`Quantity for ${item.name}`}
                       className="w-16 rounded border border-gray-300 px-2 py-1"
                     />

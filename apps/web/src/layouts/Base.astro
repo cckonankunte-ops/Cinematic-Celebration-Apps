@@ -110,7 +110,12 @@ const image = ogImage ?? new URL('/og-default.png', Astro.site).toString();
     <!-- Floating WhatsApp: tap to pick a branch, then open a WhatsApp chat to
          that branch's number. Branches + phones come from the public API at
          runtime (no secrets; same data the Contact page uses). -->
-    <div id="wa-float" class="fixed bottom-4 right-4 z-50">
+    <!-- On mobile the booking page shows a sticky bottom action bar (Back/Next/
+         Submit) anchored bottom-right; to avoid covering those buttons the FAB
+         sits bottom-LEFT and is lifted above the bar's height on small screens.
+         On sm+ (no overlapping action bar in that corner) it returns to the
+         familiar bottom-right. The panel opens aligned to the FAB's side. -->
+    <div id="wa-float" class="fixed bottom-20 left-4 z-50 sm:bottom-4 sm:left-auto sm:right-4">
       <div
         id="wa-panel"
         class="mb-2 hidden w-60 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
