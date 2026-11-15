@@ -192,16 +192,18 @@ def validate_booking_time(
 
     # 1. Future-start.
     #    - ADMIN: fully exempt (may act on any past time).
-    #    - STAFF: allowed while the slot is running and for a grace period after
-    #      its usable end, so staff can edit add-ons mid/just-after a party.
+    #    - STAFF: strictly future UNLESS a positive grace is given, in which case
+    #      they may act while the slot runs and until its usable end + grace, so
+    #      add-ons can be edited mid/just-after a party. grace=0 => strict.
     #    - PUBLIC: strictly future.
-    if actor is ActorKind.PUBLIC and start_dt <= current:
-        raise StartInPastError()
-    if actor is ActorKind.STAFF and start_dt <= current:
-        grace_end = usable_end(booking_date, start, duration_minutes) + timedelta(
-            minutes=staff_edit_grace_minutes
-        )
-        if current > grace_end:
+    if start_dt <= current and actor is not ActorKind.ADMIN:
+        allowed_by_grace = False
+        if actor is ActorKind.STAFF and staff_edit_grace_minutes > 0:
+            grace_end = usable_end(booking_date, start, duration_minutes) + timedelta(
+                minutes=staff_edit_grace_minutes
+            )
+            allowed_by_grace = current <= grace_end
+        if not allowed_by_grace:
             raise StartInPastError()
 
     # 2. Working-hours containment (all actors).

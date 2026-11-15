@@ -130,6 +130,75 @@ npm run gen:api
 
 ---
 
+## 5b. Verify (tests + build) — run before pushing
+
+Confirmed script names: admin `lint` = `eslint .`, `test` = `vitest run`,
+`build` = `tsc -b && vite build`; API uses `pytest` (real Postgres via
+testcontainers, so Docker must be running — `cc-pg` already is).
+
+### API (Python) — run all tests
+
+```bash
+cd apps/api
+source .venv/bin/activate
+pytest
+```
+
+To run only the files touched by recent changes:
+
+```bash
+cd apps/api
+source .venv/bin/activate
+pytest tests/unit/test_slots.py \
+       tests/integration/test_booking_review.py \
+       tests/integration/test_booking_validation.py \
+       tests/integration/test_booking_accept.py
+```
+
+What these cover:
+- `test_slots.py` — staff edit grace window (edit during/after a running slot).
+- `test_booking_review.py` — admin Review reinstates expired → pending (slot
+  re-check 409, non-expired rejected).
+- `test_booking_validation.py` — admin/staff may exceed `max_people_allowed`;
+  customer cap still enforced; `people >= 1` floor.
+
+### Admin panel (lint + unit tests + type-check/build)
+
+```bash
+cd apps/admin
+npm run lint
+npm run test
+npm run build
+```
+
+What this covers: the Review button, the plan Edit form + `useUpdatePlan`, the
+wider layout (`max-w-screen-2xl`), and the admin max-people booking (no client
+cap). `build` runs `tsc -b` so it catches TypeScript errors in the new form/hook.
+
+### Customer web (only if `apps/web` changed)
+
+The recent booking/catalog changes did NOT touch `apps/web`, so this is usually
+a no-op — run it only if you edited the customer site:
+
+```bash
+cd apps/web
+npm run test
+npm run build
+```
+
+### One-line "all green" gate before a push
+
+```bash
+( cd apps/api && source .venv/bin/activate && pytest ) && \
+( cd apps/admin && npm run lint && npm run test && npm run build )
+```
+
+If every command exits 0, the recent changes (staff edit grace, admin Review of
+expired bookings, wider admin layout, plan editing, admin max-people bypass) are
+verified; commit and push.
+
+---
+
 ## 6. Only if you recreated the DB: re-import the retrofitted data
 
 Skip this unless section 1's reset was needed. From the repo root, with the API
