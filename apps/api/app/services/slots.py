@@ -156,6 +156,13 @@ class LocationHours:
     allow_late_booking: bool
 
 
+# How long after a slot's usable end STAFF may still edit/act on a booking.
+# Lets on-floor staff update add-ons (party popper, food, etc.) during and just
+# after a running slot without re-opening the whole future-start rule. PUBLIC is
+# never granted this; ADMIN is fully exempt from future-start regardless.
+STAFF_EDIT_GRACE_MINUTES = 60
+
+
 def validate_booking_time(
     *,
     hours: LocationHours,
@@ -164,11 +171,14 @@ def validate_booking_time(
     duration_minutes: int,
     actor: ActorKind,
     now: datetime | None = None,
+    staff_edit_grace_minutes: int = 0,
 ) -> None:
     """Validate a prospective booking's time against all time rules.
 
     Rules run in order and raise the first failure:
-      1. future-start   — PUBLIC/STAFF only (ADMIN may book the past)
+      1. future-start   — PUBLIC only strictly; STAFF get a grace window (may act
+                          until the slot's usable end + ``staff_edit_grace_minutes``);
+                          ADMIN fully exempt (may book/edit the past)
       2. working-hours  — all actors (usable window within open/close)
       3. end-before-close — PUBLIC/STAFF (ADMIN may override)
       4. late-cutoff    — PUBLIC only, SAME-DAY only (STAFF/ADMIN exempt;
@@ -180,9 +190,19 @@ def validate_booking_time(
     current = now if now is not None else now_ist()
     start_dt = _anchor(booking_date, start)
 
-    # 1. Future-start (admins exempt).
-    if actor is not ActorKind.ADMIN and start_dt <= current:
+    # 1. Future-start.
+    #    - ADMIN: fully exempt (may act on any past time).
+    #    - STAFF: allowed while the slot is running and for a grace period after
+    #      its usable end, so staff can edit add-ons mid/just-after a party.
+    #    - PUBLIC: strictly future.
+    if actor is ActorKind.PUBLIC and start_dt <= current:
         raise StartInPastError()
+    if actor is ActorKind.STAFF and start_dt <= current:
+        grace_end = usable_end(booking_date, start, duration_minutes) + timedelta(
+            minutes=staff_edit_grace_minutes
+        )
+        if current > grace_end:
+            raise StartInPastError()
 
     # 2. Working-hours containment (all actors).
     if not window_fits_working_hours(

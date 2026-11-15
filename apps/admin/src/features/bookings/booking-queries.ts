@@ -260,6 +260,24 @@ export function useCancelBooking(
   });
 }
 
+/**
+ * Admin-only: reinstate an EXPIRED booking back to 'pending' so it can be
+ * edited and accepted through the normal flow. The server re-checks slot
+ * availability and returns 409 if the window is no longer free.
+ */
+export function useReviewBooking(
+  id: number,
+): UseMutationResult<BookingRead, unknown, void> {
+  const qc = useQueryClient();
+  return useMutation<BookingRead, unknown, void>({
+    mutationFn: () => api.post<BookingRead>(`/api/v1/admin/bookings/${id}/review`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['bookings'] });
+      void qc.invalidateQueries({ queryKey: ['booking', id] });
+    },
+  });
+}
+
 export function useBookingPayments(id: number | null): UseQueryResult<PaymentRead[]> {
   return useQuery<PaymentRead[]>({
     queryKey: ['booking', id, 'payments'],

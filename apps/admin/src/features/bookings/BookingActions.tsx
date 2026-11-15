@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
 import { formatRupees } from '@/lib/money';
@@ -18,6 +19,7 @@ import {
   useAcceptBooking,
   useCancelBooking,
   useRejectBooking,
+  useReviewBooking,
 } from './booking-queries';
 import type { BookingStatus } from './types';
 
@@ -37,10 +39,12 @@ export function BookingActions({
   whatsapp,
 }: BookingActionsProps): JSX.Element {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
   const accept = useAcceptBooking(bookingId);
   const reject = useRejectBooking(bookingId);
   const cancel = useCancelBooking(bookingId);
+  const review = useReviewBooking(bookingId);
 
   const [confirming, setConfirming] = useState<'accept' | 'reject' | 'cancel' | null>(
     null,
@@ -54,6 +58,25 @@ export function BookingActions({
   // Cancel is admin-only and available any time for a live (pending/accepted)
   // booking. It sets the booking to 'cancelled' and frees the slot.
   const canCancel = isAdmin && (status === 'pending' || status === 'accepted');
+  // Review is admin-only on an EXPIRED booking: it reinstates to 'pending' then
+  // drops the admin into the edit form to retain/reset the time and accept.
+  const canReview = isAdmin && status === 'expired';
+
+  const onReview = async (): Promise<void> => {
+    setError(null);
+    try {
+      await review.mutateAsync();
+      // Reinstated to pending -> open the edit form so the admin can confirm or
+      // change the time (slot re-checked on save) and then accept.
+      navigate(`/bookings/${bookingId}/edit`);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Failed to review booking. The slot may no longer be free.',
+      );
+    }
+  };
 
   const onCancel = async (): Promise<void> => {
     setError(null);
@@ -115,6 +138,16 @@ export function BookingActions({
             className="rounded bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
           >
             Cancel booking
+          </button>
+        )}
+        {canReview && (
+          <button
+            type="button"
+            onClick={onReview}
+            disabled={review.isPending}
+            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {review.isPending ? 'Reviewing…' : 'Review'}
           </button>
         )}
         <a

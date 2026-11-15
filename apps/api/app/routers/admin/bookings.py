@@ -320,6 +320,22 @@ def reject_booking(
     return to_booking_read(db, booking)
 
 
+@router.post("/bookings/{booking_id}/review", response_model=BookingRead)
+def review_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    # Admin-only: reinstating an expired booking is an admin recovery action.
+    actor: CurrentUser = Depends(require_role("admin")),
+) -> BookingRead:
+    """Reinstate an expired booking to 'pending' (admin only).
+
+    Re-checks slot availability; returns 409 if the window is no longer free.
+    Once pending, the booking flows through the normal edit + accept path.
+    """
+    booking = booking_service.review_booking(db, booking_id, actor=actor)
+    return to_booking_read(db, booking)
+
+
 @router.post("/bookings/{booking_id}/cancel", response_model=BookingRead)
 def cancel_booking(
     booking_id: int,

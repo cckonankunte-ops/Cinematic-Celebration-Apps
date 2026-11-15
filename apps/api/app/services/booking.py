@@ -71,6 +71,7 @@ from app.services.pricing import (
     compute_booking_price,
 )
 from app.services.slots import (
+    STAFF_EDIT_GRACE_MINUTES,
     ActorKind,
     LocationHours,
     is_valid_start_minute,
@@ -352,8 +353,14 @@ def _enforce_booking_time(
     start: time | None,
     duration_minutes: int | None,
     actor: ActorKind,
+    staff_edit_grace_minutes: int = 0,
 ) -> None:
-    """Run the time-rule pipeline for a booking (skips legacy slots w/o times)."""
+    """Run the time-rule pipeline for a booking (skips legacy slots w/o times).
+
+    ``staff_edit_grace_minutes`` (default 0) lets the EDIT path grant STAFF a
+    window to act on a booking during/just-after its slot; create/preview pass 0
+    so a brand-new booking can't be placed in a past slot by staff.
+    """
     if start is None or duration_minutes is None:
         return
     hours = LocationHours(
@@ -368,6 +375,7 @@ def _enforce_booking_time(
         start=start,
         duration_minutes=duration_minutes,
         actor=actor,
+        staff_edit_grace_minutes=staff_edit_grace_minutes,
     )
 
 
@@ -996,6 +1004,9 @@ def update_booking(
             )
 
         actor_kind = ActorKind.ADMIN if actor.role == "admin" else ActorKind.STAFF
+        # Edit path: give STAFF a grace window so they can update add-ons during
+        # and shortly after a running slot (e.g. party popper / food added at the
+        # venue). Admin is fully exempt; this only relaxes STAFF's future-start.
         _enforce_booking_time(
             db,
             location=location,
@@ -1003,6 +1014,7 @@ def update_booking(
             start=resolved.start_time,
             duration_minutes=resolved.duration_minutes,
             actor=actor_kind,
+            staff_edit_grace_minutes=STAFF_EDIT_GRACE_MINUTES,
         )
         _assert_no_overlap(
             db,
@@ -1356,6 +1368,49 @@ def reject_booking(db: Session, booking_id: int, *, actor: CurrentUser) -> Booki
         actor_user_id=actor.id,
         old_value=old_snapshot,
         new_value={"status": "rejected"},
+    )
+    db.commit()
+    db.refresh(booking)
+    return booking
+
+
+def review_booking(db: Session, booking_id: int, *, actor: CurrentUser) -> Booking:
+    """Reinstate an EXPIRED booking back to 'pending' (admin-only).
+
+    An expired booking has released its slot hold, so before reinstating we
+    re-check that its window is still free; if another active booking now holds
+    an overlapping window, this raises SlotUnavailableError (409) and the admin
+    must edit the booking to a free slot/time afterwards. On success the booking
+    returns to 'pending' and flows through the normal edit + accept path, and can
+    expire again if not accepted within PENDING_HOLD_MINUTES.
+
+    Writes an 'edited' audit event (the booking_events CHECK does not include a
+    dedicated reinstate type; the old/new status is captured in the payload).
+    """
+    booking = _load_booking_for_actor(db, booking_id, actor)
+    if booking.status != "expired":
+        raise ValidationFailedError("Only an expired booking can be reviewed.")
+
+    # The slot hold was freed on expiry; confirm the window is still available
+    # (excluding this booking) before re-activating it.
+    _assert_no_overlap(
+        db,
+        location_id=booking.location_id,
+        plan_id=booking.plan_id,
+        booking_date=booking.booking_date,
+        start=booking.start_time,
+        duration_minutes=booking.duration_minutes,
+        exclude_booking_id=booking.id,
+    )
+
+    booking.status = "pending"
+    write_booking_event(
+        db,
+        booking.id,
+        "edited",
+        actor_user_id=actor.id,
+        old_value={"status": "expired"},
+        new_value={"status": "pending", "action": "reviewed"},
     )
     db.commit()
     db.refresh(booking)

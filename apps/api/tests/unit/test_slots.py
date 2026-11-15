@@ -116,6 +116,7 @@ def _validate(
     duration: int,
     hours: LocationHours = HOURS,
     now: datetime = MIDNIGHT,
+    staff_edit_grace_minutes: int = 0,
 ):
     validate_booking_time(
         hours=hours,
@@ -124,13 +125,81 @@ def _validate(
         duration_minutes=duration,
         actor=actor,
         now=now,
+        staff_edit_grace_minutes=staff_edit_grace_minutes,
     )
 
 
-def test_future_start_blocks_public_and_staff() -> None:
+def test_future_start_blocks_public_and_staff_by_default() -> None:
+    # Default grace = 0: both public and staff are strictly future.
     for actor in (ActorKind.PUBLIC, ActorKind.STAFF):
         with pytest.raises(StartInPastError):
             _validate(actor, time(13, 0), 60, now=AFTERNOON)  # 13:00 < 14:00
+
+
+def test_staff_grace_never_applies_to_public() -> None:
+    # Even with a grace window configured, PUBLIC is always strictly future.
+    with pytest.raises(StartInPastError):
+        _validate(
+            ActorKind.PUBLIC,
+            time(12, 0),
+            60,
+            now=datetime(2026, 11, 10, 13, 45),
+            staff_edit_grace_minutes=60,
+        )
+
+
+def test_staff_allowed_during_running_slot_with_grace() -> None:
+    # Slot 12:00-13:00, now 12:30 (in progress), grace 60 -> staff may edit.
+    _validate(
+        ActorKind.STAFF,
+        time(12, 0),
+        60,
+        now=datetime(2026, 11, 10, 12, 30),
+        staff_edit_grace_minutes=60,
+    )
+
+
+def test_staff_allowed_within_grace_after_slot() -> None:
+    # Slot 12:00-13:00; usable end 13:00, +60min grace -> editable until 14:00.
+    # now 13:45 is within grace -> allowed.
+    _validate(
+        ActorKind.STAFF,
+        time(12, 0),
+        60,
+        now=datetime(2026, 11, 10, 13, 45),
+        staff_edit_grace_minutes=60,
+    )
+
+
+def test_staff_blocked_after_grace() -> None:
+    # now 14:30 is past the grace end (14:00) -> blocked even with grace.
+    with pytest.raises(StartInPastError):
+        _validate(
+            ActorKind.STAFF,
+            time(12, 0),
+            60,
+            now=datetime(2026, 11, 10, 14, 30),
+            staff_edit_grace_minutes=60,
+        )
+
+
+def test_staff_grace_boundary_exact() -> None:
+    # Exactly at grace end (14:00) is allowed; one minute past is blocked.
+    _validate(
+        ActorKind.STAFF,
+        time(12, 0),
+        60,
+        now=datetime(2026, 11, 10, 14, 0),
+        staff_edit_grace_minutes=60,
+    )
+    with pytest.raises(StartInPastError):
+        _validate(
+            ActorKind.STAFF,
+            time(12, 0),
+            60,
+            now=datetime(2026, 11, 10, 14, 1),
+            staff_edit_grace_minutes=60,
+        )
 
 
 def test_admin_may_book_in_the_past() -> None:
