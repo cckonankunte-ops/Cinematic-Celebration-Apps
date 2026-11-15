@@ -29,6 +29,7 @@ import type {
   PlanCreateBody,
   PlanPricingAdminRead,
   PlanPricingCreateBody,
+  PlanUpdateBody,
   SlotAdminRead,
   SlotCreateBody,
 } from './types';
@@ -49,6 +50,19 @@ export function useCreatePlan(
   const qc = useQueryClient();
   return useMutation<PlanAdminRead, unknown, PlanCreateBody>({
     mutationFn: (body) => api.post<PlanAdminRead>('/api/v1/admin/plans', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog', 'plans', locationId] });
+    },
+  });
+}
+
+export function useUpdatePlan(
+  locationId: number | null,
+  planId: number,
+): UseMutationResult<PlanAdminRead, unknown, PlanUpdateBody> {
+  const qc = useQueryClient();
+  return useMutation<PlanAdminRead, unknown, PlanUpdateBody>({
+    mutationFn: (body) => api.patch<PlanAdminRead>(`/api/v1/admin/plans/${planId}`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['catalog', 'plans', locationId] });
     },

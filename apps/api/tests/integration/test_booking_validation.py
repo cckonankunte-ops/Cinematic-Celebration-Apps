@@ -135,6 +135,44 @@ def test_people_over_max_rejected(db: Session, people: int) -> None:
         )
 
 
+def test_admin_may_exceed_max_people(db: Session) -> None:
+    """allow_exceed_max=True (admin/staff path) permits people > max_people."""
+    loc = make_location(db)
+    plan = make_plan(db, loc.id, max_people_allowed=10)
+    db.flush()
+    req = validate_booking_request(
+        db,
+        location_id=loc.id,
+        plan_id=plan.id,
+        booking_date=_valid_date(),
+        people=25,  # well over the plan's max of 10
+        cake_id=None,
+        special_decor=[],
+        combos=[],
+        allow_exceed_max=True,
+    )
+    assert req.people == 25
+
+
+def test_zero_people_rejected_even_with_bypass(db: Session) -> None:
+    """The people >= 1 floor holds regardless of allow_exceed_max."""
+    loc = make_location(db)
+    plan = make_plan(db, loc.id, max_people_allowed=10)
+    db.flush()
+    with pytest.raises(ValidationFailedError):
+        validate_booking_request(
+            db,
+            location_id=loc.id,
+            plan_id=plan.id,
+            booking_date=_valid_date(),
+            people=0,
+            cake_id=None,
+            special_decor=[],
+            combos=[],
+            allow_exceed_max=True,
+        )
+
+
 def test_cross_location_cake_rejected(db: Session) -> None:
     loc_a = make_location(db, name="A")
     loc_b = make_location(db, name="B")

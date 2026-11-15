@@ -42,6 +42,24 @@ export interface PlanCreateBody {
   effective_from: string;
 }
 
+/** PATCH body for a plan: every field optional (partial update). */
+export interface PlanUpdateBody {
+  title?: string;
+  description?: string | null;
+  details?: string | null;
+  plan_type?: number;
+  price_paise?: number;
+  people_allowed?: number;
+  max_people_allowed?: number;
+  extra_guest_paise?: number;
+  give_discount?: boolean;
+  max_discount_paise?: number;
+  advance_paise?: number;
+  effective_from?: string;
+  effective_to?: string;
+  is_active?: boolean;
+}
+
 export interface SlotAdminRead extends Validity {
   id: number;
   plan_id: number;

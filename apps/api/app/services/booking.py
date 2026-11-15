@@ -269,6 +269,7 @@ def validate_booking_request(
     combos: list[ComboSelectionIn],
     cake_weight_half_kg: int = 1,
     led_name: str | None = None,
+    allow_exceed_max: bool = False,
 ) -> ValidatedRequest:
     """Validate a booking request and return loaded, de-duplicated catalog rows.
 
@@ -276,6 +277,11 @@ def validate_booking_request(
     for selecting more than one cake-baseline or LED-baseline combo),
     BookingDateInPastError (422) for past dates, and ValidationFailedError
     (422 VALIDATION_ERROR) when the guest count or cake weight is out of range.
+
+    ``allow_exceed_max`` lets admin/staff bookings exceed the plan's
+    ``max_people_allowed`` (they take walk-in groups at the venue). Customer
+    (public) bookings pass False so the plan cap is enforced for self-service.
+    The ``people >= 1`` floor is always enforced.
 
     Nothing is persisted here; all checks raise before building the
     ValidatedRequest, so a failed validation leaves the session untouched.
@@ -287,7 +293,9 @@ def validate_booking_request(
     # Window (slot vs open) is resolved/validated separately by
     # resolve_booking_window; item validation here no longer requires a slot.
 
-    if people < 1 or people > plan.max_people_allowed:
+    if people < 1:
+        raise ValidationFailedError("At least one person is required.")
+    if not allow_exceed_max and people > plan.max_people_allowed:
         raise ValidationFailedError(
             "The number of people exceeds the maximum allowed for this plan."
         )
@@ -724,6 +732,9 @@ def create_admin_booking(
         combos=data.combos,
         cake_weight_half_kg=data.cake_weight_half_kg,
         led_name=data.led_name,
+        # Admin/staff create: allow exceeding the plan's max people (walk-in
+        # groups booked at the venue). Customer create keeps the cap.
+        allow_exceed_max=True,
     )
 
     location = db.get(Location, data.location_id)
@@ -1092,6 +1103,8 @@ def update_booking(
             combos=combos,
             cake_weight_half_kg=cake_weight_half_kg,
             led_name=led_name,
+            # Admin/staff edit: allow exceeding the plan's max people.
+            allow_exceed_max=True,
         )
         # Re-price against the booking's (possibly just-updated) duration base.
         duration_pricing = resolve_duration_pricing(
@@ -1255,6 +1268,9 @@ def preview_booking(
         combos=data.combos,
         cake_weight_half_kg=data.cake_weight_half_kg,
         led_name=data.led_name,
+        # Admin/staff previews may exceed the plan's max people (walk-in groups);
+        # customer previews keep the cap so the preview matches what they can book.
+        allow_exceed_max=not is_customer,
     )
 
     if is_admin and not is_customer:

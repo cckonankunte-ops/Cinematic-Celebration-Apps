@@ -14,6 +14,7 @@ import { useAuth } from '@/features/auth/useAuth';
 import { useLocation } from '@/features/location/useLocation';
 import { AddonManagers } from './AddonManagers';
 import { CreatePlanForm } from './CreatePlanForm';
+import { EditPlanForm } from './EditPlanForm';
 import { GalleryUpload } from './GalleryUpload';
 import { LocationSettings } from './LocationSettings';
 import { PlanPricingManager } from './PlanPricingManager';
@@ -38,12 +39,12 @@ export function CatalogPage(): JSX.Element {
   // Which expandable panel is open for a plan: gallery | slots | pricing.
   const [expanded, setExpanded] = useState<{
     planId: number;
-    panel: 'gallery' | 'slots' | 'pricing';
+    panel: 'gallery' | 'slots' | 'pricing' | 'edit';
   } | null>(null);
 
   const togglePanel = (
     planId: number,
-    panel: 'gallery' | 'slots' | 'pricing',
+    panel: 'gallery' | 'slots' | 'pricing' | 'edit',
   ): void =>
     setExpanded((cur) =>
       cur && cur.planId === planId && cur.panel === panel
@@ -80,6 +81,13 @@ export function CatalogPage(): JSX.Element {
                   <ActiveTag active={plan.is_active} />
                   <button
                     type="button"
+                    onClick={() => togglePanel(plan.id, 'edit')}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => togglePanel(plan.id, 'slots')}
                     className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
                   >
@@ -109,6 +117,13 @@ export function CatalogPage(): JSX.Element {
                   </button>
                 </div>
               </div>
+              {expanded?.planId === plan.id && expanded.panel === 'edit' && (
+                <EditPlanForm
+                  plan={plan}
+                  locationId={selectedLocationId}
+                  onDone={() => setExpanded(null)}
+                />
+              )}
               {expanded?.planId === plan.id && expanded.panel === 'gallery' && (
                 <GalleryUpload planId={plan.id} />
               )}
