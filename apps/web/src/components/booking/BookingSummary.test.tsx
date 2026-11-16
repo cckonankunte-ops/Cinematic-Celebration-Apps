@@ -50,7 +50,8 @@ describe('BookingSummary', () => {
     render(
       <BookingSummary
         breakdown={breakdown({
-          extra_guest_paise: 15000,
+          // Adult extra (20000) + kid extra (7500) = 27500 combined.
+          extra_guest_paise: 27500,
           kid_extra_guest_paise: 7500,
         })}
         adults={2}
@@ -59,9 +60,10 @@ describe('BookingSummary', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /Total/ }));
     expect(screen.getByText('Kids (3–10 yrs)')).toBeInTheDocument();
-    // Kid charge line labelled with the kid count.
-    expect(screen.getByText('Kids (3)')).toBeInTheDocument();
-    expect(screen.getByText('₹75.00')).toBeInTheDocument();
+    // Kid charge line labelled with the kid count; assert its amount within
+    // that row (the adult extra line also happens to be ₹75.00).
+    const kidChargeRow = screen.getByText('Kids (3)').closest('div');
+    expect(kidChargeRow?.textContent).toContain('₹75.00');
   });
 
   it('does not show a kids line when there are no kids', () => {
