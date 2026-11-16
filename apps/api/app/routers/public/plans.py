@@ -19,6 +19,7 @@ from app.schemas.coupon import PublicOfferRead
 from app.services import catalog
 from app.services import coupon as coupon_service
 from app.services import plan_pricing as plan_pricing_service
+from app.services.slots import now_ist
 
 router = APIRouter(prefix="/api/v1/public", tags=["public-catalog"])
 
@@ -29,8 +30,12 @@ def public_offers(db: Session = Depends(get_db)) -> list[PublicOfferRead]:
 
     Safe fields only (code, name, description, validity). Empty list when no
     public offers exist, so the UI omits the showcase entirely.
+
+    Uses the IST calendar date (not the server's UTC date) for the validity
+    window, so an offer effective "today" in India shows from IST midnight —
+    consistent with how booking dates are interpreted everywhere else.
     """
-    return coupon_service.list_public_offers(db, on=date.today())
+    return coupon_service.list_public_offers(db, on=now_ist().date())
 
 
 class AvailableSlotsRequest(BaseModel):
