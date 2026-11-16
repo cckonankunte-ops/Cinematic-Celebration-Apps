@@ -33,9 +33,9 @@ const CAKE_WEIGHT_OPTIONS: Array<{ halfKg: number; label: string }> = [
 ];
 
 /**
- * Step 2 add-ons. Combos are shown FIRST as image-forward "savings" hero cards
- * (strike-through worth + "Save ₹X" when the server reports a positive saving),
- * then the individual add-ons (cake, decor, LED, coupon) in collapsible
+ * Step 2 add-ons. Combos are shown FIRST as image-forward hero cards
+ * (strike-through worth next to the price when the server reports a positive
+ * saving), then the individual add-ons (cake, decor, LED, coupon) in collapsible
  * sections so the step stays short on mobile. The customer only sends IDs /
  * quantities; all pricing (including the saving) is computed server-side —
  * prices shown here are informational catalog values.
@@ -156,11 +156,6 @@ export default function AddonSelector({
                           className="flex h-full w-full items-center justify-center text-2xl"
                         >
                           🎀
-                        </span>
-                      )}
-                      {saves && (
-                        <span className="absolute left-1 top-1 rounded bg-green-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                          Save {formatRupees(item.savings_paise)}
                         </span>
                       )}
                     </div>

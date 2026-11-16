@@ -42,16 +42,16 @@ const comboNoSaving: Combo = {
 };
 
 describe('AddonSelector combo hero cards', () => {
-  it('shows strike-through worth and a "Save" badge when savings_paise > 0', () => {
+  it('shows strike-through worth and price when savings_paise > 0 (no Save badge)', () => {
     render(<AddonSelector {...baseProps} combos={[comboWithSaving]} />);
-    // The saving badge appears.
-    expect(screen.getByText(/Save ₹300/i)).toBeInTheDocument();
-    // The worth is shown struck through (₹1,000) alongside the price (₹700).
+    // The "Save ₹X" badge over the image was removed; the worth is still shown
+    // struck through (₹1,000) alongside the price (₹700).
+    expect(screen.queryByText(/Save ₹/i)).not.toBeInTheDocument();
     expect(screen.getByText(/₹1,000/)).toBeInTheDocument();
     expect(screen.getByText(/₹700/)).toBeInTheDocument();
   });
 
-  it('shows price only (no strike-through, no badge) when savings_paise === 0', () => {
+  it('shows price only (no strike-through) when savings_paise === 0', () => {
     render(<AddonSelector {...baseProps} combos={[comboNoSaving]} />);
     expect(screen.queryByText(/Save ₹/i)).not.toBeInTheDocument();
     expect(screen.getByText(/₹500/)).toBeInTheDocument();
