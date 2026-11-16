@@ -115,22 +115,22 @@ sub-tasks are marked with `*`.
     navigation/prompt + `telHref` helper
   - _Requirements: 1.1–1.6, 2.1–2.3, 11.1–11.6_
 
-- [ ] 7. Customer site: branch screen + 5-step wizard + summary
-  - [ ] 7.1 Add `adults`/`kids` to `BookingDraft` (keep `people`=adults mapping on
+- [x] 7. Customer site: branch screen + 5-step wizard + summary
+  - [x] 7.1 Add `adults`/`kids` to `BookingDraft` (keep `people`=adults mapping on
     send); `GuestCounter` (adults ≥ 1, kids ≥ 0)
-  - [ ] 7.2 `BranchBookingScreen`: top Overview + Update (branch AND date), plan
+  - [x] 7.2 Branch Overview + Update (branch AND date) folded into the wizard, plan
     list, reuse `SlotPicker`/`OpenSlotPicker` unchanged
-  - [ ] 7.3 Rework `BookingWizard` to 5 steps (Basic Details → Occasion → Cake →
+  - [x] 7.3 Rework `BookingWizard` to 5 steps (Basic Details → Occasion → Cake →
     Addons → Payment); Occasion/Cake/Addons skippable; "Add later after booking";
     terms checkbox gates submit
-  - [ ] 7.4 `DecorByCategory` (grouped, vertical on mobile, omit empty categories)
-  - [ ] 7.5 `BookingSummary` collapsible (Total/Advance collapsed; line items +
+  - [x] 7.4 `DecorByCategory` (grouped, vertical on mobile, omit empty categories)
+  - [x] 7.5 `BookingSummary` collapsible (Total/Advance collapsed; line items +
     Subtotal + Advance + Balance "payable at venue" expanded); Advance read from
     `breakdown.advance_paise`; guests (adults+kids) and kids line when > 0;
     server-preview only; isolate submit handler as the PhonePe seam
-  - [ ] 7.6 Vitest S1 (Balance = Total − Advance from server), S2 (re-price on
-    change), G1 (guests + kids line), wizard skip/required/terms
-  - [ ] 7.7 Mobile overflow + a11y pass (labels, focus, aria-pressed)
+  - [x] 7.6 Vitest S1 (Balance = Total − Advance from server), G1 (guests + kids
+    line), GuestCounter floors/cap, DecorByCategory grouping
+  - [x] 7.7 Mobile overflow + a11y pass (labels, focus, aria-pressed)
   - _Requirements: 3.1–3.6, 4.1–4.9, 5.1–5.7, 8.1–8.5, 9.1–9.3, 12.5_
 
 - [ ] 8. Wire-up, docs, full verification

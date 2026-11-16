@@ -30,7 +30,10 @@ export interface BookingDraft {
   ledName: string;
   /** Optional coupon code; the server validates and computes the discount. */
   couponCode: string;
-  people: number;
+  /** Adults (above 10 yrs); sent as `people` on the wire. Must be >= 1. */
+  adults: number;
+  /** Kids (3-10 yrs); sent as `kids`. >= 0. Total guests = adults + kids. */
+  kids: number;
   occasionId: number | null;
   specialPersonName: string;
   nameOnCake: string;
@@ -62,7 +65,8 @@ export function emptyDraft(bookingDate: string): BookingDraft {
     phone: '',
     ledName: '',
     couponCode: '',
-    people: 1,
+    adults: 1,
+    kids: 0,
     occasionId: null,
     specialPersonName: '',
     nameOnCake: '',
