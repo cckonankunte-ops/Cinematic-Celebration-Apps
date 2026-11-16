@@ -275,6 +275,7 @@ def validate_booking_request(
     cake_weight_half_kg: int = 1,
     led_name: str | None = None,
     allow_exceed_max: bool = False,
+    allow_past_date: bool = False,
 ) -> ValidatedRequest:
     """Validate a booking request and return loaded, de-duplicated catalog rows.
 
@@ -290,10 +291,14 @@ def validate_booking_request(
     groups at the venue); customer (public) bookings pass False so the cap is
     enforced for self-service. The adults>=1 floor is always enforced.
 
+    ``allow_past_date`` lets an admin re-price/edit a booking whose date is in
+    the past (correcting a completed booking); customers and staff pass False so
+    the past-date guard stays. Mirrors the ``allow_exceed_max`` convention.
+
     Nothing is persisted here; all checks raise before building the
     ValidatedRequest, so a failed validation leaves the session untouched.
     """
-    if booking_date < _today_ist():
+    if not allow_past_date and booking_date < _today_ist():
         raise BookingDateInPastError()
 
     plan = _load_valid_plan(db, location_id, plan_id, booking_date)
@@ -1179,6 +1184,9 @@ def update_booking(
             led_name=led_name,
             # Admin/staff edit: allow exceeding the plan's max people.
             allow_exceed_max=True,
+            # Admins may edit a past/completed booking; staff stay bound by the
+            # past-date guard (mirrors the window-level guard above).
+            allow_past_date=actor.role == "admin",
         )
         # Re-price against the booking's (possibly just-updated) duration base.
         duration_pricing = resolve_duration_pricing(

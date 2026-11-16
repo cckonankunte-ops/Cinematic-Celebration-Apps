@@ -28,9 +28,11 @@ from tests.factories import (
 pytestmark = pytest.mark.integration
 
 
-def _user(db: Session, role: str) -> CurrentUser:
-    u = make_user(db, role, location_id=None)
-    return CurrentUser(id=u.id, username=u.username, role=role, location_id=None)
+def _user(db: Session, role: str, location_id: int | None) -> CurrentUser:
+    u = make_user(db, role, location_id=location_id)
+    return CurrentUser(
+        id=u.id, username=u.username, role=role, location_id=location_id
+    )
 
 
 def _past_accepted_booking(db: Session):
@@ -54,8 +56,8 @@ def _past_accepted_booking(db: Session):
 
 def test_admin_can_edit_a_past_booking_window(db: Session) -> None:
     """Admin re-selects the slot on a past-dated booking → succeeds."""
-    admin = _user(db, "admin")
     booking, slot = _past_accepted_booking(db)
+    admin = _user(db, "admin", location_id=None)  # admin = all locations
 
     # Re-selecting the slot sets window_changed=True, which hits the past-date
     # guard; an admin is exempt and the edit goes through.
@@ -69,8 +71,10 @@ def test_admin_can_edit_a_past_booking_window(db: Session) -> None:
 
 def test_staff_cannot_edit_a_past_booking_window(db: Session) -> None:
     """Staff making the same past-dated window edit → BookingDateInPastError."""
-    staff = _user(db, "staff")
     booking, slot = _past_accepted_booking(db)
+    # Staff must be scoped to the booking's location or access is denied first;
+    # scope them correctly so the past-date guard is what actually blocks them.
+    staff = _user(db, "staff", location_id=booking.location_id)
 
     with pytest.raises(BookingDateInPastError):
         booking_service.update_booking(
