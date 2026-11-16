@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidIndianMobile } from './phone';
+import { isValidIndianMobile, telHref } from './phone';
 
 describe('isValidIndianMobile', () => {
   it('accepts a bare 10-digit mobile', () => {
@@ -28,5 +28,25 @@ describe('isValidIndianMobile', () => {
 
   it('rejects non-numeric input', () => {
     expect(isValidIndianMobile('abcd')).toBe(false);
+  });
+});
+
+describe('telHref', () => {
+  it('prefixes a bare 10-digit number with +91', () => {
+    expect(telHref('9876543210')).toBe('tel:+919876543210');
+  });
+
+  it('strips formatting characters', () => {
+    expect(telHref('+91 98765 43210')).toBe('tel:+919876543210');
+  });
+
+  it('strips a leading zero on a longer number', () => {
+    expect(telHref('09876543210')).toBe('tel:+9876543210');
+  });
+
+  it('returns null when there are no digits', () => {
+    expect(telHref('')).toBeNull();
+    expect(telHref(null)).toBeNull();
+    expect(telHref(undefined)).toBeNull();
   });
 });

@@ -102,17 +102,17 @@ sub-tasks are marked with `*`.
   - [x] 5.6* Vitest for the category select and advance-rule form
   - _Requirements: 6.6, 7.3, 10.1, 11.2, 12.1, 12.2_
 
-- [ ] 6. Customer site: home widget, offers, floating call
-  - [ ] 6.1 `HomeBookingWidget` island: branch dropdown + date (default today, no
+- [x] 6. Customer site: home widget, offers, floating call
+  - [x] 6.1 `HomeBookingWidget` island: branch dropdown + date (default today, no
     past) + Book Now (→ `/book?location=slug&date=`) + Call now (selected branch's
     phone; prompt to pick a branch when none selected)
-  - [ ] 6.2 `OffersShowcase` island on the hero (fetch `/public/offers`, render
+  - [x] 6.2 `OffersShowcase` island on the hero (fetch `/public/offers`, render
     code + name + description + validity; omit entirely when empty)
-  - [ ] 6.3 `FloatingCall` island in `Base.astro` (branch picker → `tel:` from the
+  - [x] 6.3 `FloatingCall` island in `Base.astro` (branch picker → `tel:` from the
     branch's phone; branches without a phone are not shown), styled like the
     WhatsApp button
-  - [ ] 6.4 Vitest O2 (offers omit when empty / none public) + widget
-    navigation/prompt
+  - [x] 6.4 Vitest O2 (offers omit when empty / none public) + widget
+    navigation/prompt + `telHref` helper
   - _Requirements: 1.1–1.6, 2.1–2.3, 11.1–11.6_
 
 - [ ] 7. Customer site: branch screen + 5-step wizard + summary

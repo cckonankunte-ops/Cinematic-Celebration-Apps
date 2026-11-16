@@ -7,6 +7,7 @@
  * (robots allow); the admin panel is the noindex surface, not this one.
  */
 import '../styles/global.css';
+import FloatingCall from '../components/booking/FloatingCall.tsx';
 
 interface Props {
   title: string;
@@ -138,6 +139,10 @@ const image = ogImage ?? new URL('/og-default.png', Astro.site).toString();
         </svg>
       </button>
     </div>
+
+    <!-- Floating call button (React island): branch picker -> tel: link,
+         styled to match the WhatsApp FAB and stacked just above it. -->
+    <FloatingCall client:idle />
 
     <script is:inline define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE_URL }}>
       (function () {

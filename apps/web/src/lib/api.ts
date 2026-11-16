@@ -117,6 +117,20 @@ export interface Location {
   booking_mode?: 'slot' | 'open';
 }
 
+/**
+ * A customer-facing coupon offer for the home-page showcase. Mirrors the
+ * backend `PublicOfferRead` (schemas/coupon.py): only safe, display fields —
+ * never value, cap, usage limits, or percentage-base internals. Dates are
+ * `YYYY-MM-DD` or null (open-ended validity).
+ */
+export interface PublicOffer {
+  code: string;
+  name: string | null;
+  description: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+
 /** A bookable duration for a plan (open mode) + its base price/advance. */
 export interface PlanDuration {
   duration_minutes: number;
@@ -395,5 +409,8 @@ export const publicApi = {
   },
   submitContact(body: ContactCreate): Promise<ContactResult> {
     return api.post<ContactResult>(`${PUBLIC}/contact`, body);
+  },
+  listOffers(): Promise<PublicOffer[]> {
+    return api.get<PublicOffer[]>(`${PUBLIC}/offers`);
   },
 };

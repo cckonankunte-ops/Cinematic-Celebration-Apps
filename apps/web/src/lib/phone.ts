@@ -14,3 +14,18 @@ export function isValidIndianMobile(raw: string): boolean {
   const despaced = raw.replace(/[\s-]/g, '');
   return INDIAN_MOBILE.test(despaced);
 }
+
+/**
+ * Build a `tel:` href from a raw phone string. Strips non-digits; a bare
+ * 10-digit Indian mobile is prefixed with the `91` country code (mirrors the
+ * WhatsApp FAB's `waDigits` and LocationList's tel: logic). Returns null when
+ * there are no digits so callers can omit the link entirely.
+ */
+export function telHref(raw: string | null | undefined): string | null {
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  if (digits.length === 0) {
+    return null;
+  }
+  const normalized = digits.length === 10 ? `91${digits}` : digits.replace(/^0+/, '');
+  return `tel:+${normalized}`;
+}

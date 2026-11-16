@@ -45,6 +45,16 @@ export default function BookingWizard() {
     const params = new URLSearchParams(window.location.search);
     const slug = params.get('location');
     const planParam = params.get('plan');
+    const dateParam = params.get('date');
+
+    // Prefill the date from the home widget's `?date=` when it's a valid
+    // YYYY-MM-DD that isn't in the past; otherwise keep today's default.
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const today = todayIsoInIST();
+      if (dateParam >= today) {
+        setDraft((d) => ({ ...d, bookingDate: dateParam }));
+      }
+    }
 
     let active = true;
     publicApi

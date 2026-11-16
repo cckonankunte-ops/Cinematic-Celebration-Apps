@@ -1,6 +1,8 @@
 ---
 import Base from '../layouts/Base.astro';
 import BranchPreview from '../components/booking/BranchPreview.tsx';
+import HomeBookingWidget from '../components/booking/HomeBookingWidget.tsx';
+import OffersShowcase from '../components/booking/OffersShowcase.tsx';
 
 const title = 'Cinematic Celebration — Private Theatre Celebrations in Bangalore';
 const description =
@@ -73,6 +75,16 @@ const why = [
       >
         About us
       </a>
+    </div>
+
+    <!-- Quick booking: pick a branch + date and jump into the flow, or call. -->
+    <div class="mt-10 animate-fade-up" style="animation-delay:0.3s">
+      <HomeBookingWidget client:load />
+    </div>
+
+    <!-- Public offers (renders nothing when there are none). -->
+    <div class="mt-6 animate-fade-up" style="animation-delay:0.4s">
+      <OffersShowcase client:visible />
     </div>
   </section>
 
