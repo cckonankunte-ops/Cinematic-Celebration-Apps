@@ -9,6 +9,7 @@ function offer(code: string, overrides: Partial<PublicOffer> = {}): PublicOffer 
     code,
     name: null,
     description: null,
+    location_name: 'Hulimavu',
     effective_from: null,
     effective_to: null,
     ...overrides,
@@ -40,6 +41,7 @@ describe('OffersShowcase', () => {
       offer('WEEKDAY10', {
         name: 'Weekday Special',
         description: '10% off on weekdays',
+        location_name: 'JP Nagar',
         effective_from: '2027-01-01',
         effective_to: '2027-03-31',
       }),
@@ -50,6 +52,7 @@ describe('OffersShowcase', () => {
     await waitFor(() => expect(screen.getByText('WEEKDAY10')).toBeInTheDocument());
     expect(screen.getByText('Weekday Special')).toBeInTheDocument();
     expect(screen.getByText('10% off on weekdays')).toBeInTheDocument();
+    expect(screen.getByText('JP Nagar')).toBeInTheDocument();
     expect(screen.getByText(/Valid 01 Jan 2027/)).toBeInTheDocument();
   });
 });

@@ -74,5 +74,8 @@ class PublicOfferRead(BaseModel):
     code: str
     name: str | None
     description: str | None
+    # Branch this offer belongs to (coupons are per-location); shown on the card
+    # so customers know which branch an offer applies to.
+    location_name: str
     effective_from: date | None
     effective_to: date | None
