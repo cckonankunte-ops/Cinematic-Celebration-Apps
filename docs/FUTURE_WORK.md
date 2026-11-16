@@ -216,3 +216,41 @@ common case and only exposes quantity where it's actually used.
 `- 1 +` stepper; unselected items show none. Good enough until the flag lands.
 
 **Status:** deferred (recorded 2026). Not scheduled.
+
+## Admin-managed home-page hero / banner content (deferred)
+
+**Context.** The customer home-page hero (`apps/web/src/pages/index.astro`) is
+fully **static/hardcoded**: the headline ("Celebrate every moment on the big
+screen"), subtext, the two CTA buttons, and the floating emoji are literal
+content baked in at build time. The only admin-editable content that appears on
+the home page today is the **public offers showcase** (`OffersShowcase`), driven
+by coupons marked public under admin → Coupons. There is NO admin screen to edit
+hero text or a rotating/scrolling banner — that feature was never built.
+
+**Want.** Let staff edit the home-page banner/scroller content from the admin
+panel instead of changing code.
+
+**Two sizing options when picked up.**
+
+1. **Lightweight — editable hero text.** A small global (or per-branch) settings
+   record holding `hero_headline` + `hero_subtext` (+ maybe CTA label/link); the
+   home page fetches it at runtime and falls back to the current hardcoded copy
+   when empty. Scope: one settings row/endpoint + a small admin form + wire the
+   hero to fetch it. No carousel.
+
+2. **Full scroller banner.** An admin-managed list of banner slides
+   (`home_banners`: image object_key in R2, title, subtitle, optional link,
+   sort_order, is_active, optional validity dates). Needs: migration + model +
+   public `HomeBannerRead` + admin CRUD schemas/service + an admin manager screen
+   (image upload like catalog) + a React carousel island on the home hero + tests.
+   Comparable in size to one booking-flow-v2 task. The site is a static build, so
+   the carousel island fetches banners at runtime (same pattern as OffersShowcase
+   / HomeBookingWidget). Keep the home JS bundle small.
+
+**Notes / constraints.** Images go to Cloudflare R2 (DB stores object keys only),
+mirroring the catalog image pattern. Keep it server-authoritative and runtime-
+fetched (no SSR). Respect the existing offers showcase (don't duplicate coupon
+offers into banners).
+
+**Status:** deferred (recorded 2026). Not scheduled. Recommend writing a small
+spec (requirements → design → tasks) if option 2 is chosen.
