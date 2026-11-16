@@ -321,7 +321,8 @@ class BookingRead(BaseModel):
     special_person_name: str | None
     name_on_cake: str | None
     message: str | None
-    people: int
+    people: int  # adults
+    kids: int = 0
     occasion_id: int | None
     plan_price_paise: int
     extra_guest_paise: int
@@ -359,7 +360,8 @@ class BookingListItem(BaseModel):
     booking_name: str
     phone: str | None = None
     special_person_name: str | None = None
-    people: int
+    people: int  # adults
+    kids: int = 0
     plan_title: str
     slot_description: str
     occasion_name: str | None = None

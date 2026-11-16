@@ -41,6 +41,8 @@ class PlanRead(BaseModel):
     people_allowed: int
     max_people_allowed: int
     extra_guest_paise: int
+    # Kids (3-10 yrs) charged this % of the extra-guest rate (whole-rupee).
+    kid_price_pct: int = 50
     advance_paise: int
     gallery_urls: list[str] = []
 
@@ -101,6 +103,8 @@ class SpecialDecorRead(BaseModel):
     id: int
     name: str
     description: str
+    # Grouping category: 'extra_decoration' | 'gifts' | 'special_service'.
+    category: str = "extra_decoration"
     price_paise: int
     image_url: str
     sort_order: int

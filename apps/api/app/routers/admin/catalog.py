@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import check_origin, require_role
+from app.schemas.advance_rule import AdvanceRuleCreate, AdvanceRuleRead
 from app.schemas.catalog_admin import (
     CakeAdminRead,
     CakeCreate,
@@ -39,7 +40,10 @@ from app.schemas.catalog_admin import (
     SpecialDecorCreate,
     SpecialDecorUpdate,
 )
+from app.schemas.location_admin import DisallowedTimeCreate, DisallowedTimeRead
+from app.services import advance_rule as advance_rule_service
 from app.services import catalog_admin
+from app.services import location_admin as location_admin_service
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -286,3 +290,77 @@ def update_combo(combo_id: int, body: ComboUpdate, db: Session = Depends(get_db)
 @router.delete("/combos/{combo_id}", response_model=ComboAdminRead)
 def deactivate_combo(combo_id: int, db: Session = Depends(get_db)) -> ComboAdminRead:
     return catalog_admin.to_combo_admin_read(catalog_admin.deactivate_combo(db, combo_id))
+
+
+# --- Disallowed booking-time ranges per branch (admin only) ---
+@router.get(
+    "/locations/{location_id}/disallowed-times",
+    response_model=list[DisallowedTimeRead],
+)
+def list_disallowed_times(
+    location_id: int, db: Session = Depends(get_db)
+) -> list[DisallowedTimeRead]:
+    return [
+        location_admin_service.to_disallowed_time_read(r)
+        for r in location_admin_service.list_disallowed_times(db, location_id)
+    ]
+
+
+@router.post(
+    "/locations/{location_id}/disallowed-times",
+    response_model=DisallowedTimeRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_disallowed_time(
+    location_id: int, body: DisallowedTimeCreate, db: Session = Depends(get_db)
+) -> DisallowedTimeRead:
+    row = location_admin_service.create_disallowed_time(db, location_id, body)
+    return location_admin_service.to_disallowed_time_read(row)
+
+
+@router.delete(
+    "/locations/{location_id}/disallowed-times/{row_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_disallowed_time(
+    location_id: int, row_id: int, db: Session = Depends(get_db)
+) -> Response:
+    location_admin_service.delete_disallowed_time(db, location_id, row_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Advance rules per branch (admin only) ---
+@router.get(
+    "/locations/{location_id}/advance-rules",
+    response_model=list[AdvanceRuleRead],
+)
+def list_advance_rules(
+    location_id: int, db: Session = Depends(get_db)
+) -> list[AdvanceRuleRead]:
+    return [
+        advance_rule_service.to_advance_rule_read(r)
+        for r in advance_rule_service.list_advance_rules(db, location_id)
+    ]
+
+
+@router.post(
+    "/locations/{location_id}/advance-rules",
+    response_model=AdvanceRuleRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_advance_rule(
+    location_id: int, body: AdvanceRuleCreate, db: Session = Depends(get_db)
+) -> AdvanceRuleRead:
+    rule = advance_rule_service.create_advance_rule(db, location_id, body)
+    return advance_rule_service.to_advance_rule_read(rule)
+
+
+@router.delete(
+    "/locations/{location_id}/advance-rules/{rule_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_advance_rule(
+    location_id: int, rule_id: int, db: Session = Depends(get_db)
+) -> Response:
+    advance_rule_service.delete_advance_rule(db, location_id, rule_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

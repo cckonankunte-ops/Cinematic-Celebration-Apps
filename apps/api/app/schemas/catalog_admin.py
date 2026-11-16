@@ -32,6 +32,7 @@ class PlanCreate(BaseModel):
     people_allowed: int = Field(ge=0, default=4)
     max_people_allowed: int = Field(ge=0)
     extra_guest_paise: int = Field(ge=0, default=0)
+    kid_price_pct: int = Field(default=50, ge=0, le=100)
     give_discount: bool = False
     max_discount_paise: int = Field(ge=0, default=0)
     advance_paise: int = Field(ge=0, default=0)
@@ -48,6 +49,7 @@ class PlanUpdate(BaseModel):
     people_allowed: int | None = Field(default=None, ge=0)
     max_people_allowed: int | None = Field(default=None, ge=0)
     extra_guest_paise: int | None = Field(default=None, ge=0)
+    kid_price_pct: int | None = Field(default=None, ge=0, le=100)
     give_discount: bool | None = None
     max_discount_paise: int | None = Field(default=None, ge=0)
     advance_paise: int | None = Field(default=None, ge=0)
@@ -67,6 +69,7 @@ class PlanAdminRead(BaseModel):
     people_allowed: int
     max_people_allowed: int
     extra_guest_paise: int
+    kid_price_pct: int
     give_discount: bool
     max_discount_paise: int
     advance_paise: int
@@ -208,6 +211,9 @@ class SpecialDecorCreate(BaseModel):
     # Description is optional: simple items (e.g. "Water Small") need none.
     # Consistent with combos, which also allow an empty description.
     description: str = ""
+    category: Literal["extra_decoration", "gifts", "special_service"] = (
+        "extra_decoration"
+    )
     price_paise: int = Field(ge=0)
     object_key: str = Field(min_length=1)
     sort_order: int = Field(ge=0, default=0)
@@ -219,6 +225,7 @@ class SpecialDecorUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1)
     # Optional on update too; "" clears the description.
     description: str | None = None
+    category: Literal["extra_decoration", "gifts", "special_service"] | None = None
     price_paise: int | None = Field(default=None, ge=0)
     object_key: str | None = Field(default=None, min_length=1)
     sort_order: int | None = Field(default=None, ge=0)
@@ -232,6 +239,7 @@ class SpecialDecorAdminRead(BaseModel):
     location_id: int
     name: str
     description: str
+    category: str
     price_paise: int
     object_key: str
     image_url: str

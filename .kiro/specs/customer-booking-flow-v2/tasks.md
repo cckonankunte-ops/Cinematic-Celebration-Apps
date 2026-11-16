@@ -67,23 +67,23 @@ sub-tasks are marked with `*`.
     A2 (advance identical in preview/create), A4 (advance vs final total w/ coupon)
   - _Requirements: 6.4, 6.5, 10.3, 10.4, 10.5, 12.5, 12.6, 12.8_
 
-- [ ] 4. API schemas + public catalog + offers + advance-rule endpoints
-  - [ ] 4.1 Add `kids` to `PreviewBase`, `BookingCreate`, `BookingUpdate`
+- [x] 4. API schemas + public catalog + offers + advance-rule endpoints
+  - [x] 4.1 Add `kids` to `PreviewBase`, `BookingCreate`, `BookingUpdate`
     (default 0, ge=0); `kid_extra_guest_paise` and `advance_paise` to
     `PriceBreakdownRead`; `kids` to `BookingRead` / `BookingListItem`
-  - [ ] 4.2 Add `kid_price_pct` to `PlanRead` and `category` to `SpecialDecorRead`;
-    wire through `services/catalog.py`
-  - [ ] 4.3 Add `name`/`description`/`is_public` to admin coupon create/update +
+  - [x] 4.2 Add `kid_price_pct` to `PlanRead` and `category` to `SpecialDecorRead`;
+    wire through `services/catalog.py` (+ admin catalog schemas/reads)
+  - [x] 4.3 Add `name`/`description`/`is_public` to admin coupon create/update +
     `CouponRead`; add `PublicOfferRead` + `GET /api/v1/public/offers` +
     `coupon.list_public_offers(db, on=...)` returning active+public, in-validity
     coupons with safe fields only (code, name, description, validity)
-  - [ ] 4.4 Add disallowed-times admin schemas + CRUD endpoints
+  - [x] 4.4 Add disallowed-times admin schemas + CRUD endpoints
     (`GET/POST/DELETE /admin/locations/{id}/disallowed-times`, admin-only)
-  - [ ] 4.5 Add advance-rule schemas (`AdvanceRuleCreate`/`AdvanceRuleRead`) +
+  - [x] 4.5 Add advance-rule schemas (`AdvanceRuleCreate`/`AdvanceRuleRead`) +
     CRUD endpoints (`GET/POST/DELETE /admin/locations/{id}/advance-rules`,
     admin-only) + a small `services/advance_rule.py` owning the transaction;
     duplicate threshold → 409
-  - [ ] 4.6 Integration tests O1 (offers safe fields; private/inactive/out-of-
+  - [x] 4.6 Integration tests O1 (offers safe fields; private/inactive/out-of-
     validity excluded), T2 (bad range → 422), A3 (advance-rule CRUD: duplicate →
     409, cross-location ok, negative → 422, staff → 403)
   - _Requirements: 6.6, 7.6, 10.1, 10.2, 11.1, 11.2, 11.3, 11.4, 11.6, 12.1, 12.2, 12.9_

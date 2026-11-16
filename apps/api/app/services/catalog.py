@@ -111,6 +111,7 @@ def _to_plan_read(db: Session, plan: Plan) -> PlanRead:
         people_allowed=plan.people_allowed,
         max_people_allowed=plan.max_people_allowed,
         extra_guest_paise=plan.extra_guest_paise,
+        kid_price_pct=plan.kid_price_pct,
         advance_paise=plan.advance_paise,
         gallery_urls=_plan_gallery_urls(db, plan.id),
     )
@@ -225,6 +226,7 @@ def list_special_decor(db: Session, location_id: int, on: date) -> list[SpecialD
             id=d.id,
             name=d.name,
             description=d.description,
+            category=d.category,
             price_paise=d.price_paise,
             image_url=public_url(d.object_key),
             sort_order=d.sort_order,

@@ -24,6 +24,9 @@ def create_coupon(db: Session, data: CouponCreate) -> Coupon:
     coupon = Coupon(
         location_id=data.location_id,
         code=data.code,
+        name=data.name,
+        description=data.description,
+        is_public=data.is_public,
         type=data.type,
         value=data.value,
         cap_paise=data.cap_paise,
@@ -54,6 +57,9 @@ def update_coupon(db: Session, coupon_id: int, data: CouponUpdate) -> Coupon:
     if coupon is None:
         raise NotFoundError("Coupon not found.")
     coupon.code = data.code
+    coupon.name = data.name
+    coupon.description = data.description
+    coupon.is_public = data.is_public
     coupon.type = data.type
     coupon.value = data.value
     coupon.cap_paise = data.cap_paise
@@ -95,6 +101,9 @@ def to_coupon_read(coupon: Coupon) -> CouponRead:
         id=coupon.id,
         location_id=coupon.location_id,
         code=coupon.code,
+        name=coupon.name,
+        description=coupon.description,
+        is_public=coupon.is_public,
         type=coupon.type,
         value=coupon.value,
         cap_paise=coupon.cap_paise,
