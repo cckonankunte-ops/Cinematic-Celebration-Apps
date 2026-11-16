@@ -31,6 +31,7 @@ from app.core.errors import (
 from app.core.phone import normalize_indian_mobile
 from app.core.security import CurrentUser, assert_location_access
 from app.integrations.payments import get_payment_provider
+from app.models.advance_rule import AdvanceRule
 from app.models.booking import Booking
 from app.models.booking_item import BookingItem
 from app.models.cake import Cake
@@ -38,7 +39,6 @@ from app.models.combo_item import ComboItem
 from app.models.contact_lead import ContactLead
 from app.models.coupon import Coupon
 from app.models.coupon_redemption import CouponRedemption
-from app.models.advance_rule import AdvanceRule
 from app.models.location import Location
 from app.models.location_disallowed_time import LocationDisallowedTime
 from app.models.payment import Payment

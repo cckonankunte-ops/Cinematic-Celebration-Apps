@@ -20,15 +20,16 @@ from app.core.errors import (
 )
 from app.services.slots import (
     ActorKind,
+    DisallowedRange,
     LocationHours,
     actor_kind_from_role,
+    is_time_disallowed,
     is_valid_start_minute,
     occupied_window,
     usable_end,
     validate_booking_time,
     window_fits_working_hours,
 )
-from app.services.slots import DisallowedRange, is_time_disallowed
 
 D = date(2026, 11, 10)  # a fixed future-ish date for the pure tests
 

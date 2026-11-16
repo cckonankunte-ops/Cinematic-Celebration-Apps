@@ -19,7 +19,7 @@ class DisallowedTimeCreate(BaseModel):
     is_active: bool = True
 
     @model_validator(mode="after")
-    def _check_order(self) -> "DisallowedTimeCreate":
+    def _check_order(self) -> DisallowedTimeCreate:
         if self.start_time >= self.end_time:
             raise ValueError("start_time must be before end_time")
         return self
