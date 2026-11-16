@@ -71,7 +71,7 @@ export type DecorCategory = 'extra_decoration' | 'gifts' | 'special_service';
 export const DECOR_CATEGORY_LABELS: Record<DecorCategory, string> = {
   extra_decoration: 'Extra Decoration',
   gifts: 'Choose Gifts',
-  special_service: 'Special Service',
+  special_service: 'Special Services',
 };
 
 /** A per-branch disallowed booking-time range (admin). */

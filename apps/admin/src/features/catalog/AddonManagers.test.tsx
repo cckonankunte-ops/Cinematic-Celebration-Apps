@@ -96,7 +96,7 @@ describe('DecorManager category', () => {
     render(<DecorManager locationId={1} showInactive />);
     const select = screen.getByRole('combobox', { name: 'Category' }) as HTMLSelectElement;
     const options = Array.from(select.options).map((o) => o.textContent);
-    expect(options).toEqual(['Extra Decoration', 'Choose Gifts', 'Special Service']);
+    expect(options).toEqual(['Extra Decoration', 'Choose Gifts', 'Special Services']);
     // Defaults to the first (extra_decoration) value.
     expect(select.value).toBe('extra_decoration');
   });

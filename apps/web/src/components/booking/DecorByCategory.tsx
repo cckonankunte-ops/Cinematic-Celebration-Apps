@@ -24,7 +24,7 @@ const CATEGORY_ORDER: DecorCategory[] = [
 const CATEGORY_LABELS: Record<DecorCategory, string> = {
   extra_decoration: 'Extra Decoration',
   gifts: 'Choose Gifts',
-  special_service: 'Special Service',
+  special_service: 'Special Services',
 };
 
 export default function DecorByCategory({
