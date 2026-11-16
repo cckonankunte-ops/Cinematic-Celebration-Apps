@@ -121,6 +121,7 @@ export default function HomeBookingWidget() {
           <button
             type="button"
             onClick={onBook}
+            disabled={!slug || !date}
             className="flex-1 rounded-full bg-festive-hero px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50 sm:flex-none"
           >
             Book Now

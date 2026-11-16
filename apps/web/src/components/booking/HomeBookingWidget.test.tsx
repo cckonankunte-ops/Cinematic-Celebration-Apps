@@ -60,6 +60,31 @@ describe('HomeBookingWidget', () => {
     expect(hrefValue).toBe('/book?location=jp-nagar&date=2027-01-15');
   });
 
+  it('disables Book Now until both a branch and a date are chosen', async () => {
+    vi.spyOn(publicApi, 'listLocations').mockResolvedValue([
+      loc(1, 'Hulimavu', 'hulimavu', '9876543210'),
+    ]);
+
+    render(<HomeBookingWidget />);
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'Hulimavu' })).toBeInTheDocument(),
+    );
+
+    const bookNow = screen.getByRole('button', { name: 'Book Now' });
+    // Nothing selected by default → disabled.
+    expect(bookNow).toBeDisabled();
+
+    // Branch only → still disabled.
+    fireEvent.change(screen.getByLabelText('Branch'), { target: { value: 'hulimavu' } });
+    expect(bookNow).toBeDisabled();
+
+    // Branch + date → enabled.
+    fireEvent.change(screen.getByLabelText('Booking date'), {
+      target: { value: '2027-01-15' },
+    });
+    expect(bookNow).toBeEnabled();
+  });
+
   it('dials the selected branch on Call now', async () => {
     vi.spyOn(publicApi, 'listLocations').mockResolvedValue([
       loc(1, 'Hulimavu', 'hulimavu', '9876543210'),
@@ -70,8 +95,25 @@ describe('HomeBookingWidget', () => {
       expect(screen.getByRole('option', { name: 'Hulimavu' })).toBeInTheDocument(),
     );
 
+    // No branch is selected by default; choose one, then Call now dials it.
+    fireEvent.change(screen.getByLabelText('Branch'), { target: { value: 'hulimavu' } });
     fireEvent.click(screen.getByRole('button', { name: 'Call now' }));
     expect(hrefValue).toBe('tel:+919876543210');
+  });
+
+  it('prompts to choose a location when Call now is tapped with none selected', async () => {
+    vi.spyOn(publicApi, 'listLocations').mockResolvedValue([
+      loc(1, 'Hulimavu', 'hulimavu', '9876543210'),
+    ]);
+
+    render(<HomeBookingWidget />);
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'Hulimavu' })).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Call now' }));
+    expect(screen.getByText(/choose a location first/i)).toBeInTheDocument();
+    expect(hrefValue).toBe('http://localhost/');
   });
 
   it('shows a hint instead of dialing when the branch has no phone', async () => {
@@ -84,6 +126,7 @@ describe('HomeBookingWidget', () => {
       expect(screen.getByRole('option', { name: 'Hulimavu' })).toBeInTheDocument(),
     );
 
+    fireEvent.change(screen.getByLabelText('Branch'), { target: { value: 'hulimavu' } });
     fireEvent.click(screen.getByRole('button', { name: 'Call now' }));
     expect(screen.getByText(/no phone number listed/i)).toBeInTheDocument();
     expect(hrefValue).toBe('http://localhost/');
