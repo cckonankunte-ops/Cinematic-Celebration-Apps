@@ -26,26 +26,31 @@ def list_public_offers(db: Session, *, on: date):
     base. A coupon qualifies when ``is_active`` AND ``is_public`` AND ``on``
     falls within its validity window (NULL bounds treated as open-ended).
     """
+    from app.models.location import Location
     from app.schemas.coupon import PublicOfferRead
 
     rows = db.execute(
-        select(Coupon).where(
+        select(Coupon, Location.name)
+        .join(Location, Location.id == Coupon.location_id)
+        .where(
             Coupon.is_active.is_(True),
             Coupon.is_public.is_(True),
+            Location.is_active.is_(True),
             (Coupon.effective_from.is_(None)) | (Coupon.effective_from <= on),
             (Coupon.effective_to.is_(None)) | (Coupon.effective_to >= on),
         )
-        .order_by(Coupon.id)
-    ).scalars()
+        .order_by(Location.name, Coupon.id)
+    ).all()
     return [
         PublicOfferRead(
             code=c.code,
             name=c.name,
             description=c.description,
+            location_name=location_name,
             effective_from=c.effective_from,
             effective_to=c.effective_to,
         )
-        for c in rows
+        for c, location_name in rows
     ]
 
 

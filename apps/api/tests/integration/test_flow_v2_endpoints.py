@@ -70,15 +70,17 @@ def test_o1_public_offers_safe_fields_only(client: TestClient, db: Session) -> N
     codes = {o["code"] for o in data}
     assert codes == {"PUBLIC10"}
     offer = data[0]
-    # Safe fields present; internal fields absent.
+    # Safe fields present (incl. the branch name); internal fields absent.
     assert set(offer.keys()) == {
         "code",
         "name",
         "description",
+        "location_name",
         "effective_from",
         "effective_to",
     }
     assert offer["name"] == "Flat 100 off"
+    assert offer["location_name"] == loc.name
 
 
 def test_o1_public_offers_empty_when_none_public(

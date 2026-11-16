@@ -127,6 +127,8 @@ export interface PublicOffer {
   code: string;
   name: string | null;
   description: string | null;
+  /** Branch this offer belongs to (coupons are per-branch). */
+  location_name: string;
   effective_from: string | null;
   effective_to: string | null;
 }

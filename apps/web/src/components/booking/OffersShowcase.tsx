@@ -39,7 +39,7 @@ export default function OffersShowcase() {
       <ul className="grid gap-3 sm:grid-cols-2">
         {offers.map((offer) => (
           <li
-            key={offer.code}
+            key={`${offer.location_name}:${offer.code}`}
             className="rounded-2xl border border-white/60 bg-white/95 p-4 text-left shadow-sm"
           >
             <div className="flex items-center gap-2">
@@ -48,6 +48,9 @@ export default function OffersShowcase() {
               </span>
               <span className="rounded-md bg-brand/10 px-2 py-0.5 font-mono text-sm font-bold text-brand">
                 {offer.code}
+              </span>
+              <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                {offer.location_name}
               </span>
             </div>
             {offer.name && (

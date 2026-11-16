@@ -40,13 +40,21 @@ describe('telHref', () => {
     expect(telHref('+91 98765 43210')).toBe('tel:+919876543210');
   });
 
-  it('strips a leading zero on a longer number', () => {
-    expect(telHref('09876543210')).toBe('tel:+9876543210');
+  it('drops a leading 0 trunk prefix and re-applies +91', () => {
+    expect(telHref('09876543210')).toBe('tel:+919876543210');
+  });
+
+  it('drops an explicit 91 country code and keeps a single +91', () => {
+    expect(telHref('919876543210')).toBe('tel:+919876543210');
   });
 
   it('returns null when there are no digits', () => {
     expect(telHref('')).toBeNull();
     expect(telHref(null)).toBeNull();
     expect(telHref(undefined)).toBeNull();
+  });
+
+  it('returns null for a number that is not a 10-digit mobile', () => {
+    expect(telHref('12345')).toBeNull();
   });
 });
