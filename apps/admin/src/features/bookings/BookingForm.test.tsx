@@ -6,14 +6,26 @@ import { BookingForm } from './BookingForm';
 
 // Mode the mocked location reports; tests flip this to exercise slot vs open.
 let mockBookingMode: 'slot' | 'open' = 'slot';
+let mockPlans: { id: number; title: string }[] = [
+  { id: 3, title: 'Starlight Package' },
+];
+let mockSlots: { id: number; description: string; is_available: boolean }[] = [
+  { id: 7, description: '9 AM - 12 PM', is_available: true },
+];
+let mockDurations: {
+  duration_minutes: number;
+  price_paise: number;
+  advance_paise: number;
+}[] = [
+  { duration_minutes: 60, price_paise: 79900, advance_paise: 0 },
+  { duration_minutes: 120, price_paise: 119900, advance_paise: 0 },
+];
 
 // Mock the catalog query hooks so the form renders without a QueryClient or a
 // live API. Each returns a tiny deterministic option set.
 vi.mock('./catalog-queries', () => ({
-  usePlans: () => ({ data: [{ id: 3, title: 'Starlight Package' }] }),
-  useSlotAvailability: () => ({
-    data: [{ id: 7, description: '9 AM - 12 PM', is_available: true }],
-  }),
+  usePlans: () => ({ data: mockPlans }),
+  useSlotAvailability: () => ({ data: mockSlots }),
   useCakes: () => ({ data: [{ id: 4, name: 'Chocolate', price_paise: 50000 }] }),
   useSpecialDecor: () => ({ data: [{ id: 1, name: 'Balloons', price_paise: 20000 }] }),
   useCombos: () => ({ data: [{ id: 2, name: 'Snacks', price_paise: 30000 }] }),
@@ -21,12 +33,7 @@ vi.mock('./catalog-queries', () => ({
   useLocationBookingMode: () => ({
     data: [{ id: 1, name: 'Hulimavu', booking_mode: mockBookingMode }],
   }),
-  usePlanDurations: () => ({
-    data: [
-      { duration_minutes: 60, price_paise: 79900, advance_paise: 0 },
-      { duration_minutes: 120, price_paise: 119900, advance_paise: 0 },
-    ],
-  }),
+  usePlanDurations: () => ({ data: mockDurations }),
   useOpenAvailability: () => ({
     data: [
       { start_time: '15:00:00', is_available: true },
@@ -86,6 +93,79 @@ describe('BookingForm', () => {
     // original tests that don't drive the live summary.
     previewResult = {};
     mockBookingMode = 'slot';
+    mockPlans = [{ id: 3, title: 'Starlight Package' }];
+    mockSlots = [{ id: 7, description: '9 AM - 12 PM', is_available: true }];
+    mockDurations = [
+      { duration_minutes: 60, price_paise: 79900, advance_paise: 0 },
+      { duration_minutes: 120, price_paise: 119900, advance_paise: 0 },
+    ];
+  });
+
+  it('keeps prefilled plan and duration selected when options load later', () => {
+    mockBookingMode = 'open';
+    mockPlans = [];
+    mockDurations = [];
+    const props = {
+      locationId: 1,
+      bookingId: 10,
+      initial: {
+        plan_id: 3,
+        duration_minutes: 120,
+        start_time: '15:00',
+        booking_date: '2030-01-01',
+      },
+      submitLabel: 'Save changes',
+      onSubmit: () => {},
+      isSubmitting: false,
+      serverError: null,
+    };
+    const { rerender } = render(<BookingForm {...props} />);
+
+    mockPlans = [{ id: 3, title: 'Starlight Package' }];
+    mockDurations = [
+      { duration_minutes: 60, price_paise: 79900, advance_paise: 0 },
+      { duration_minutes: 120, price_paise: 119900, advance_paise: 0 },
+    ];
+    rerender(<BookingForm {...props} />);
+
+    expect(screen.getByRole('combobox', { name: 'Plan' })).toHaveValue('3');
+    expect(screen.getByRole('combobox', { name: 'Duration' })).toHaveValue('120');
+  });
+
+  it('keeps the prefilled slot through plan hydration and submits it in edit mode', async () => {
+    mockPlans = [];
+    mockSlots = [];
+    const onSubmit = vi.fn();
+    const props = {
+      locationId: 1,
+      bookingId: 10,
+      initial: {
+        plan_id: 3,
+        slot_id: 7,
+        booking_date: '2030-01-01',
+        booking_name: 'Priya S',
+        phone: '9876543210',
+      },
+      submitLabel: 'Save changes',
+      onSubmit,
+      isSubmitting: false,
+      serverError: null,
+    };
+    const { rerender } = render(<BookingForm {...props} />);
+
+    mockPlans = [{ id: 3, title: 'Starlight Package' }];
+    mockSlots = [{ id: 7, description: '9 AM - 12 PM', is_available: true }];
+    rerender(<BookingForm {...props} />);
+
+    expect(screen.getByRole('combobox', { name: 'Plan' })).toHaveValue('3');
+    expect(screen.getByRole('combobox', { name: 'Slot' })).toHaveValue('7');
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ plan_id: 3, slot_id: 7 }),
+      ),
+    );
   });
 
   it('renders cascading plan/slot selects and add-on options', () => {

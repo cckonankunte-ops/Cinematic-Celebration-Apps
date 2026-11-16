@@ -414,18 +414,32 @@ export function BookingForm({
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1 text-sm">
           <span className="font-medium text-gray-700">Plan</span>
-          <select
-            aria-label="Plan"
-            className={inputClass}
-            {...register('plan_id', { valueAsNumber: true })}
-          >
-            <option value="">Select a plan…</option>
-            {plans.data?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </select>
+          <Controller
+            control={control}
+            name="plan_id"
+            render={({ field }) => (
+              <select
+                aria-label="Plan"
+                className={inputClass}
+                name={field.name}
+                ref={field.ref}
+                value={typeof field.value === 'number' ? field.value : ''}
+                onBlur={field.onBlur}
+                onChange={(event) =>
+                  field.onChange(
+                    event.target.value === '' ? undefined : Number(event.target.value),
+                  )
+                }
+              >
+                <option value="">Select a plan…</option>
+                {plans.data?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            )}
+          />
           {errors.plan_id && <p className="text-xs text-red-600">{errors.plan_id.message}</p>}
         </label>
 
@@ -434,40 +448,68 @@ export function BookingForm({
             {isOpenMode ? 'Duration' : 'Slot'}
           </span>
           {isOpenMode ? (
-            <select
-              aria-label="Duration"
-              className={inputClass}
-              disabled={!planId}
-              {...register('duration_minutes', { valueAsNumber: true })}
-            >
-              <option value="">Select a duration…</option>
-              {durations.data?.map((d) => (
-                <option key={d.duration_minutes} value={d.duration_minutes}>
-                  {formatDurationLabel(d.duration_minutes)} — {formatRupees(d.price_paise)}
-                </option>
-              ))}
-            </select>
+            <Controller
+              control={control}
+              name="duration_minutes"
+              render={({ field }) => (
+                <select
+                  aria-label="Duration"
+                  className={inputClass}
+                  disabled={!planId}
+                  name={field.name}
+                  ref={field.ref}
+                  value={typeof field.value === 'number' ? field.value : ''}
+                  onBlur={field.onBlur}
+                  onChange={(event) =>
+                    field.onChange(
+                      event.target.value === '' ? undefined : Number(event.target.value),
+                    )
+                  }
+                >
+                  <option value="">Select a duration…</option>
+                  {durations.data?.map((d) => (
+                    <option key={d.duration_minutes} value={d.duration_minutes}>
+                      {formatDurationLabel(d.duration_minutes)} — {formatRupees(d.price_paise)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            />
           ) : (
-            <select
-              aria-label="Slot"
-              className={inputClass}
-              disabled={!planId}
-              {...register('slot_id', { valueAsNumber: true })}
-            >
-              <option value="">Select a slot…</option>
-              {slots.data?.map((s) => {
-                // A held slot is non-selectable, EXCEPT the booking's own slot
-                // in edit mode (it holds itself) so the pre-fill stays valid.
-                const isCurrent = currentSlotId === s.id;
-                const blocked = !s.is_available && !isCurrent;
-                return (
-                  <option key={s.id} value={s.id} disabled={blocked}>
-                    {s.description}
-                    {blocked ? ' — already booked' : ''}
-                  </option>
-                );
-              })}
-            </select>
+            <Controller
+              control={control}
+              name="slot_id"
+              render={({ field }) => (
+                <select
+                  aria-label="Slot"
+                  className={inputClass}
+                  disabled={!planId}
+                  name={field.name}
+                  ref={field.ref}
+                  value={typeof field.value === 'number' ? field.value : ''}
+                  onBlur={field.onBlur}
+                  onChange={(event) =>
+                    field.onChange(
+                      event.target.value === '' ? undefined : Number(event.target.value),
+                    )
+                  }
+                >
+                  <option value="">Select a slot…</option>
+                  {slots.data?.map((s) => {
+                    // A held slot is non-selectable, EXCEPT the booking's own slot
+                    // in edit mode (it holds itself) so the pre-fill stays valid.
+                    const isCurrent = currentSlotId === s.id;
+                    const blocked = !s.is_available && !isCurrent;
+                    return (
+                      <option key={s.id} value={s.id} disabled={blocked}>
+                        {s.description}
+                        {blocked ? ' — already booked' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+            />
           )}
           {errors.slot_id && <p className="text-xs text-red-600">{errors.slot_id.message}</p>}
         </label>
