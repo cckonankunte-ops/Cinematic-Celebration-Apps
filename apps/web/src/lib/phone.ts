@@ -16,16 +16,28 @@ export function isValidIndianMobile(raw: string): boolean {
 }
 
 /**
- * Build a `tel:` href from a raw phone string. Strips non-digits; a bare
- * 10-digit Indian mobile is prefixed with the `91` country code (mirrors the
- * WhatsApp FAB's `waDigits` and LocationList's tel: logic). Returns null when
- * there are no digits so callers can omit the link entirely.
+ * Build a `tel:` href from a raw phone string, always as `+91` + the 10-digit
+ * Indian mobile. Strips non-digits, drops a leading `91` country code or a
+ * leading `0` trunk prefix, and keeps the last 10 digits. Returns null when
+ * there is no usable 10-digit number so callers can omit the link entirely.
+ *
+ * Examples: "9876543210" -> tel:+919876543210; "09876543210" ->
+ * tel:+919876543210; "+91 98765 43210" -> tel:+919876543210.
  */
 export function telHref(raw: string | null | undefined): string | null {
-  const digits = String(raw ?? '').replace(/\D/g, '');
+  let digits = String(raw ?? '').replace(/\D/g, '');
   if (digits.length === 0) {
     return null;
   }
-  const normalized = digits.length === 10 ? `91${digits}` : digits.replace(/^0+/, '');
-  return `tel:+${normalized}`;
+  // Drop an explicit country code or trunk prefix so we're left with the
+  // national 10-digit number, then re-apply a single +91.
+  if (digits.length > 10 && digits.startsWith('91')) {
+    digits = digits.slice(2);
+  }
+  digits = digits.replace(/^0+/, '');
+  if (digits.length !== 10) {
+    // Not a recognizable 10-digit Indian mobile; don't produce a broken link.
+    return null;
+  }
+  return `tel:+91${digits}`;
 }
