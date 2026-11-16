@@ -38,7 +38,9 @@ from app.models.combo_item import ComboItem
 from app.models.contact_lead import ContactLead
 from app.models.coupon import Coupon
 from app.models.coupon_redemption import CouponRedemption
+from app.models.advance_rule import AdvanceRule
 from app.models.location import Location
+from app.models.location_disallowed_time import LocationDisallowedTime
 from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.plan_pricing import PlanPricing
@@ -73,7 +75,9 @@ from app.services.pricing import (
 from app.services.slots import (
     STAFF_EDIT_GRACE_MINUTES,
     ActorKind,
+    DisallowedRange,
     LocationHours,
+    is_time_disallowed,
     is_valid_start_minute,
     occupied_window,
     validate_booking_time,
@@ -267,6 +271,7 @@ def validate_booking_request(
     cake_id: int | None,
     special_decor: list[DecorSelectionIn],
     combos: list[ComboSelectionIn],
+    kids: int = 0,
     cake_weight_half_kg: int = 1,
     led_name: str | None = None,
     allow_exceed_max: bool = False,
@@ -278,10 +283,12 @@ def validate_booking_request(
     BookingDateInPastError (422) for past dates, and ValidationFailedError
     (422 VALIDATION_ERROR) when the guest count or cake weight is out of range.
 
-    ``allow_exceed_max`` lets admin/staff bookings exceed the plan's
-    ``max_people_allowed`` (they take walk-in groups at the venue). Customer
-    (public) bookings pass False so the plan cap is enforced for self-service.
-    The ``people >= 1`` floor is always enforced.
+    ``people`` is the ADULT count and ``kids`` the kid count; a booking needs at
+    least one adult (``people >= 1``) and ``kids >= 0``. The plan's
+    ``max_people_allowed`` cap applies to the TOTAL guests (``people + kids``).
+    ``allow_exceed_max`` lets admin/staff bookings exceed that cap (walk-in
+    groups at the venue); customer (public) bookings pass False so the cap is
+    enforced for self-service. The adults>=1 floor is always enforced.
 
     Nothing is persisted here; all checks raise before building the
     ValidatedRequest, so a failed validation leaves the session untouched.
@@ -294,8 +301,11 @@ def validate_booking_request(
     # resolve_booking_window; item validation here no longer requires a slot.
 
     if people < 1:
-        raise ValidationFailedError("At least one person is required.")
-    if not allow_exceed_max and people > plan.max_people_allowed:
+        raise ValidationFailedError("At least one adult is required.")
+    if kids < 0:
+        raise ValidationFailedError("Kids count cannot be negative.")
+    total_guests = people + kids
+    if not allow_exceed_max and total_guests > plan.max_people_allowed:
         raise ValidationFailedError(
             "The number of people exceeds the maximum allowed for this plan."
         )
@@ -337,6 +347,7 @@ def validate_booking_request(
     return ValidatedRequest(
         plan=plan,
         people=people,
+        kids=kids,
         cake=cake,
         cake_weight_half_kg=cake_weight_half_kg,
         special_decor=decor_selections,
@@ -353,6 +364,37 @@ def generate_reference(location: Location, booking_date: date) -> str:
     return f"CC-{abbrev}-{booking_date.strftime('%Y%m%d')}-{hex_part}"
 
 
+def _active_advance_rules(db: Session, location_id: int) -> list[AdvanceRule]:
+    """Load a branch's active advance rules (passed into pricing to resolve the
+    advance payable; AdvanceRule satisfies the pure AdvanceRuleLike shape)."""
+    return list(
+        db.execute(
+            select(AdvanceRule).where(
+                AdvanceRule.location_id == location_id,
+                AdvanceRule.is_active.is_(True),
+            )
+        ).scalars()
+    )
+
+
+def _active_disallowed_ranges(db: Session, location_id: int) -> list[DisallowedRange]:
+    """Load a branch's active disallowed time ranges as pure value objects."""
+    rows = db.execute(
+        select(LocationDisallowedTime).where(
+            LocationDisallowedTime.location_id == location_id,
+            LocationDisallowedTime.is_active.is_(True),
+        )
+    ).scalars()
+    return [
+        DisallowedRange(
+            start=r.start_time,
+            end=r.end_time,
+            max_duration_minutes=r.max_duration_minutes,
+        )
+        for r in rows
+    ]
+
+
 def _enforce_booking_time(
     db: Session,
     *,
@@ -362,15 +404,27 @@ def _enforce_booking_time(
     duration_minutes: int | None,
     actor: ActorKind,
     staff_edit_grace_minutes: int = 0,
+    override_disallowed: bool = False,
 ) -> None:
     """Run the time-rule pipeline for a booking (skips legacy slots w/o times).
 
     ``staff_edit_grace_minutes`` (default 0) lets the EDIT path grant STAFF a
     window to act on a booking during/just-after its slot; create/preview pass 0
     so a brand-new booking can't be placed in a past slot by staff.
+
+    Admin-configured disallowed time ranges (R10) are enforced here: a customer
+    is always blocked from a disallowed window; an admin is blocked too unless
+    ``override_disallowed`` is set (mirrors how other time rules exempt admins).
     """
     if start is None or duration_minutes is None:
         return
+    # Disallowed-range check. PUBLIC/STAFF are always subject; ADMIN may override.
+    if not (actor is ActorKind.ADMIN and override_disallowed):
+        ranges = _active_disallowed_ranges(db, location.id)
+        if is_time_disallowed(ranges, start, duration_minutes):
+            raise ValidationFailedError(
+                "This time is not available for booking at this branch."
+            )
     hours = LocationHours(
         opens_at=location.opens_at,
         closes_at=location.closes_at,
@@ -524,6 +578,7 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
         plan_id=data.plan_id,
         booking_date=data.booking_date,
         people=data.people,
+        kids=data.kids,
         cake_id=data.cake_id,
         special_decor=data.special_decor,
         combos=data.combos,
@@ -589,10 +644,13 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
     price = compute_booking_price(
         req, is_customer=True, coupon=validated,
         base_price_paise=duration_pricing.price_paise,
+        advance_rules=_active_advance_rules(db, data.location_id),
     )
 
     public_token = secrets.token_urlsafe(12)
-    advance_paise = duration_pricing.advance_paise
+    # Advance payable comes from the branch's threshold rules against the final
+    # total (compute_booking_price), falling back to the plan's advance.
+    advance_paise = price.advance_paise
     final_reference = ""
 
     for _ in range(_MAX_REFERENCE_ATTEMPTS):
@@ -614,6 +672,7 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
             message=data.message,
             led_name=data.led_name,
             people=data.people,
+            kids=data.kids,
             occasion_id=data.occasion_id,
             plan_price_paise=price.plan_price_paise,
             extra_guest_paise=price.extra_guest_paise,
@@ -727,6 +786,7 @@ def create_admin_booking(
         plan_id=data.plan_id,
         booking_date=data.booking_date,
         people=data.people,
+        kids=data.kids,
         cake_id=data.cake_id,
         special_decor=data.special_decor,
         combos=data.combos,
@@ -758,7 +818,9 @@ def create_admin_booking(
     )
 
     # Admin is exempt from future-start / late-cutoff / end-before-close, but
-    # working-hours still apply. Overlap pre-check gives a clean 409.
+    # working-hours still apply. Admin create also overrides disallowed-time
+    # ranges (staff may deliberately book a blocked window at the venue).
+    # Overlap pre-check gives a clean 409.
     _enforce_booking_time(
         db,
         location=location,
@@ -766,6 +828,7 @@ def create_admin_booking(
         start=start_time,
         duration_minutes=duration_minutes,
         actor=ActorKind.ADMIN,
+        override_disallowed=True,
     )
     _assert_no_overlap(
         db,
@@ -805,6 +868,7 @@ def create_admin_booking(
         is_customer=False,
         coupon=validated,
         base_price_paise=duration_pricing.price_paise,
+        advance_rules=_active_advance_rules(db, data.location_id),
     )
 
     public_token = secrets.token_urlsafe(12)
@@ -827,6 +891,7 @@ def create_admin_booking(
             message=data.message,
             led_name=data.led_name,
             people=data.people,
+            kids=data.kids,
             occasion_id=data.occasion_id,
             plan_price_paise=price.plan_price_paise,
             extra_guest_paise=price.extra_guest_paise,
@@ -838,7 +903,7 @@ def create_admin_booking(
             coupon_code=price.coupon_code,
             coupon_discount_paise=price.coupon_discount_paise,
             total_paise=price.total_paise,
-            advance_paise=duration_pricing.advance_paise,
+            advance_paise=price.advance_paise,
             status="accepted",
             crm_user_id=actor.id,
         )
@@ -935,6 +1000,7 @@ def update_booking(
     old_snapshot = _money_snapshot(booking)
 
     people = data.people if data.people is not None else booking.people
+    kids = data.kids if data.kids is not None else booking.kids
     discount = data.discount_paise if data.discount_paise is not None else booking.discount_paise
     food = data.food_paise if data.food_paise is not None else booking.food_paise
     other = data.other_paise if data.other_paise is not None else booking.other_paise
@@ -1018,6 +1084,8 @@ def update_booking(
         # Edit path: give STAFF a grace window so they can update add-ons during
         # and shortly after a running slot (e.g. party popper / food added at the
         # venue). Admin is fully exempt; this only relaxes STAFF's future-start.
+        # Admins may also edit into a disallowed window (override); staff are
+        # still subject to disallowed ranges.
         _enforce_booking_time(
             db,
             location=location,
@@ -1026,6 +1094,7 @@ def update_booking(
             duration_minutes=resolved.duration_minutes,
             actor=actor_kind,
             staff_edit_grace_minutes=STAFF_EDIT_GRACE_MINUTES,
+            override_disallowed=actor.role == "admin",
         )
         _assert_no_overlap(
             db,
@@ -1045,6 +1114,7 @@ def update_booking(
         window_changed
         or date_changed
         or data.people is not None
+        or data.kids is not None
         or data.cake_id is not None
         or data.special_decor is not None
         or data.combos is not None
@@ -1098,6 +1168,7 @@ def update_booking(
             plan_id=booking.plan_id,
             booking_date=booking.booking_date,
             people=people,
+            kids=kids,
             cake_id=cake_id,
             special_decor=special_decor,
             combos=combos,
@@ -1139,6 +1210,7 @@ def update_booking(
             is_customer=False,
             coupon=validated,
             base_price_paise=duration_pricing.price_paise,
+            advance_rules=_active_advance_rules(db, booking.location_id),
         )
         db.execute(
             BookingItem.__table__.delete().where(BookingItem.booking_id == booking.id)
@@ -1146,6 +1218,7 @@ def update_booking(
         _add_booking_items(db, booking.id, price.addon_lines)
 
         booking.people = people
+        booking.kids = kids
         booking.led_name = led_name
         booking.plan_price_paise = price.plan_price_paise
         booking.extra_guest_paise = price.extra_guest_paise
@@ -1157,6 +1230,8 @@ def update_booking(
         booking.coupon_code = price.coupon_code
         booking.coupon_discount_paise = price.coupon_discount_paise
         booking.total_paise = price.total_paise
+        # Re-resolve the advance from the branch's rules against the new total.
+        booking.advance_paise = price.advance_paise
 
         # Keep the redemption ledger consistent with the final coupon state.
         if validated is not None and coupon_row is not None:
@@ -1210,6 +1285,7 @@ def _breakdown_to_read(
     return PriceBreakdownRead(
         plan_price_paise=breakdown.plan_price_paise,
         extra_guest_paise=breakdown.extra_guest_paise,
+        kid_extra_guest_paise=breakdown.kid_extra_guest_paise,
         addon_lines=[
             AddonLineRead(
                 kind=line.kind,
@@ -1234,6 +1310,7 @@ def _breakdown_to_read(
         coupon_code=breakdown.coupon_code,
         coupon_discount_paise=breakdown.coupon_discount_paise,
         total_paise=breakdown.total_paise,
+        advance_paise=breakdown.advance_paise,
         amount_paid_paise=amount_paid_paise,
         amount_due_paise=breakdown.total_paise - amount_paid_paise,
     )
@@ -1263,6 +1340,7 @@ def preview_booking(
         plan_id=data.plan_id,
         booking_date=data.booking_date,
         people=data.people,
+        kids=data.kids,
         cake_id=data.cake_id,
         special_decor=data.special_decor,
         combos=data.combos,
@@ -1329,6 +1407,7 @@ def preview_booking(
         is_customer=is_customer,
         coupon=validated,
         base_price_paise=duration_pricing.price_paise,
+        advance_rules=_active_advance_rules(db, data.location_id),
     )
 
     # Brand-new previews have no booking, so nothing is paid yet; an edit preview

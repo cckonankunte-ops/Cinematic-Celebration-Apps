@@ -50,18 +50,18 @@ sub-tasks are marked with `*`.
     pure/property-friendly
   - _Requirements: 6.1, 6.3, 6.3a, 6.4, 6.7, 12.3, 12.4, 12.6_
 
-- [ ] 3. Validation + booking service: kids, disallowed times, advance wiring
-  - [ ] 3.1 Add `kids` param to `validate_booking_request`; cap check on
+- [-] 3. Validation + booking service: kids, disallowed times, advance wiring
+  - [x] 3.1 Add `kids` param to `validate_booking_request`; cap check on
     `people + kids` vs `max_people_allowed`; adults ≥ 1; populate
     `ValidatedRequest.kids`
-  - [ ] 3.2 Pure `is_time_disallowed(ranges, start, duration_minutes)` helper in
+  - [x] 3.2 Pure `is_time_disallowed(ranges, start, duration_minutes)` helper in
     `services/slots.py` + unit truth-table test
-  - [ ] 3.3 Enforce disallowed ranges in `_enforce_booking_time` (customer always;
+  - [x] 3.3 Enforce disallowed ranges in `_enforce_booking_time` (customer always;
     admin unless override) and in open-mode availability generation
-  - [ ] 3.4 Load the location's active `advance_rules` in the booking service and
+  - [x] 3.4 Load the location's active `advance_rules` in the booking service and
     pass them into `compute_booking_price` for preview + create so `advance_paise`
     is in every breakdown
-  - [ ] 3.5 Persist `bookings.kids` in `create_customer_booking` /
+  - [x] 3.5 Persist `bookings.kids` in `create_customer_booking` /
     `create_admin_booking`; thread `kids` through preview
   - [ ] 3.6 Integration tests K5 (cap), T1/T3 (disallowed), adults=0 → 422;
     A2 (advance identical in preview/create), A4 (advance vs final total w/ coupon)

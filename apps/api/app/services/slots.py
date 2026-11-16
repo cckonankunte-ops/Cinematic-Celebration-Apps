@@ -163,6 +163,54 @@ class LocationHours:
 STAFF_EDIT_GRACE_MINUTES = 60
 
 
+@dataclass(frozen=True)
+class DisallowedRange:
+    """An active disallowed wall-clock range for a branch.
+
+    ``max_duration_minutes`` None blocks any overlapping booking; when set, only
+    bookings of that duration or shorter are blocked. Times are IST wall-clock
+    on the booking date.
+    """
+
+    start: time
+    end: time
+    max_duration_minutes: int | None = None
+
+
+def is_time_disallowed(
+    ranges: list[DisallowedRange], start: time, duration_minutes: int
+) -> bool:
+    """True when the booking's usable window overlaps an applicable disallowed
+    range.
+
+    For each active range: the range applies only if its ``max_duration_minutes``
+    is None (blocks any duration) or ``duration_minutes <= max_duration_minutes``
+    (blocks short bookings, e.g. "no 1-hour bookings after 22:00"). An applicable
+    range blocks when the booking's usable window
+    ``[start, start + duration_minutes)`` overlaps the range ``[start, end)``.
+
+    Pure function over wall-clock times (same-day, no midnight crossover for the
+    range itself, which the admin schema guarantees via ``start < end``). The
+    booking window is evaluated on a nominal date so overlap math is simple.
+    """
+    nominal = date(2000, 1, 1)
+    book_start = datetime.combine(nominal, start)
+    book_end = book_start + timedelta(minutes=duration_minutes)
+    for r in ranges:
+        applies = (
+            r.max_duration_minutes is None
+            or duration_minutes <= r.max_duration_minutes
+        )
+        if not applies:
+            continue
+        range_start = datetime.combine(nominal, r.start)
+        range_end = datetime.combine(nominal, r.end)
+        # Half-open overlap: [book_start, book_end) ∩ [range_start, range_end).
+        if book_start < range_end and range_start < book_end:
+            return True
+    return False
+
+
 def validate_booking_time(
     *,
     hours: LocationHours,
