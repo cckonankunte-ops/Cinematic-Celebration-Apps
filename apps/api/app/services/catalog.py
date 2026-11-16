@@ -18,6 +18,7 @@ from app.integrations.storage import public_url
 from app.models.cake import Cake
 from app.models.combo_item import ComboItem
 from app.models.location import Location
+from app.models.location_disallowed_time import LocationDisallowedTime
 from app.models.occasion import Occasion
 from app.models.plan import Plan, PlanGalleryImage
 from app.models.slot import Slot
@@ -35,8 +36,10 @@ from app.schemas.catalog import (
 )
 from app.services.slots import (
     ActorKind,
+    DisallowedRange,
     LocationHours,
     OccupiedWindow,
+    is_time_disallowed,
     occupied_window,
     usable_end,
     validate_booking_time,
@@ -108,6 +111,7 @@ def _to_plan_read(db: Session, plan: Plan) -> PlanRead:
         people_allowed=plan.people_allowed,
         max_people_allowed=plan.max_people_allowed,
         extra_guest_paise=plan.extra_guest_paise,
+        kid_price_pct=plan.kid_price_pct,
         advance_paise=plan.advance_paise,
         gallery_urls=_plan_gallery_urls(db, plan.id),
     )
@@ -222,6 +226,7 @@ def list_special_decor(db: Session, location_id: int, on: date) -> list[SpecialD
             id=d.id,
             name=d.name,
             description=d.description,
+            category=d.category,
             price_paise=d.price_paise,
             image_url=public_url(d.object_key),
             sort_order=d.sort_order,
@@ -284,6 +289,24 @@ def list_available_slots(
         ).scalars()
     )
     return [s for s in list_active_slots(db, plan_id, on) if s.id not in held_slot_ids]
+
+
+def _active_disallowed_ranges(db: Session, location_id: int) -> list[DisallowedRange]:
+    """Load a branch's active disallowed time ranges as pure value objects."""
+    rows = db.execute(
+        select(LocationDisallowedTime).where(
+            LocationDisallowedTime.location_id == location_id,
+            LocationDisallowedTime.is_active.is_(True),
+        )
+    ).scalars()
+    return [
+        DisallowedRange(
+            start=r.start_time,
+            end=r.end_time,
+            max_duration_minutes=r.max_duration_minutes,
+        )
+        for r in rows
+    ]
 
 
 def _active_occupied_windows(
@@ -436,6 +459,15 @@ def generate_open_availability(
     )
     open_dt, close_dt = working_window(on, location.opens_at, location.closes_at)
 
+    # Admin-configured disallowed ranges (R10) hide overlapping customer starts.
+    # Admins are exempt (they may book a disallowed window via override), so the
+    # ranges only filter the PUBLIC view.
+    disallowed = (
+        _active_disallowed_ranges(db, location_id)
+        if actor is ActorKind.PUBLIC
+        else []
+    )
+
     out: list[OpenAvailabilityRead] = []
     # Step :00/:30 from open; stop once the usable end would exceed close.
     cursor = open_dt
@@ -452,6 +484,8 @@ def generate_open_availability(
                 now=now,
             )
         except AppError:
+            available = False
+        if available and is_time_disallowed(disallowed, start, duration_minutes):
             available = False
         if available:
             window = occupied_window(on, start, duration_minutes, buffer)

@@ -15,10 +15,22 @@ from app.schemas.catalog import (
     SlotAvailabilityRead,
     SlotRead,
 )
+from app.schemas.coupon import PublicOfferRead
 from app.services import catalog
+from app.services import coupon as coupon_service
 from app.services import plan_pricing as plan_pricing_service
 
 router = APIRouter(prefix="/api/v1/public", tags=["public-catalog"])
+
+
+@router.get("/offers", response_model=list[PublicOfferRead])
+def public_offers(db: Session = Depends(get_db)) -> list[PublicOfferRead]:
+    """Active, public, currently-valid coupon offers for the home-page showcase.
+
+    Safe fields only (code, name, description, validity). Empty list when no
+    public offers exist, so the UI omits the showcase entirely.
+    """
+    return coupon_service.list_public_offers(db, on=date.today())
 
 
 class AvailableSlotsRequest(BaseModel):

@@ -45,6 +45,9 @@ const componentsSchema = z.object({
 export const couponFormSchema = z
   .object({
     code: z.string().trim().min(1, 'Code is required'),
+    name: z.string().trim().max(120, 'Too long').optional().default(''),
+    description: z.string().trim().max(500, 'Too long').optional().default(''),
+    is_public: z.boolean().default(false),
     type: z.enum(['flat', 'percentage']),
     value: z
       .number({ invalid_type_error: 'Value is required' })

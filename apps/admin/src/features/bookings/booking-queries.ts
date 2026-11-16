@@ -44,6 +44,7 @@ export interface AdminPreviewBody {
   duration_minutes?: number;
   booking_date: string;
   people: number;
+  kids: number;
   cake_id?: number;
   cake_weight_half_kg: number;
   special_decor: { id: number; quantity: number }[];

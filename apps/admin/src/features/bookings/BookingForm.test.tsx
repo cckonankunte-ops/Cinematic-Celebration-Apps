@@ -73,6 +73,7 @@ function couponBreakdown(discountPaise: number, code: string): Record<string, un
   return {
     plan_price_paise: 100000,
     extra_guest_paise: 0,
+    kid_extra_guest_paise: 0,
     addon_lines: [],
     subtotal_paise: 100000,
     discount_paise: 0,
@@ -82,6 +83,7 @@ function couponBreakdown(discountPaise: number, code: string): Record<string, un
     coupon_code: code,
     coupon_discount_paise: discountPaise,
     total_paise: 100000 - discountPaise,
+    advance_paise: 0,
     amount_paid_paise: 0,
     amount_due_paise: 100000 - discountPaise,
   };

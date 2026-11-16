@@ -26,6 +26,11 @@ class CouponComponents(BaseModel):
 
 class CouponBase(BaseModel):
     code: str = Field(min_length=1)
+    # Admin-written, customer-facing offer label + blurb (plain text). Shown on
+    # the home page only when is_public is true. Display-only; never affect math.
+    name: str | None = None
+    description: str | None = None
+    is_public: bool = False
     type: Literal["flat", "percentage"]
     value: int = Field(ge=0)
     cap_paise: int | None = Field(default=None, ge=0)
@@ -57,3 +62,17 @@ class CouponUpdate(CouponBase):
 class CouponRead(CouponBase):
     id: int
     location_id: int
+
+
+class PublicOfferRead(BaseModel):
+    """Safe, customer-facing coupon offer for the home-page showcase.
+
+    Only public, display-safe fields — never usage limits, caps, value, or
+    percentage-base internals.
+    """
+
+    code: str
+    name: str | None
+    description: str | None
+    effective_from: date | None
+    effective_to: date | None

@@ -14,6 +14,8 @@ const sampleStatus: Status = {
   plan_title: 'Starlight Package',
   slot_description: '9 AM - 12 PM',
   booking_date: '2025-12-25',
+  people: 4,
+  kids: 0,
   total_paise: 450000,
   amount_paid_paise: 50000,
   amount_due_paise: 400000,

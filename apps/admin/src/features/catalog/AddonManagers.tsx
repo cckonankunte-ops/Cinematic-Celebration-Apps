@@ -29,8 +29,10 @@ import {
   useUpdateDecor,
 } from './queries';
 import {
+  DECOR_CATEGORY_LABELS,
   FAR_FUTURE_DATE,
   type CakeAdminRead,
+  type DecorCategory,
   type NamedAddonAdminRead,
 } from './types';
 
@@ -351,7 +353,11 @@ export function DecorManager({
               className="flex items-center justify-between rounded border border-gray-200 bg-white px-3 py-2 text-sm"
             >
               <span>
-                {d.name} <span className="text-gray-500">· {formatRupees(d.price_paise)}</span>
+                {d.name}{' '}
+                <span className="text-gray-500">
+                  · {formatRupees(d.price_paise)}
+                  {d.category ? ` · ${DECOR_CATEGORY_LABELS[d.category]}` : ''}
+                </span>
               </span>
               <RowActions
                 active={d.is_active}
@@ -386,6 +392,9 @@ function DecorForm({
   const isEdit = existing !== undefined;
   const [name, setName] = useState(existing?.name ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
+  const [category, setCategory] = useState<DecorCategory>(
+    existing?.category ?? 'extra_decoration',
+  );
   const [priceRupees, setPriceRupees] = useState(
     existing ? String(existing.price_paise / 100) : '',
   );
@@ -412,6 +421,7 @@ function DecorForm({
         await update.mutateAsync({
           name: name.trim(),
           description: description.trim(),
+          category,
           price_paise: rupeesToPaise(Number(priceRupees)),
           ...(objectKey ? { object_key: objectKey } : {}),
           is_active: true,
@@ -422,6 +432,7 @@ function DecorForm({
           location_id: locationId,
           name: name.trim(),
           description: description.trim(),
+          category,
           price_paise: rupeesToPaise(Number(priceRupees)),
           object_key: objectKey as string,
           sort_order: 0,
@@ -429,6 +440,7 @@ function DecorForm({
         });
         setName('');
         setDescription('');
+        setCategory('extra_decoration');
         setPriceRupees('');
         if (fileRef.current) {
           fileRef.current.value = '';
@@ -454,6 +466,20 @@ function DecorForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
+      <label className="block text-xs text-gray-600">
+        Category
+        <select
+          className={field}
+          value={category}
+          onChange={(e) => setCategory(e.target.value as DecorCategory)}
+        >
+          {(Object.keys(DECOR_CATEGORY_LABELS) as DecorCategory[]).map((key) => (
+            <option key={key} value={key}>
+              {DECOR_CATEGORY_LABELS[key]}
+            </option>
+          ))}
+        </select>
+      </label>
       <input
         className={field}
         placeholder="Description"

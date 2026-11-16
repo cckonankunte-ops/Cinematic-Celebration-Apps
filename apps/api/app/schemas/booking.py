@@ -66,6 +66,8 @@ class PriceBreakdownRead(BaseModel):
 
     plan_price_paise: int
     extra_guest_paise: int
+    # Kid-only portion of extra_guest_paise, so the UI can show a "Kids" line.
+    kid_extra_guest_paise: int = 0
     addon_lines: list[AddonLineRead]
     subtotal_paise: int
     discount_paise: int
@@ -75,6 +77,8 @@ class PriceBreakdownRead(BaseModel):
     coupon_code: str | None
     coupon_discount_paise: int
     total_paise: int
+    # Server-resolved advance payable (threshold rules, else plan fallback).
+    advance_paise: int = 0
     amount_paid_paise: int
     amount_due_paise: int
 
@@ -95,7 +99,8 @@ class PreviewBase(BaseModel):
     start_time: time | None = None
     duration_minutes: int | None = Field(default=None, gt=0)
     booking_date: date
-    people: int = Field(ge=1)
+    people: int = Field(ge=1)  # adults (above 10 yrs)
+    kids: int = Field(default=0, ge=0)  # kids (3-10 yrs)
     cake_id: int | None = None
     cake_weight_half_kg: int = Field(default=1, ge=1)
     special_decor: list[DecorSelectionIn] = Field(default_factory=list)
@@ -154,7 +159,8 @@ class BookingCreate(BaseModel):
     special_person_name: str | None = None
     name_on_cake: str | None = None
     message: str | None = None
-    people: int = Field(ge=1)
+    people: int = Field(ge=1)  # adults (above 10 yrs)
+    kids: int = Field(default=0, ge=0)  # kids (3-10 yrs)
     occasion_id: int | None = None
     cake_id: int | None = None
     cake_weight_half_kg: int = Field(default=1, ge=1)
@@ -201,6 +207,8 @@ class PublicBookingStatus(BaseModel):
     plan_title: str
     slot_description: str
     booking_date: date
+    people: int = 0  # adults (above 10 yrs)
+    kids: int = 0  # kids (3-10 yrs)
     total_paise: int
     amount_paid_paise: int
     amount_due_paise: int  # may be negative = overpaid
@@ -244,7 +252,8 @@ class BookingUpdate(BaseModel):
     ignored by the service.
     """
 
-    people: int | None = Field(default=None, ge=1)
+    people: int | None = Field(default=None, ge=1)  # adults; None = unchanged
+    kids: int | None = Field(default=None, ge=0)  # kids (3-10 yrs); None = unchanged
     # Moving the booking to a different date. When set, the client MUST also send
     # the re-selected window (slot_id for slot mode, or start_time +
     # duration_minutes for open mode) for the new date; the service re-checks
@@ -314,7 +323,8 @@ class BookingRead(BaseModel):
     special_person_name: str | None
     name_on_cake: str | None
     message: str | None
-    people: int
+    people: int  # adults
+    kids: int = 0
     occasion_id: int | None
     plan_price_paise: int
     extra_guest_paise: int
@@ -352,7 +362,8 @@ class BookingListItem(BaseModel):
     booking_name: str
     phone: str | None = None
     special_person_name: str | None = None
-    people: int
+    people: int  # adults
+    kids: int = 0
     plan_title: str
     slot_description: str
     occasion_name: str | None = None

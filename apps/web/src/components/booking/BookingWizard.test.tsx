@@ -44,6 +44,7 @@ describe('BookingWizard', () => {
     vi.spyOn(publicApi, 'previewBooking').mockResolvedValue({
       plan_price_paise: 450000,
       extra_guest_paise: 0,
+      kid_extra_guest_paise: 0,
       addon_lines: [],
       subtotal_paise: 450000,
       discount_paise: 0,
@@ -53,6 +54,7 @@ describe('BookingWizard', () => {
       coupon_code: null,
       coupon_discount_paise: 0,
       total_paise: 450000,
+      advance_paise: 50000,
       amount_paid_paise: 0,
       amount_due_paise: 450000,
     });

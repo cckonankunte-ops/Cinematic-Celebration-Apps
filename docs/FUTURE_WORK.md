@@ -142,3 +142,115 @@ The LED charge counted only letters (A–Z), so digits in an LED name (e.g. "23"
 now counts ASCII letters AND digits (spaces/punctuation still ignored). Tests
 updated (`test_pricing_examples.py`, `test_pricing_extended.py`). The draft
 `led-number-pricing` spec stub is superseded by this fix and can be removed.
+
+## Kids count on operational sheets + confirmation email (deferred)
+
+**Context.** customer-booking-flow-v2 added a per-booking `kids` count (3–10 yrs)
+alongside `people` (adults). The customer flow, admin booking form/list/summary,
+and the public status page now all surface adults + kids. The **operational
+sheets** (time sheet, cake sheet) and the **booking-confirmation email** still
+show only "People" (adults); they predate v2 and were never specced to include
+kids.
+
+**Concern.** On-floor staff reading the printed time/cake sheet see the adult
+count, not total headcount (adults + kids). For catering/seating the total
+matters.
+
+**Why it's deferred.** It's a cross-layer change for a display-only nicety (no
+money or booking-integrity impact — pricing already accounts for kids
+server-side). Touching it means:
+- `apps/api/app/schemas/sheets.py` — add `kids` to `TimesheetRow` (and
+  `CakesheetRow` if useful).
+- `apps/api/app/services/sheets.py` — populate `kids` from the booking.
+- `apps/api/app/services/excel.py` — add a "Kids" column (or change "People" to
+  show `people + kids` / "N (+M kids)") in `build_timesheet_xlsx`.
+- `apps/admin/src/features/timesheet/` — `types.ts` (`TimesheetRow.kids`) and
+  `TimesheetPage.tsx` (render it).
+- `apps/api/app/services/email.py` — add kids to the confirmation email body.
+- Update `test_timesheet.py` / sheet tests.
+
+**Proposed display.** Show total guests with a kids breakdown, e.g. "6 (+2
+kids)", rather than a separate column, to keep the printed sheet compact. Keep
+"People" meaning adults in any machine-read column.
+
+**Status:** deferred (recorded 2026). Not scheduled. Pricing and all booking
+screens already handle kids; this is sheets/email presentation only.
+
+
+## Cake categories (Standard / Premium) with tabbed customer picker (deferred)
+
+**Context.** The customer "Add a cake" step shows cakes as image cards. The
+owner wants cakes grouped into two categories — **Standard** and **Premium** —
+shown as two tabs, mirroring the special-decor category pattern.
+
+**Why deferred.** Unlike decor (whose category already exists), `cakes` has no
+category column, so this needs a backend change, not just UI:
+- Migration `cakes.category` TEXT NOT NULL DEFAULT 'standard', CHECK
+  `category IN ('standard','premium')`; backfill existing rows to 'standard'.
+- `Cake` model + `CakeRead` (public) + admin cake create/edit schemas/forms gain
+  `category`; admin decor-style select.
+- Web `Cake` type gains `category`; the Cake step renders two tabs and filters
+  cards by the active tab.
+- Tests for the new field + the tabbed picker.
+
+**Status:** deferred (recorded 2026). The cake image cards + weight popup ship
+now; only the Standard/Premium tabbing is deferred.
+
+## "Allow multiple" flag for special decor (deferred)
+
+**Context.** ~90% of special-decor items are only ever ordered as quantity 1;
+only a few (party popper, sash) are occasionally multiples. The customer decor
+card currently shows an inline quantity stepper once an item is selected.
+
+**Idea.** Add a per-item `allow_multiple` boolean on `special_decor_items`
+(admin-set). When false, the customer card is a plain select (qty fixed at 1, no
+stepper); when true, the inline stepper appears. Keeps the UI clean for the
+common case and only exposes quantity where it's actually used.
+
+**Why deferred.** Needs a backend field:
+- Migration `special_decor_items.allow_multiple` BOOLEAN NOT NULL DEFAULT false.
+- Model + public `SpecialDecorRead` + admin decor create/edit schemas/forms.
+- Web `SpecialDecor` type + `DecorByCategory` conditionally renders the stepper.
+
+**Interim (shipping now).** Every selected decor item shows a small inline
+`- 1 +` stepper; unselected items show none. Good enough until the flag lands.
+
+**Status:** deferred (recorded 2026). Not scheduled.
+
+## Admin-managed home-page hero / banner content (deferred)
+
+**Context.** The customer home-page hero (`apps/web/src/pages/index.astro`) is
+fully **static/hardcoded**: the headline ("Celebrate every moment on the big
+screen"), subtext, the two CTA buttons, and the floating emoji are literal
+content baked in at build time. The only admin-editable content that appears on
+the home page today is the **public offers showcase** (`OffersShowcase`), driven
+by coupons marked public under admin → Coupons. There is NO admin screen to edit
+hero text or a rotating/scrolling banner — that feature was never built.
+
+**Want.** Let staff edit the home-page banner/scroller content from the admin
+panel instead of changing code.
+
+**Two sizing options when picked up.**
+
+1. **Lightweight — editable hero text.** A small global (or per-branch) settings
+   record holding `hero_headline` + `hero_subtext` (+ maybe CTA label/link); the
+   home page fetches it at runtime and falls back to the current hardcoded copy
+   when empty. Scope: one settings row/endpoint + a small admin form + wire the
+   hero to fetch it. No carousel.
+
+2. **Full scroller banner.** An admin-managed list of banner slides
+   (`home_banners`: image object_key in R2, title, subtitle, optional link,
+   sort_order, is_active, optional validity dates). Needs: migration + model +
+   public `HomeBannerRead` + admin CRUD schemas/service + an admin manager screen
+   (image upload like catalog) + a React carousel island on the home hero + tests.
+   Comparable in size to one booking-flow-v2 task. The site is a static build, so
+   the carousel island fetches banners at runtime (same pattern as OffersShowcase
+   / HomeBookingWidget). Keep the home JS bundle small.
+
+**Notes / constraints.** Images go to Cloudflare R2 (DB stores object keys only),
+mirroring the catalog image pattern. Keep it server-authoritative and runtime-
+fetched (no SSR). Respect the existing offers showcase (don't duplicate coupon
+offers into banners).
+
+**Status:** deferred (recorded 2026). Not scheduled. Recommend writing a small
+spec (requirements → design → tasks) if option 2 is chosen.

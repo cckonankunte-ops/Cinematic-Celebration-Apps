@@ -4,6 +4,12 @@ All code is written and passes static analysis. The commands below are the
 "everything green" gate (task 23). They were NOT run on the authoring machine
 (no Python 3.12 / Node / Docker there), so run them on your secondary laptop.
 
+> **Feature note.** The `customer-booking-flow-v2` additions (kids pricing,
+> decor categories, disallowed times, coupon public offers, and advance-rule
+> resolution) are documented in `BOOKING_FLOW_V2.md`. They add no new env vars.
+> After the backend schema changes, regenerate the OpenAPI contract
+> (`python -m scripts.export_openapi`) so `apps/api/openapi.json` is current.
+
 > **Shell note.** The command blocks below use **bash** syntax (macOS/Linux).
 > If you use the **VS Code terminal on Windows (PowerShell)**, use the
 > **"Windows / PowerShell"** section at the bottom of this file instead — a few

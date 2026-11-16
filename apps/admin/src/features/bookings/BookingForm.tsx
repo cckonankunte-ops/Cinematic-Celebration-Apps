@@ -103,6 +103,7 @@ export function BookingForm({
       location_id: locationId,
       booking_date: todayIsoInIST(),
       people: 1,
+      kids: 0,
       cake_weight_half_kg: 1,
       special_decor: [],
       combos: [],
@@ -255,6 +256,7 @@ export function BookingForm({
       duration_minutes: watched.duration_minutes,
       booking_date: watched.booking_date,
       people: watched.people,
+      kids: watched.kids,
       cake_id: watched.cake_id,
       cake_weight_half_kg: watched.cake_weight_half_kg,
       occasion_id: watched.occasion_id,
@@ -311,6 +313,7 @@ export function BookingForm({
       duration_minutes: slotIdNum === null ? (durationNum ?? undefined) : undefined,
       booking_date: bookingDate,
       people: num(parsed.people) || 1,
+      kids: num(parsed.kids),
       cake_id: optionalId(parsed.cake_id),
       cake_weight_half_kg: num(parsed.cake_weight_half_kg) || 1,
       special_decor: (parsed.special_decor ?? []).map((d) => ({
@@ -567,7 +570,7 @@ export function BookingForm({
         </label>
 
         <label className="space-y-1 text-sm">
-          <span className="font-medium text-gray-700">People</span>
+          <span className="font-medium text-gray-700">People (above 10 yrs)</span>
           <input
             type="number"
             min={1}
@@ -578,27 +581,68 @@ export function BookingForm({
         </label>
 
         <label className="space-y-1 text-sm">
+          <span className="font-medium text-gray-700">Kids (3–10 yrs)</span>
+          <input
+            type="number"
+            min={0}
+            className={inputClass}
+            {...register('kids', { valueAsNumber: true })}
+          />
+          {errors.kids && <p className="text-xs text-red-600">{errors.kids.message}</p>}
+        </label>
+
+        <label className="space-y-1 text-sm">
           <span className="font-medium text-gray-700">Occasion</span>
-          <select className={inputClass} {...register('occasion_id', { valueAsNumber: true })}>
-            <option value="">None</option>
-            {occasions.data?.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
+          <Controller
+            control={control}
+            name="occasion_id"
+            render={({ field }) => (
+              <select
+                className={inputClass}
+                name={field.name}
+                ref={field.ref}
+                value={typeof field.value === 'number' ? field.value : ''}
+                onBlur={field.onBlur}
+                onChange={(e) =>
+                  field.onChange(e.target.value === '' ? undefined : Number(e.target.value))
+                }
+              >
+                <option value="">None</option>
+                {occasions.data?.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          />
         </label>
 
         <label className="space-y-1 text-sm">
           <span className="font-medium text-gray-700">Cake</span>
-          <select className={inputClass} {...register('cake_id', { valueAsNumber: true })}>
-            <option value="">None</option>
-            {cakes.data?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <Controller
+            control={control}
+            name="cake_id"
+            render={({ field }) => (
+              <select
+                className={inputClass}
+                name={field.name}
+                ref={field.ref}
+                value={typeof field.value === 'number' ? field.value : ''}
+                onBlur={field.onBlur}
+                onChange={(e) =>
+                  field.onChange(e.target.value === '' ? undefined : Number(e.target.value))
+                }
+              >
+                <option value="">None</option>
+                {cakes.data?.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          />
         </label>
 
         <label className="space-y-1 text-sm">
@@ -881,7 +925,11 @@ export function BookingForm({
         </fieldset>
       )}
 
-      <PreviewSummary breakdown={breakdown} error={previewError} />
+      <PreviewSummary
+        breakdown={breakdown}
+        error={previewError}
+        kids={Number.isFinite(watched.kids) ? (watched.kids as number) : 0}
+      />
 
       {serverError && <p className="text-sm text-red-600">{serverError}</p>}
 
@@ -899,6 +947,8 @@ export function BookingForm({
 interface PreviewSummaryProps {
   breakdown: PriceBreakdownRead | null;
   error: string | null;
+  /** Kids count, to label the server-computed kids charge line. */
+  kids: number;
 }
 
 /**
@@ -906,7 +956,11 @@ interface PreviewSummaryProps {
  * row; the coupon is shown as a distinct line when it discounts anything. The
  * total is authoritative — this panel never does any price math itself.
  */
-function PreviewSummary({ breakdown, error }: PreviewSummaryProps): JSX.Element | null {
+function PreviewSummary({
+  breakdown,
+  error,
+  kids,
+}: PreviewSummaryProps): JSX.Element | null {
   if (error) {
     return (
       <div className="rounded border border-red-200 bg-red-50 p-3 text-sm">
@@ -929,10 +983,21 @@ function PreviewSummary({ breakdown, error }: PreviewSummaryProps): JSX.Element 
         <span>{formatRupees(breakdown.plan_price_paise)}</span>
       </div>
 
-      {breakdown.extra_guest_paise > 0 && (
+      {breakdown.extra_guest_paise - breakdown.kid_extra_guest_paise > 0 && (
         <div className="flex justify-between">
           <span>Extra guests</span>
-          <span>{formatRupees(breakdown.extra_guest_paise)}</span>
+          <span>
+            {formatRupees(
+              breakdown.extra_guest_paise - breakdown.kid_extra_guest_paise,
+            )}
+          </span>
+        </div>
+      )}
+
+      {breakdown.kid_extra_guest_paise > 0 && (
+        <div className="flex justify-between">
+          <span>Kids{kids > 0 ? ` (${kids})` : ''}</span>
+          <span>{formatRupees(breakdown.kid_extra_guest_paise)}</span>
         </div>
       )}
 
@@ -1030,6 +1095,16 @@ function PreviewSummary({ breakdown, error }: PreviewSummaryProps): JSX.Element 
       <div className="flex justify-between border-t border-gray-200 pt-1 font-semibold text-gray-900">
         <span>Total</span>
         <span>{formatRupees(breakdown.total_paise)}</span>
+      </div>
+
+      <div className="flex justify-between text-gray-700">
+        <span>Advance payable</span>
+        <span>{formatRupees(breakdown.advance_paise)}</span>
+      </div>
+
+      <div className="flex justify-between text-gray-600">
+        <span>Balance (payable at venue)</span>
+        <span>{formatRupees(breakdown.total_paise - breakdown.advance_paise)}</span>
       </div>
 
       <div className="flex justify-between text-gray-600">

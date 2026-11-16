@@ -117,6 +117,20 @@ export interface Location {
   booking_mode?: 'slot' | 'open';
 }
 
+/**
+ * A customer-facing coupon offer for the home-page showcase. Mirrors the
+ * backend `PublicOfferRead` (schemas/coupon.py): only safe, display fields —
+ * never value, cap, usage limits, or percentage-base internals. Dates are
+ * `YYYY-MM-DD` or null (open-ended validity).
+ */
+export interface PublicOffer {
+  code: string;
+  name: string | null;
+  description: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+
 /** A bookable duration for a plan (open mode) + its base price/advance. */
 export interface PlanDuration {
   duration_minutes: number;
@@ -175,6 +189,9 @@ export interface Cake {
   image_url: string;
 }
 
+/** Special-decor grouping category (stored lowercase). */
+export type DecorCategory = 'extra_decoration' | 'gifts' | 'special_service';
+
 export interface SpecialDecor {
   id: number;
   name: string;
@@ -182,6 +199,8 @@ export interface SpecialDecor {
   price_paise: number;
   image_url: string;
   sort_order: number;
+  /** Grouping category; defaults to extra_decoration for legacy rows. */
+  category: DecorCategory;
 }
 
 export interface Combo {
@@ -229,7 +248,10 @@ export interface BookingCreate {
   special_person_name?: string;
   name_on_cake?: string;
   message?: string;
+  /** Adults (above 10 yrs); must be >= 1. */
   people: number;
+  /** Kids (3-10 yrs); >= 0. Total guests = people + kids. */
+  kids?: number;
   occasion_id?: number;
   cake_id?: number;
   /** Cake weight in half-kg units (int >= 1). */
@@ -253,6 +275,7 @@ export interface PublicPreviewRequest {
   duration_minutes?: number;
   booking_date: string;
   people: number;
+  kids?: number;
   cake_id?: number;
   cake_weight_half_kg?: number;
   special_decor: DecorSelection[];
@@ -283,6 +306,8 @@ export interface AddonLineRead {
 export interface PriceBreakdownRead {
   plan_price_paise: number;
   extra_guest_paise: number;
+  /** Kid-only portion of extra_guest_paise, for a "Kids" summary line. */
+  kid_extra_guest_paise: number;
   addon_lines: AddonLineRead[];
   subtotal_paise: number;
   discount_paise: number;
@@ -292,6 +317,8 @@ export interface PriceBreakdownRead {
   coupon_code: string | null;
   coupon_discount_paise: number;
   total_paise: number;
+  /** Server-resolved advance payable (threshold rules, else plan fallback). */
+  advance_paise: number;
   amount_paid_paise: number;
   amount_due_paise: number;
 }
@@ -308,6 +335,10 @@ export interface BookingStatus {
   plan_title: string;
   slot_description: string;
   booking_date: string;
+  /** Adults (above 10 yrs). */
+  people: number;
+  /** Kids (3-10 yrs). */
+  kids: number;
   total_paise: number;
   amount_paid_paise: number;
   amount_due_paise: number;
@@ -395,5 +426,8 @@ export const publicApi = {
   },
   submitContact(body: ContactCreate): Promise<ContactResult> {
     return api.post<ContactResult>(`${PUBLIC}/contact`, body);
+  },
+  listOffers(): Promise<PublicOffer[]> {
+    return api.get<PublicOffer[]>(`${PUBLIC}/offers`);
   },
 };

@@ -13,6 +13,12 @@ serves the new app.
 > The new app is LIVE on the real domain, verified end-to-end (step 10):
 > - Customer site: `https://cinematiccelebration.in` (Cloudflare Pages `cineceleb-web`)
 > - Admin panel: `https://admin.cinematiccelebration.in` (Pages `cineceleb-admin`)
+>
+> **Legacy access:** the old Hostinger admin + old MySQL were temporarily
+> re-enabled at `https://oldadmin.cinematiccelebration.in` to verify historical
+> data before retiring the Hostinger VPS. Setup + rollback steps (and the
+> "back up MySQL before canceling the VPS" reminder) are in
+> `LEGACY_ADMIN_TEMP_ACCESS.md`.
 > - API: `https://api.cinematiccelebration.in` (droplet `142.93.208.192`, Caddy TLS)
 > - Data: migrated from the Nov 14 legacy dump (3159 bookings, 5 duplicates skipped)
 > - Registrar GoDaddy; DNS on Cloudflare (`irma`/`patryk` nameservers); DNSSEC off

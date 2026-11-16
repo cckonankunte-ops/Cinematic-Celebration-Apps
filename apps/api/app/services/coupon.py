@@ -18,6 +18,37 @@ from app.models.coupon_redemption import CouponRedemption
 from app.services.pricing import COMPONENT_KEYS, ValidatedCoupon
 
 
+def list_public_offers(db: Session, *, on: date):
+    """Active, PUBLIC, currently-valid coupons for the home-page showcase.
+
+    Returns PublicOfferRead value objects with safe fields only (code, name,
+    description, validity) — never usage limits, caps, value, or percentage
+    base. A coupon qualifies when ``is_active`` AND ``is_public`` AND ``on``
+    falls within its validity window (NULL bounds treated as open-ended).
+    """
+    from app.schemas.coupon import PublicOfferRead
+
+    rows = db.execute(
+        select(Coupon).where(
+            Coupon.is_active.is_(True),
+            Coupon.is_public.is_(True),
+            (Coupon.effective_from.is_(None)) | (Coupon.effective_from <= on),
+            (Coupon.effective_to.is_(None)) | (Coupon.effective_to >= on),
+        )
+        .order_by(Coupon.id)
+    ).scalars()
+    return [
+        PublicOfferRead(
+            code=c.code,
+            name=c.name,
+            description=c.description,
+            effective_from=c.effective_from,
+            effective_to=c.effective_to,
+        )
+        for c in rows
+    ]
+
+
 def resolve_coupon_row(db: Session, *, location_id: int, code: str) -> Coupon:
     """Fetch the location-scoped coupon row by exact code (step 1).
 

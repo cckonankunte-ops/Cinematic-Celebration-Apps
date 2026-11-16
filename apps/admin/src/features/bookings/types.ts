@@ -45,6 +45,8 @@ export interface BookingRead {
   name_on_cake: string | null;
   message: string | null;
   people: number;
+  /** Kids (3-10 yrs); adults are `people`. */
+  kids: number;
   occasion_id: number | null;
   plan_price_paise: number;
   extra_guest_paise: number;
@@ -80,6 +82,8 @@ export interface BookingListItem {
   phone?: string | null;
   special_person_name?: string | null;
   people: number;
+  /** Kids (3-10 yrs); may be absent on older deployments. */
+  kids?: number;
   plan_title: string;
   slot_description: string;
   occasion_name?: string | null;
@@ -139,6 +143,8 @@ export interface AddonLineRead {
 export interface PriceBreakdownRead {
   plan_price_paise: number;
   extra_guest_paise: number;
+  /** Kid-only portion of extra_guest_paise, for a "Kids" summary line. */
+  kid_extra_guest_paise: number;
   addon_lines: AddonLineRead[];
   subtotal_paise: number;
   discount_paise: number;
@@ -148,6 +154,8 @@ export interface PriceBreakdownRead {
   coupon_code: string | null;
   coupon_discount_paise: number;
   total_paise: number;
+  /** Server-resolved advance payable (threshold rules, else plan fallback). */
+  advance_paise: number;
   amount_paid_paise: number;
   amount_due_paise: number;
 }

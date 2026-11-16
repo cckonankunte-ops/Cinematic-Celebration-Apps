@@ -16,6 +16,7 @@ from datetime import date, time
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -80,7 +81,14 @@ class Booking(Base, TimestampMixin):
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     # LED text ordered on the booking (e.g. "ARUNA"); may be empty/absent.
     led_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Guest split: ``people`` is the ADULT count (above 10 yrs); ``kids`` (3-10
+    # yrs) is additive and defaults to 0. Total guests = people + kids. Keeping
+    # ``people`` as adults preserves every existing reader and the extra-guest
+    # snapshot; kids pricing is a separate charge computed in pricing.py.
     people: Mapped[int] = mapped_column(Integer, nullable=False)
+    kids: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("0")
+    )
     occasion_id: Mapped[int | None] = mapped_column(
         ForeignKey("occasions.id", ondelete="SET NULL"), nullable=True
     )
@@ -126,4 +134,5 @@ class Booking(Base, TimestampMixin):
             postgresql_where=text("status IN ('pending', 'accepted')"),
         ),
         Index("ix_bookings_created_at", "created_at"),
+        CheckConstraint("kids >= 0", name="ck_bookings_kids_nonneg"),
     )

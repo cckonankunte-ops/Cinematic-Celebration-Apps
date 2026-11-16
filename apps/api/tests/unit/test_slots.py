@@ -20,8 +20,10 @@ from app.core.errors import (
 )
 from app.services.slots import (
     ActorKind,
+    DisallowedRange,
     LocationHours,
     actor_kind_from_role,
+    is_time_disallowed,
     is_valid_start_minute,
     occupied_window,
     usable_end,
@@ -30,6 +32,33 @@ from app.services.slots import (
 )
 
 D = date(2026, 11, 10)  # a fixed future-ish date for the pure tests
+
+
+# --- disallowed-time ranges (R10) truth table ----------------------------
+def test_is_time_disallowed_overlap_and_duration_rule() -> None:
+    # Range blocks any booking overlapping 22:00-23:59 (no duration cap).
+    any_dur = [DisallowedRange(start=time(22, 0), end=time(23, 59))]
+    assert is_time_disallowed(any_dur, time(22, 0), 60) is True   # inside
+    assert is_time_disallowed(any_dur, time(21, 30), 60) is True  # overlaps start
+    assert is_time_disallowed(any_dur, time(20, 0), 60) is False  # ends 21:00, before
+    assert is_time_disallowed(any_dur, time(23, 59), 60) is False  # starts at end (half-open)
+
+    # Duration-capped range: "no bookings of <=60 min after 22:00".
+    capped = [DisallowedRange(start=time(22, 0), end=time(23, 59), max_duration_minutes=60)]
+    assert is_time_disallowed(capped, time(22, 0), 60) is True    # 60 <= 60 -> applies
+    assert is_time_disallowed(capped, time(22, 0), 120) is False  # 120 > 60 -> does not apply
+    assert is_time_disallowed(capped, time(22, 0), 30) is True    # 30 <= 60 -> applies
+
+    # Empty ranges -> never disallowed.
+    assert is_time_disallowed([], time(22, 0), 60) is False
+
+    # Multiple ranges: disallowed if ANY applicable range overlaps.
+    multi = [
+        DisallowedRange(start=time(0, 0), end=time(1, 0)),
+        DisallowedRange(start=time(22, 0), end=time(23, 0)),
+    ]
+    assert is_time_disallowed(multi, time(22, 30), 60) is True
+    assert is_time_disallowed(multi, time(12, 0), 60) is False
 
 
 # --- start-minute validation ---------------------------------------------
