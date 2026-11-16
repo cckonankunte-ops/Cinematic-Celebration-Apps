@@ -1038,7 +1038,10 @@ def update_booking(
         effective_date = (
             data.booking_date if data.booking_date is not None else booking.booking_date
         )
-        if effective_date < _today_ist():
+        # Admins may edit bookings on a past date (e.g. correcting a completed
+        # booking); staff and the future-start grace keep them on current/future
+        # dates. Mirrors the `override_disallowed=actor.role == "admin"` pattern.
+        if actor.role != "admin" and effective_date < _today_ist():
             raise BookingDateInPastError()
 
         is_slot_mode = location.booking_mode != "open"

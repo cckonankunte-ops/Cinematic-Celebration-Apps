@@ -58,7 +58,10 @@ export function BookingCard({ booking }: { booking: BookingListItem }): JSX.Elem
         <dt className="text-gray-500">Date</dt>
         <dd className="text-right text-gray-900">{formatDate(booking.booking_date)}</dd>
         <dt className="text-gray-500">People</dt>
-        <dd className="text-right text-gray-900">{booking.people}</dd>
+        <dd className="text-right text-gray-900">
+          {booking.people}
+          {booking.kids ? ` + ${booking.kids} kids` : ''}
+        </dd>
         <dt className="text-gray-500">Total</dt>
         <dd className="text-right text-gray-900">{formatRupees(booking.total_paise)}</dd>
         <dt className="text-gray-500">Paid</dt>

@@ -81,6 +81,12 @@ export const bookingCreateSchema = z.object({
     .number({ invalid_type_error: 'People is required' })
     .int('Must be a whole number')
     .min(1, 'At least 1 person'),
+  // Kids (3-10 yrs); >= 0. An empty input yields NaN via valueAsNumber → 0.
+  kids: z.preprocess(
+    (v) =>
+      v === '' || v === null || (typeof v === 'number' && Number.isNaN(v)) ? 0 : v,
+    z.number().int('Must be a whole number').min(0, 'Cannot be negative').default(0),
+  ),
   occasion_id: optionalId,
   cake_id: optionalId,
   cake_weight_half_kg: z.number().int().min(1).default(1),

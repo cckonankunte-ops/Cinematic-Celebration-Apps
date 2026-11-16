@@ -103,6 +103,7 @@ export function BookingForm({
       location_id: locationId,
       booking_date: todayIsoInIST(),
       people: 1,
+      kids: 0,
       cake_weight_half_kg: 1,
       special_decor: [],
       combos: [],
@@ -255,6 +256,7 @@ export function BookingForm({
       duration_minutes: watched.duration_minutes,
       booking_date: watched.booking_date,
       people: watched.people,
+      kids: watched.kids,
       cake_id: watched.cake_id,
       cake_weight_half_kg: watched.cake_weight_half_kg,
       occasion_id: watched.occasion_id,
@@ -311,6 +313,7 @@ export function BookingForm({
       duration_minutes: slotIdNum === null ? (durationNum ?? undefined) : undefined,
       booking_date: bookingDate,
       people: num(parsed.people) || 1,
+      kids: num(parsed.kids),
       cake_id: optionalId(parsed.cake_id),
       cake_weight_half_kg: num(parsed.cake_weight_half_kg) || 1,
       special_decor: (parsed.special_decor ?? []).map((d) => ({
@@ -567,7 +570,7 @@ export function BookingForm({
         </label>
 
         <label className="space-y-1 text-sm">
-          <span className="font-medium text-gray-700">People</span>
+          <span className="font-medium text-gray-700">People (above 10 yrs)</span>
           <input
             type="number"
             min={1}
@@ -575,6 +578,17 @@ export function BookingForm({
             {...register('people', { valueAsNumber: true })}
           />
           {errors.people && <p className="text-xs text-red-600">{errors.people.message}</p>}
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span className="font-medium text-gray-700">Kids (3–10 yrs)</span>
+          <input
+            type="number"
+            min={0}
+            className={inputClass}
+            {...register('kids', { valueAsNumber: true })}
+          />
+          {errors.kids && <p className="text-xs text-red-600">{errors.kids.message}</p>}
         </label>
 
         <label className="space-y-1 text-sm">

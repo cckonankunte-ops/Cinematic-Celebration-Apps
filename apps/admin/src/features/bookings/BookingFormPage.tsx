@@ -41,6 +41,7 @@ function toInitialValues(booking: BookingRead): Partial<BookingCreateInput> {
     name_on_cake: booking.name_on_cake ?? undefined,
     message: booking.message ?? undefined,
     people: booking.people,
+    kids: booking.kids,
     occasion_id: booking.occasion_id ?? undefined,
     cake_id: cakeItem?.item_id ?? undefined,
     cake_weight_half_kg: cakeItem?.weight_half_kg ?? 1,

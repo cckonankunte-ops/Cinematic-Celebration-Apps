@@ -45,6 +45,8 @@ export interface BookingRead {
   name_on_cake: string | null;
   message: string | null;
   people: number;
+  /** Kids (3-10 yrs); adults are `people`. */
+  kids: number;
   occasion_id: number | null;
   plan_price_paise: number;
   extra_guest_paise: number;
@@ -80,6 +82,8 @@ export interface BookingListItem {
   phone?: string | null;
   special_person_name?: string | null;
   people: number;
+  /** Kids (3-10 yrs); may be absent on older deployments. */
+  kids?: number;
   plan_title: string;
   slot_description: string;
   occasion_name?: string | null;
