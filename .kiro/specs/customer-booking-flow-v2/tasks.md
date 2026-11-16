@@ -7,24 +7,24 @@ sub-tasks are marked with `*`.
 > Migration numbering: the live DB is at **0016**. All new revisions chain off
 > 0016 as 0017–0022. Do NOT reuse 0015/0016.
 
-- [ ] 1. Schema: kids %, decor category, kids on bookings, disallowed times,
+- [-] 1. Schema: kids %, decor category, kids on bookings, disallowed times,
   coupon offer fields, advance rules
-  - [ ] 1.1 Add `plans.kid_price_pct` (SMALLINT, default 50, CHECK 0–100) to the
+  - [x] 1.1 Add `plans.kid_price_pct` (SMALLINT, default 50, CHECK 0–100) to the
     `Plan` model + migration `0017_add_kid_price_pct_to_plans`
-  - [ ] 1.2 Add `special_decor_items.category` (TEXT, default `extra_decoration`,
+  - [x] 1.2 Add `special_decor_items.category` (TEXT, default `extra_decoration`,
     CHECK in the three values) to the model + migration
     `0018_add_category_to_special_decor_items`; define
     `SPECIAL_DECOR_CATEGORIES` constant
-  - [ ] 1.3 Add `bookings.kids` (SMALLINT, default 0, CHECK `kids >= 0`) to the
+  - [x] 1.3 Add `bookings.kids` (SMALLINT, default 0, CHECK `kids >= 0`) to the
     `Booking` model + migration `0019_add_kids_to_bookings`
-  - [ ] 1.4 Add `location_disallowed_times` table + model
+  - [x] 1.4 Add `location_disallowed_times` table + model
     (`location_disallowed_time.py`) with FK (ON DELETE CASCADE), start/end,
     optional `max_duration_minutes`, note, is_active, CHECK `start < end` +
     migration `0020_create_location_disallowed_times`
-  - [ ] 1.5 Add `coupons.name` (TEXT NULL), `coupons.description` (TEXT NULL),
+  - [x] 1.5 Add `coupons.name` (TEXT NULL), `coupons.description` (TEXT NULL),
     `coupons.is_public` (BOOLEAN NOT NULL default false) to the `Coupon` model +
     migration `0021_add_name_description_public_to_coupons`
-  - [ ] 1.6 Add `advance_rules` table + model (`advance_rule.py`): FK to
+  - [x] 1.6 Add `advance_rules` table + model (`advance_rule.py`): FK to
     `locations` (ON DELETE CASCADE, indexed), `min_total_paise`, `advance_paise`,
     `is_active`, CHECKs (both `>= 0`), unique `(location_id, min_total_paise)`
     (`uq_advance_rules_location_threshold`) + migration `0022_create_advance_rules`

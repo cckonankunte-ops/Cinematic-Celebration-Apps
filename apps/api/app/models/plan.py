@@ -4,7 +4,18 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Integer, String, Text, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -27,6 +38,12 @@ class Plan(Base, TimestampMixin):
     people_allowed: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
     max_people_allowed: Mapped[int] = mapped_column(Integer, nullable=False)
     extra_guest_paise: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    # Kids (3-10 yrs) are charged this percentage (0-100) of the plan's CURRENT
+    # extra-guest rate, rounded to a whole rupee. Derived at pricing time so
+    # raising extra_guest_paise later raises the kid charge automatically.
+    kid_price_pct: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("50")
+    )
     give_discount: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     max_discount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     advance_paise: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
@@ -36,6 +53,12 @@ class Plan(Base, TimestampMixin):
         Date, nullable=False, server_default=text("'2099-12-31'")
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "kid_price_pct BETWEEN 0 AND 100", name="ck_plans_kid_price_pct_range"
+        ),
+    )
 
 
 class PlanGalleryImage(Base):

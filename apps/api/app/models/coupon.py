@@ -22,6 +22,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
@@ -42,6 +43,16 @@ class Coupon(Base, TimestampMixin):
         nullable=False,
     )
     code: Mapped[str] = mapped_column(String, nullable=False)
+    # Admin-written, customer-facing offer label + blurb (plain text). Shown on
+    # the home page only when is_public is true. Display-only; never affect the
+    # server-authoritative discount math.
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Only public coupons appear in the home-page offers showcase. Defaults false
+    # so nothing is exposed until an admin opts a coupon in.
+    is_public: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     type: Mapped[str] = mapped_column(String, nullable=False)  # flat | percentage
     value: Mapped[int] = mapped_column(BigInteger, nullable=False)
     cap_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

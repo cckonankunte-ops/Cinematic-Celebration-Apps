@@ -4,6 +4,7 @@ Importing every model here ensures Base.metadata is fully populated for Alembic
 autogenerate and for the test harness.
 """
 
+from app.models.advance_rule import AdvanceRule
 from app.models.booking import Booking
 from app.models.booking_event import BookingEvent
 from app.models.booking_item import BookingItem
@@ -13,6 +14,7 @@ from app.models.contact_lead import ContactLead
 from app.models.coupon import Coupon
 from app.models.coupon_redemption import CouponRedemption
 from app.models.location import Location
+from app.models.location_disallowed_time import LocationDisallowedTime
 from app.models.occasion import Occasion
 from app.models.payment import Payment
 from app.models.plan import Plan, PlanGalleryImage
@@ -23,6 +25,7 @@ from app.models.user import User
 from app.models.user_role import UserRole
 
 __all__ = [
+    "AdvanceRule",
     "Booking",
     "BookingEvent",
     "BookingItem",
@@ -32,6 +35,7 @@ __all__ = [
     "Coupon",
     "CouponRedemption",
     "Location",
+    "LocationDisallowedTime",
     "Occasion",
     "Payment",
     "Plan",
