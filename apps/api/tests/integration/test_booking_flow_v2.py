@@ -18,13 +18,15 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ValidationFailedError
 from app.models.advance_rule import AdvanceRule
-from app.models.booking import Booking
 from app.models.location_disallowed_time import LocationDisallowedTime
+from app.models.plan_pricing import PlanPricing
 from app.schemas.booking import BookingCreate, PublicPreviewRequest
 from app.services import booking as booking_service
 from app.services import catalog as catalog_service
 from app.services.slots import ActorKind
 from tests.factories import (
+    FAR_FUTURE,
+    FAR_PAST,
     future_date,
     make_coupon,
     make_location,
@@ -44,6 +46,24 @@ def _advance_rule(
     db.add(rule)
     db.flush()
     return rule
+
+
+def _price_duration(
+    db: Session, plan_id: int, duration: int, price_paise: int = 120000
+) -> None:
+    """Open-mode bookings price by duration via plan_pricing; seed a row."""
+    db.add(
+        PlanPricing(
+            plan_id=plan_id,
+            duration_minutes=duration,
+            price_paise=price_paise,
+            advance_paise=0,
+            effective_from=FAR_PAST,
+            effective_to=FAR_FUTURE,
+            is_active=True,
+        )
+    )
+    db.flush()
 
 
 def _disallowed(
@@ -130,6 +150,7 @@ def test_t1_disallowed_hides_start_and_rejects_customer(db: Session) -> None:
     loc.opens_at = time(10, 0)
     loc.closes_at = time(22, 0)
     plan = make_plan(db, loc.id)
+    _price_duration(db, plan.id, 60)
     _disallowed(db, loc.id, start=time(20, 0), end=time(21, 0))
     db.flush()
 
@@ -172,6 +193,7 @@ def test_t3_config_is_forward_only(db: Session) -> None:
     loc.opens_at = time(10, 0)
     loc.closes_at = time(22, 0)
     plan = make_plan(db, loc.id)
+    _price_duration(db, plan.id, 60)
     db.flush()
 
     # Book 14:00 BEFORE any disallowed range exists -> succeeds.
