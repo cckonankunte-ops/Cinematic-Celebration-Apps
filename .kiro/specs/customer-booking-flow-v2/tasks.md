@@ -142,9 +142,9 @@ sub-tasks are marked with `*`.
     disallowed times, coupon public offers, advance-rule resolution + plan-advance
     fallback, customer flow, migrations, smoke checklist); cross-linked from
     `VERIFICATION.md`. `.env.example` unchanged (no new config)
-  - [ ] 8.3 Run `ruff`, `pytest`, `eslint`, `vitest`; fix to green (web
-    `vitest`+`build` confirmed green this branch; run api `ruff`/`pytest` and
-    admin `eslint`/`vitest`/`build` in the Codespace per VERIFICATION.md)
+  - [x] 8.3 Run `ruff`, `pytest`, `eslint`, `vitest`; fix to green — confirmed
+    green in the Codespace: api `ruff`+`pytest`, admin `eslint`+`vitest`+`build`,
+    web `vitest`+`build`; OpenAPI contract refreshed via `export_openapi`
   - [ ] 8.4 Manual smoke on staging: home widget → branch screen → 5 steps →
     submit; kids pricing; decor categories; disallowed time blocked; public offers
     shown (and hidden when none public); advance reflects the matched rule and the
