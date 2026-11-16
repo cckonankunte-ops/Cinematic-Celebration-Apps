@@ -104,6 +104,10 @@ describe('DecorManager category', () => {
   it('shows the category label in the decor list row', () => {
     decorRows = [decor(1, 'gifts')];
     render(<DecorManager locationId={1} showInactive />);
-    expect(screen.getByText(/Choose Gifts/)).toBeInTheDocument();
+    // "Decor 1" is its own text node in the row; assert the category label is
+    // present in that same list item's normalized text.
+    const row = screen.getByText('Decor 1', { exact: false }).closest('li');
+    expect(row).not.toBeNull();
+    expect(row?.textContent).toContain('Choose Gifts');
   });
 });
