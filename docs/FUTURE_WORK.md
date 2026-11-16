@@ -142,3 +142,36 @@ The LED charge counted only letters (A–Z), so digits in an LED name (e.g. "23"
 now counts ASCII letters AND digits (spaces/punctuation still ignored). Tests
 updated (`test_pricing_examples.py`, `test_pricing_extended.py`). The draft
 `led-number-pricing` spec stub is superseded by this fix and can be removed.
+
+## Kids count on operational sheets + confirmation email (deferred)
+
+**Context.** customer-booking-flow-v2 added a per-booking `kids` count (3–10 yrs)
+alongside `people` (adults). The customer flow, admin booking form/list/summary,
+and the public status page now all surface adults + kids. The **operational
+sheets** (time sheet, cake sheet) and the **booking-confirmation email** still
+show only "People" (adults); they predate v2 and were never specced to include
+kids.
+
+**Concern.** On-floor staff reading the printed time/cake sheet see the adult
+count, not total headcount (adults + kids). For catering/seating the total
+matters.
+
+**Why it's deferred.** It's a cross-layer change for a display-only nicety (no
+money or booking-integrity impact — pricing already accounts for kids
+server-side). Touching it means:
+- `apps/api/app/schemas/sheets.py` — add `kids` to `TimesheetRow` (and
+  `CakesheetRow` if useful).
+- `apps/api/app/services/sheets.py` — populate `kids` from the booking.
+- `apps/api/app/services/excel.py` — add a "Kids" column (or change "People" to
+  show `people + kids` / "N (+M kids)") in `build_timesheet_xlsx`.
+- `apps/admin/src/features/timesheet/` — `types.ts` (`TimesheetRow.kids`) and
+  `TimesheetPage.tsx` (render it).
+- `apps/api/app/services/email.py` — add kids to the confirmation email body.
+- Update `test_timesheet.py` / sheet tests.
+
+**Proposed display.** Show total guests with a kids breakdown, e.g. "6 (+2
+kids)", rather than a separate column, to keep the printed sheet compact. Keep
+"People" meaning adults in any machine-read column.
+
+**Status:** deferred (recorded 2026). Not scheduled. Pricing and all booking
+screens already handle kids; this is sheets/email presentation only.
