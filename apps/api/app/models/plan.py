@@ -42,7 +42,7 @@ class Plan(Base, TimestampMixin):
     # extra-guest rate, rounded to a whole rupee. Derived at pricing time so
     # raising extra_guest_paise later raises the kid charge automatically.
     kid_price_pct: Mapped[int] = mapped_column(
-        SmallInteger, nullable=False, server_default=text("50")
+        SmallInteger, nullable=False, default=50, server_default=text("50")
     )
     give_discount: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     max_discount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)

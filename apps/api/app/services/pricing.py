@@ -69,12 +69,45 @@ class ValidatedRequest:
     """Validated, de-duplicated catalog rows for a booking request."""
 
     plan: Plan
-    people: int
+    people: int  # ADULTS (above 10 yrs); kids are separate below
+    kids: int = 0  # KIDS (3-10 yrs); default 0 keeps existing callers unchanged
     cake: Cake | None = None
     cake_weight_half_kg: int = 1  # default 1 == 0.5 kg
     special_decor: list[DecorSelection] = field(default_factory=list)
     combos: list[ComboSelection] = field(default_factory=list)
     led_name: str | None = None
+
+
+@dataclass(frozen=True)
+class AdvanceRuleLike:
+    """Minimal advance-rule shape the pure pricing layer needs.
+
+    The service passes active rows for the booking's location (any object with
+    ``min_total_paise`` / ``advance_paise`` works, including the ORM model).
+    """
+
+    min_total_paise: int
+    advance_paise: int
+
+
+def resolve_advance_paise(
+    rules: list[AdvanceRuleLike],
+    final_total_paise: int,
+    *,
+    fallback_paise: int,
+) -> int:
+    """Pick the advance for a booking from per-location threshold rules.
+
+    The HIGHEST ``min_total_paise`` the final total meets or exceeds wins. When
+    no rule matches (or there are no rules), return ``fallback_paise`` — the
+    plan's own ``advance_paise``. Thresholds are unique per location (DB index),
+    so the max is unambiguous.
+    """
+    matched = [r for r in rules if final_total_paise >= r.min_total_paise]
+    if not matched:
+        return fallback_paise
+    winner = max(matched, key=lambda r: r.min_total_paise)
+    return winner.advance_paise
 
 
 @dataclass(frozen=True)
@@ -120,7 +153,10 @@ class AddonLine:
 @dataclass(frozen=True)
 class PriceBreakdown:
     plan_price_paise: int
-    extra_guest_paise: int
+    extra_guest_paise: int  # combined adult + kid extra-guest charge
+    # Kid-only portion of extra_guest_paise, so the UI can show a "Kids" line.
+    # 0 when there are no chargeable kids. Additive; existing readers ignore it.
+    kid_extra_guest_paise: int
     addon_lines: list[AddonLine]
     subtotal_paise: int
     discount_paise: int
@@ -130,11 +166,69 @@ class PriceBreakdown:
     coupon_code: str | None
     coupon_discount_paise: int
     total_paise: int
+    # Advance payable, resolved from the location's threshold rules (or the
+    # plan's advance_paise fallback). Returned by preview + create so the UI's
+    # Advance/Balance are server-authoritative.
+    advance_paise: int = 0
 
 
-def _extra_guest_paise(plan: Plan, people: int) -> int:
-    extra_guests = max(0, people - plan.people_allowed)
-    return extra_guests * plan.extra_guest_paise
+def _round_to_whole_rupee(paise: int) -> int:
+    """Round paise to the nearest whole RUPEE (multiple of 100 paise), half-up.
+
+    Kid pricing is charged in whole rupees only (deliberate rule for kids; other
+    money keeps paise-level precision). E.g. 7450 -> 7500, 7400 -> 7400.
+    """
+    return _round_half_up(paise, 100) * 100
+
+
+def kid_rate_paise(plan: Plan) -> int:
+    """Per-kid extra charge: ``kid_price_pct`` % of the plan's CURRENT extra-guest
+    rate, rounded half-up to a whole rupee.
+
+    Derived from ``plan.extra_guest_paise`` at pricing time, so raising the adult
+    extra-guest rate later raises the kid charge automatically (no frozen kid
+    price). Worked examples (kid_price_pct=50): extra ₹150 (15000) -> 7500 (₹75);
+    extra ₹149 (14900) -> 50% = 7450 -> whole rupee = 7500 (₹75).
+    """
+    # Defensive: an un-flushed in-memory Plan may have kid_price_pct unset
+    # (None); treat that as 0 so pricing never crashes on a half-built object.
+    pct = plan.kid_price_pct or 0
+    raw = _round_half_up(pct * plan.extra_guest_paise, 100)
+    return _round_to_whole_rupee(raw)
+
+
+@dataclass(frozen=True)
+class _ExtraGuestCharge:
+    """Split extra-guest charge: adult extras + kid extras, and the kid portion."""
+
+    total_paise: int
+    kid_paise: int
+
+
+def _extra_guest_charge(plan: Plan, adults: int, kids: int) -> _ExtraGuestCharge:
+    """Adults-first guest-allowance rule (the single documented rule).
+
+    1. ``allowed = plan.people_allowed``.
+    2. Adults fill the allowance first:
+       ``adult_extras = max(0, adults - allowed)``.
+    3. Remaining allowance covers kids:
+       ``allowance_left = max(0, allowed - adults)``;
+       ``kid_extras = max(0, kids - allowance_left)``.
+    4. charge = adult_extras × plan.extra_guest_paise + kid_extras × kid_rate.
+
+    Kids under 3 are neither counted nor charged (the UI doesn't collect them).
+    When ``kids == 0`` this reduces exactly to the old
+    ``max(0, adults - allowed) × extra_guest_paise``, so existing pricing is
+    unchanged. Returns both the combined charge and the kid-only portion so the
+    breakdown can surface a "Kids" line.
+    """
+    allowed = plan.people_allowed
+    adult_extras = max(0, adults - allowed)
+    allowance_left = max(0, allowed - adults)
+    kid_extras = max(0, kids - allowance_left)
+    adult_paise = adult_extras * plan.extra_guest_paise
+    kid_paise = kid_extras * kid_rate_paise(plan)
+    return _ExtraGuestCharge(total_paise=adult_paise + kid_paise, kid_paise=kid_paise)
 
 
 def _resolve_discount(plan: Plan, requested_discount_paise: int, is_customer: bool) -> int:
@@ -207,6 +301,7 @@ def compute_booking_price(
     is_customer: bool,
     coupon: ValidatedCoupon | None = None,
     base_price_paise: int | None = None,
+    advance_rules: list[AdvanceRuleLike] | None = None,
 ) -> PriceBreakdown:
     """Compute the authoritative price breakdown.
 
@@ -219,13 +314,20 @@ def compute_booking_price(
     resolved a duration-specific price (see ``services.plan_pricing``). When
     None, the plan's own ``price_paise`` is used (back-compatible default).
     People allowance and the extra-guest rate always come from the plan.
+
+    ``advance_rules`` are the location's active threshold rules; the resolved
+    advance (or the plan's ``advance_paise`` fallback when none match) is set on
+    the returned breakdown. None/empty -> the plan fallback.
     """
     plan = req.plan
     # Duration-specific base price when provided, else the plan's price.
     plan_price = base_price_paise if base_price_paise is not None else plan.price_paise
 
-    # 1. Plan price + extra-guest charge (extra-guest rate comes from the plan).
-    extra_guest = _extra_guest_paise(plan, req.people)
+    # 1. Plan price + extra-guest charge (adults-first allowance rule; adult and
+    #    kid extras use the plan's rates). Combined figure + kid-only portion.
+    extra_guest_charge = _extra_guest_charge(plan, req.people, req.kids)
+    extra_guest = extra_guest_charge.total_paise
+    kid_extra_guest = extra_guest_charge.kid_paise
 
     lines: list[AddonLine] = []
 
@@ -351,9 +453,16 @@ def compute_booking_price(
     # 10. Total, clamped at 0 so a coupon can never make it negative.
     total = max(0, total_before_coupon - coupon_discount)
 
+    # 11. Advance payable: highest matching threshold rule for the location, else
+    #     the plan's advance_paise. Resolved against the FINAL total.
+    advance = resolve_advance_paise(
+        advance_rules or [], total, fallback_paise=plan.advance_paise
+    )
+
     return PriceBreakdown(
         plan_price_paise=plan_price,
         extra_guest_paise=extra_guest,
+        kid_extra_guest_paise=kid_extra_guest,
         addon_lines=lines,
         subtotal_paise=subtotal,
         discount_paise=discount,
@@ -363,4 +472,5 @@ def compute_booking_price(
         coupon_code=coupon_code,
         coupon_discount_paise=coupon_discount,
         total_paise=total,
+        advance_paise=advance,
     )

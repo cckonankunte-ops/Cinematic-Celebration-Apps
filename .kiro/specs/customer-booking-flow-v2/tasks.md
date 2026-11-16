@@ -7,7 +7,7 @@ sub-tasks are marked with `*`.
 > Migration numbering: the live DB is at **0016**. All new revisions chain off
 > 0016 as 0017–0022. Do NOT reuse 0015/0016.
 
-- [-] 1. Schema: kids %, decor category, kids on bookings, disallowed times,
+- [x] 1. Schema: kids %, decor category, kids on bookings, disallowed times,
   coupon offer fields, advance rules
   - [x] 1.1 Add `plans.kid_price_pct` (SMALLINT, default 50, CHECK 0–100) to the
     `Plan` model + migration `0017_add_kid_price_pct_to_plans`
@@ -28,24 +28,24 @@ sub-tasks are marked with `*`.
     `locations` (ON DELETE CASCADE, indexed), `min_total_paise`, `advance_paise`,
     `is_active`, CHECKs (both `>= 0`), unique `(location_id, min_total_paise)`
     (`uq_advance_rules_location_threshold`) + migration `0022_create_advance_rules`
-  - [ ] 1.7 Verify all six migrations apply cleanly on a seeded DB (upgrade +
+  - [x] 1.7 Verify all six migrations apply cleanly on a seeded DB (upgrade +
     downgrade), additive with server defaults
   - _Requirements: 6.2, 7.1, 7.2, 10.1, 10.2, 11.2, 12.1, 12.2_
 
-- [ ] 2. Pricing: kids charge + guest-allowance rule + advance resolution
-  - [ ] 2.1 Add `_round_to_whole_rupee` and `kid_rate_paise(plan)` to `pricing.py`
+- [x] 2. Pricing: kids charge + guest-allowance rule + advance resolution
+  - [x] 2.1 Add `_round_to_whole_rupee` and `kid_rate_paise(plan)` to `pricing.py`
     (whole-rupee, derived from current `extra_guest_paise`)
-  - [ ] 2.2 Add `kids` to `ValidatedRequest`; replace `_extra_guest_paise(plan,
+  - [x] 2.2 Add `kids` to `ValidatedRequest`; replace `_extra_guest_paise(plan,
     people)` with the documented adults-first allowance rule charging adult extras
     at the plan rate and kid extras at `kid_rate_paise`
-  - [ ] 2.3 Add `kid_extra_guest_paise` to `PriceBreakdown` (combined
+  - [x] 2.3 Add `kid_extra_guest_paise` to `PriceBreakdown` (combined
     `extra_guest_paise` unchanged)
-  - [ ] 2.4 Add pure `resolve_advance_paise(rules, final_total_paise, *,
+  - [x] 2.4 Add pure `resolve_advance_paise(rules, final_total_paise, *,
     fallback_paise)` (highest matching threshold wins; no match → `fallback_paise`
     = the plan's `advance_paise`); add `advance_paise` to `PriceBreakdown`; call it
     in `compute_booking_price` after the final total is known, passing the plan's
     advance as the fallback (rules + fallback passed in, no DB in `pricing.py`)
-  - [ ] 2.5 Unit tests K1–K4, K6 + `kids=0` regression; A1 advance resolution
+  - [x] 2.5 Unit tests K1–K4, K6 + `kids=0` regression; A1 advance resolution
     (highest wins, no-match → fallback, empty rules → fallback); all
     pure/property-friendly
   - _Requirements: 6.1, 6.3, 6.3a, 6.4, 6.7, 12.3, 12.4, 12.6_
