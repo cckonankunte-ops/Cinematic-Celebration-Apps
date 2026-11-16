@@ -205,7 +205,9 @@ class CakeAdminRead(BaseModel):
 class SpecialDecorCreate(BaseModel):
     location_id: int
     name: str = Field(min_length=1)
-    description: str = Field(min_length=1)
+    # Description is optional: simple items (e.g. "Water Small") need none.
+    # Consistent with combos, which also allow an empty description.
+    description: str = ""
     price_paise: int = Field(ge=0)
     object_key: str = Field(min_length=1)
     sort_order: int = Field(ge=0, default=0)
@@ -215,7 +217,8 @@ class SpecialDecorCreate(BaseModel):
 
 class SpecialDecorUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1)
-    description: str | None = Field(default=None, min_length=1)
+    # Optional on update too; "" clears the description.
+    description: str | None = None
     price_paise: int | None = Field(default=None, ge=0)
     object_key: str | None = Field(default=None, min_length=1)
     sort_order: int | None = Field(default=None, ge=0)
