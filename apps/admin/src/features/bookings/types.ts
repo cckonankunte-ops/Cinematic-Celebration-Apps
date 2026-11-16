@@ -143,6 +143,8 @@ export interface AddonLineRead {
 export interface PriceBreakdownRead {
   plan_price_paise: number;
   extra_guest_paise: number;
+  /** Kid-only portion of extra_guest_paise, for a "Kids" summary line. */
+  kid_extra_guest_paise: number;
   addon_lines: AddonLineRead[];
   subtotal_paise: number;
   discount_paise: number;
@@ -152,6 +154,8 @@ export interface PriceBreakdownRead {
   coupon_code: string | null;
   coupon_discount_paise: number;
   total_paise: number;
+  /** Server-resolved advance payable (threshold rules, else plan fallback). */
+  advance_paise: number;
   amount_paid_paise: number;
   amount_due_paise: number;
 }

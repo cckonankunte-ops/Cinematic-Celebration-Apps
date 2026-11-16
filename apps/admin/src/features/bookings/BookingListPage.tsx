@@ -344,7 +344,10 @@ export function BookingListPage(): JSX.Element {
                     <td className="py-2 pr-4">{b.plan_title}</td>
                     <td className="py-2 pr-4">{formatDate(b.booking_date)}</td>
                     <td className="py-2 pr-4">{b.slot_description}</td>
-                    <td className="py-2 pr-4">{b.people}</td>
+                    <td className="py-2 pr-4">
+                      {b.people}
+                      {b.kids ? ` + ${b.kids} kids` : ''}
+                    </td>
                     <td className="py-2 pr-4 text-right">
                       {formatRupees(b.amount_paid_paise ?? 0)}
                     </td>

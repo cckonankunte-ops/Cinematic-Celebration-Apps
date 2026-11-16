@@ -895,7 +895,11 @@ export function BookingForm({
         </fieldset>
       )}
 
-      <PreviewSummary breakdown={breakdown} error={previewError} />
+      <PreviewSummary
+        breakdown={breakdown}
+        error={previewError}
+        kids={Number.isFinite(watched.kids) ? (watched.kids as number) : 0}
+      />
 
       {serverError && <p className="text-sm text-red-600">{serverError}</p>}
 
@@ -913,6 +917,8 @@ export function BookingForm({
 interface PreviewSummaryProps {
   breakdown: PriceBreakdownRead | null;
   error: string | null;
+  /** Kids count, to label the server-computed kids charge line. */
+  kids: number;
 }
 
 /**
@@ -920,7 +926,11 @@ interface PreviewSummaryProps {
  * row; the coupon is shown as a distinct line when it discounts anything. The
  * total is authoritative — this panel never does any price math itself.
  */
-function PreviewSummary({ breakdown, error }: PreviewSummaryProps): JSX.Element | null {
+function PreviewSummary({
+  breakdown,
+  error,
+  kids,
+}: PreviewSummaryProps): JSX.Element | null {
   if (error) {
     return (
       <div className="rounded border border-red-200 bg-red-50 p-3 text-sm">
@@ -943,10 +953,21 @@ function PreviewSummary({ breakdown, error }: PreviewSummaryProps): JSX.Element 
         <span>{formatRupees(breakdown.plan_price_paise)}</span>
       </div>
 
-      {breakdown.extra_guest_paise > 0 && (
+      {breakdown.extra_guest_paise - breakdown.kid_extra_guest_paise > 0 && (
         <div className="flex justify-between">
           <span>Extra guests</span>
-          <span>{formatRupees(breakdown.extra_guest_paise)}</span>
+          <span>
+            {formatRupees(
+              breakdown.extra_guest_paise - breakdown.kid_extra_guest_paise,
+            )}
+          </span>
+        </div>
+      )}
+
+      {breakdown.kid_extra_guest_paise > 0 && (
+        <div className="flex justify-between">
+          <span>Kids{kids > 0 ? ` (${kids})` : ''}</span>
+          <span>{formatRupees(breakdown.kid_extra_guest_paise)}</span>
         </div>
       )}
 
@@ -1044,6 +1065,16 @@ function PreviewSummary({ breakdown, error }: PreviewSummaryProps): JSX.Element 
       <div className="flex justify-between border-t border-gray-200 pt-1 font-semibold text-gray-900">
         <span>Total</span>
         <span>{formatRupees(breakdown.total_paise)}</span>
+      </div>
+
+      <div className="flex justify-between text-gray-700">
+        <span>Advance payable</span>
+        <span>{formatRupees(breakdown.advance_paise)}</span>
+      </div>
+
+      <div className="flex justify-between text-gray-600">
+        <span>Balance (payable at venue)</span>
+        <span>{formatRupees(breakdown.total_paise - breakdown.advance_paise)}</span>
       </div>
 
       <div className="flex justify-between text-gray-600">

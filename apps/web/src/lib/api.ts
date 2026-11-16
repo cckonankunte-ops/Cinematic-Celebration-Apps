@@ -335,6 +335,10 @@ export interface BookingStatus {
   plan_title: string;
   slot_description: string;
   booking_date: string;
+  /** Adults (above 10 yrs). */
+  people: number;
+  /** Kids (3-10 yrs). */
+  kids: number;
   total_paise: number;
   amount_paid_paise: number;
   amount_due_paise: number;

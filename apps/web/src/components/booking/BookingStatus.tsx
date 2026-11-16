@@ -83,6 +83,14 @@ export default function BookingStatus() {
         <Row label="Plan" value={status.plan_title} />
         <Row label="Slot" value={status.slot_description} />
         <Row label="Date" value={formatDate(status.booking_date)} />
+        <Row
+          label="Guests"
+          value={
+            status.kids > 0
+              ? `${status.people} + ${status.kids} kids`
+              : String(status.people)
+          }
+        />
         <Row label="Total" value={formatRupees(status.total_paise)} />
         <Row label="Paid" value={formatRupees(status.amount_paid_paise)} />
         <Row

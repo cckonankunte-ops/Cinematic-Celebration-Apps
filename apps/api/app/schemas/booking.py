@@ -207,6 +207,8 @@ class PublicBookingStatus(BaseModel):
     plan_title: str
     slot_description: str
     booking_date: date
+    people: int = 0  # adults (above 10 yrs)
+    kids: int = 0  # kids (3-10 yrs)
     total_paise: int
     amount_paid_paise: int
     amount_due_paise: int  # may be negative = overpaid

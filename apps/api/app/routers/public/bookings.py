@@ -74,6 +74,8 @@ def get_booking_status(
         plan_title=plan_title,
         slot_description=slot_description,
         booking_date=booking.booking_date,
+        people=booking.people,
+        kids=booking.kids,
         total_paise=amounts.total_paise,
         amount_paid_paise=amounts.amount_paid_paise,
         amount_due_paise=amounts.amount_due_paise,
