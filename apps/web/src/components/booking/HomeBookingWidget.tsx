@@ -16,7 +16,7 @@ export default function HomeBookingWidget() {
   const today = todayIsoInIST();
   const [locations, setLocations] = useState<Location[]>([]);
   const [slug, setSlug] = useState('');
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [callHint, setCallHint] = useState<string | null>(null);
@@ -28,7 +28,6 @@ export default function HomeBookingWidget() {
       .then((result) => {
         if (!active) return;
         setLocations(result);
-        if (result.length > 0) setSlug(result[0].slug);
       })
       .catch(() => {
         if (active) setError('Could not load branches right now.');
@@ -44,7 +43,15 @@ export default function HomeBookingWidget() {
   const selected = locations.find((l) => l.slug === slug) ?? null;
 
   const onBook = () => {
-    if (!slug) return;
+    setCallHint(null);
+    if (!slug) {
+      setCallHint('Please choose a location.');
+      return;
+    }
+    if (!date) {
+      setCallHint('Please choose a date.');
+      return;
+    }
     const params = new URLSearchParams({ location: slug, date });
     window.location.href = `/book?${params.toString()}`;
   };
@@ -52,7 +59,7 @@ export default function HomeBookingWidget() {
   const onCall = () => {
     setCallHint(null);
     if (!selected) {
-      setCallHint('Please pick a branch first.');
+      setCallHint('Please choose a location first.');
       return;
     }
     const href = telHref(selected.phone);
@@ -89,6 +96,7 @@ export default function HomeBookingWidget() {
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
           >
+            <option value="">Choose a location</option>
             {locations.map((loc) => (
               <option key={loc.id} value={loc.slug}>
                 {loc.name}
@@ -113,7 +121,6 @@ export default function HomeBookingWidget() {
           <button
             type="button"
             onClick={onBook}
-            disabled={!slug}
             className="flex-1 rounded-full bg-festive-hero px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50 sm:flex-none"
           >
             Book Now

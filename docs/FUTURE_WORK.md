@@ -175,3 +175,44 @@ kids)", rather than a separate column, to keep the printed sheet compact. Keep
 
 **Status:** deferred (recorded 2026). Not scheduled. Pricing and all booking
 screens already handle kids; this is sheets/email presentation only.
+
+
+## Cake categories (Standard / Premium) with tabbed customer picker (deferred)
+
+**Context.** The customer "Add a cake" step shows cakes as image cards. The
+owner wants cakes grouped into two categories — **Standard** and **Premium** —
+shown as two tabs, mirroring the special-decor category pattern.
+
+**Why deferred.** Unlike decor (whose category already exists), `cakes` has no
+category column, so this needs a backend change, not just UI:
+- Migration `cakes.category` TEXT NOT NULL DEFAULT 'standard', CHECK
+  `category IN ('standard','premium')`; backfill existing rows to 'standard'.
+- `Cake` model + `CakeRead` (public) + admin cake create/edit schemas/forms gain
+  `category`; admin decor-style select.
+- Web `Cake` type gains `category`; the Cake step renders two tabs and filters
+  cards by the active tab.
+- Tests for the new field + the tabbed picker.
+
+**Status:** deferred (recorded 2026). The cake image cards + weight popup ship
+now; only the Standard/Premium tabbing is deferred.
+
+## "Allow multiple" flag for special decor (deferred)
+
+**Context.** ~90% of special-decor items are only ever ordered as quantity 1;
+only a few (party popper, sash) are occasionally multiples. The customer decor
+card currently shows an inline quantity stepper once an item is selected.
+
+**Idea.** Add a per-item `allow_multiple` boolean on `special_decor_items`
+(admin-set). When false, the customer card is a plain select (qty fixed at 1, no
+stepper); when true, the inline stepper appears. Keeps the UI clean for the
+common case and only exposes quantity where it's actually used.
+
+**Why deferred.** Needs a backend field:
+- Migration `special_decor_items.allow_multiple` BOOLEAN NOT NULL DEFAULT false.
+- Model + public `SpecialDecorRead` + admin decor create/edit schemas/forms.
+- Web `SpecialDecor` type + `DecorByCategory` conditionally renders the stepper.
+
+**Interim (shipping now).** Every selected decor item shows a small inline
+`- 1 +` stepper; unselected items show none. Good enough until the flag lands.
+
+**Status:** deferred (recorded 2026). Not scheduled.
