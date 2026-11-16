@@ -34,7 +34,7 @@ describe('DecorByCategory', () => {
     expect(screen.queryByText('Special Service')).not.toBeInTheDocument();
   });
 
-  it('selects an item with quantity 1 when ticked', () => {
+  it('selects an item with quantity 1 when its card is tapped', () => {
     const onChangeDecor = vi.fn();
     render(
       <DecorByCategory
@@ -43,8 +43,39 @@ describe('DecorByCategory', () => {
         onChangeDecor={onChangeDecor}
       />,
     );
-    fireEvent.click(screen.getByRole('checkbox'));
+    // The card is a button; tapping it adds the item at quantity 1.
+    fireEvent.click(screen.getByRole('button', { pressed: false }));
     expect(onChangeDecor).toHaveBeenCalledWith([{ id: 1, quantity: 1 }]);
+  });
+
+  it('shows an inline stepper only after selection and increments quantity', () => {
+    const onChangeDecor = vi.fn();
+    render(
+      <DecorByCategory
+        specialDecor={[decor(1, 'Party Popper', 'extra_decoration')]}
+        decor={[{ id: 1, quantity: 1 }]}
+        onChangeDecor={onChangeDecor}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Increase quantity for Party Popper' }),
+    );
+    expect(onChangeDecor).toHaveBeenCalledWith([{ id: 1, quantity: 2 }]);
+  });
+
+  it('removes the item when quantity is decremented below 1', () => {
+    const onChangeDecor = vi.fn();
+    render(
+      <DecorByCategory
+        specialDecor={[decor(1, 'Balloons', 'extra_decoration')]}
+        decor={[{ id: 1, quantity: 1 }]}
+        onChangeDecor={onChangeDecor}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Decrease quantity for Balloons' }),
+    );
+    expect(onChangeDecor).toHaveBeenCalledWith([]);
   });
 
   it('shows an empty message when there is no decor', () => {

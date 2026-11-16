@@ -582,15 +582,6 @@ export default function BookingWizard() {
             selectedId={draft.occasionId}
             onSelect={(occasionId) => patch({ occasionId })}
           />
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium">Name on cake</span>
-            <input
-              type="text"
-              value={draft.nameOnCake}
-              onChange={(e) => patch({ nameOnCake: e.target.value })}
-              className="rounded border border-gray-300 px-3 py-2"
-            />
-          </label>
         </section>
       )}
 
@@ -617,6 +608,18 @@ export default function BookingWizard() {
             onCakeChange={(cakeId) => patch({ cakeId })}
             onCakeWeightChange={(cakeWeightHalfKg) => patch({ cakeWeightHalfKg })}
           />
+          {draft.cakeId !== null && (
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-medium">Name on cake</span>
+              <input
+                type="text"
+                value={draft.nameOnCake}
+                onChange={(e) => patch({ nameOnCake: e.target.value })}
+                placeholder="e.g. Happy Birthday Arun"
+                className="rounded border border-gray-300 px-3 py-2"
+              />
+            </label>
+          )}
         </section>
       )}
 
@@ -628,7 +631,7 @@ export default function BookingWizard() {
             <button
               type="button"
               onClick={() => {
-                patch({ specialDecor: [], comboIds: [], ledName: '' });
+                patch({ specialDecor: [], comboIds: [] });
                 setStep(5);
               }}
               className="text-sm font-semibold text-brand hover:underline"
@@ -707,43 +710,11 @@ export default function BookingWizard() {
             </section>
           )}
 
-          <div>
-            <h3 className="mb-2 font-semibold text-gray-900">Special decor</h3>
-            <DecorByCategory
-              specialDecor={catalog.specialDecor}
-              decor={draft.specialDecor}
-              onChangeDecor={(specialDecor) => patch({ specialDecor })}
-            />
-          </div>
-
-          <details className="rounded-xl border border-gray-200 p-3">
-            <summary className="cursor-pointer font-semibold text-gray-900">
-              Add a LED name
-            </summary>
-            <label className="mt-3 flex flex-col gap-1">
-              <input
-                type="text"
-                value={draft.ledName}
-                onChange={(e) => patch({ ledName: e.target.value })}
-                aria-label="LED name"
-                className="rounded border border-gray-300 px-3 py-2"
-              />
-              <span className="text-xs text-gray-500">₹40 per letter</span>
-            </label>
-          </details>
-
-          <details className="rounded-xl border border-gray-200 p-3">
-            <summary className="cursor-pointer font-semibold text-gray-900">
-              Have a coupon code?
-            </summary>
-            <input
-              type="text"
-              value={draft.couponCode}
-              onChange={(e) => patch({ couponCode: e.target.value })}
-              aria-label="Coupon code"
-              className="mt-3 w-full rounded border border-gray-300 px-3 py-2"
-            />
-          </details>
+          <DecorByCategory
+            specialDecor={catalog.specialDecor}
+            decor={draft.specialDecor}
+            onChangeDecor={(specialDecor) => patch({ specialDecor })}
+          />
 
           <label className="flex flex-col gap-1">
             <span className="text-sm font-medium">Message / special requests</span>
@@ -787,6 +758,35 @@ export default function BookingWizard() {
               </div>
             )}
           </dl>
+
+          <details className="rounded-xl border border-gray-200 p-3">
+            <summary className="cursor-pointer font-semibold text-gray-900">
+              Add a LED name
+            </summary>
+            <label className="mt-3 flex flex-col gap-1">
+              <input
+                type="text"
+                value={draft.ledName}
+                onChange={(e) => patch({ ledName: e.target.value })}
+                aria-label="LED name"
+                className="rounded border border-gray-300 px-3 py-2"
+              />
+              <span className="text-xs text-gray-500">₹40 per letter</span>
+            </label>
+          </details>
+
+          <details className="rounded-xl border border-gray-200 p-3">
+            <summary className="cursor-pointer font-semibold text-gray-900">
+              Have a coupon code?
+            </summary>
+            <input
+              type="text"
+              value={draft.couponCode}
+              onChange={(e) => patch({ couponCode: e.target.value })}
+              aria-label="Coupon code"
+              className="mt-3 w-full rounded border border-gray-300 px-3 py-2"
+            />
+          </details>
 
           <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-600">
             <p className="font-semibold text-gray-800">Terms &amp; Conditions</p>

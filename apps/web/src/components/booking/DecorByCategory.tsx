@@ -1,13 +1,14 @@
-import { useState } from 'react';
-
 import type { DecorCategory, DecorSelection, SpecialDecor } from '../../lib/api';
 import { formatRupees } from '../../lib/formatters';
 
 /**
  * Special decor grouped by category, rendered in a fixed order (Extra
- * Decoration → Choose Gifts → Special Service), each a labeled section stacked
- * vertically (single column on mobile). Empty categories are omitted. The
- * customer picks items + quantities; all pricing is server-side.
+ * Decoration → Choose Gifts → Special Services), each a labeled section. Items
+ * render as image cards, two per row on mobile. Tap a card to add it (quantity
+ * 1); a small inline "− 1 +" stepper appears only once an item is selected, so
+ * the common single-quantity case stays one tap and multi-quantity (party
+ * popper, sash) is a couple of taps. Empty categories are omitted. All pricing
+ * is server-side; the client sends only ids + quantities.
  */
 interface Props {
   specialDecor: SpecialDecor[];
@@ -35,47 +36,21 @@ export default function DecorByCategory({
   const findDecor = (id: number): DecorSelection | undefined =>
     decor.find((d) => d.id === id);
 
-  // Raw text per decor id while editing quantity (lets mobile users clear "1").
-  const [qtyDrafts, setQtyDrafts] = useState<Record<number, string>>({});
-
   const toggleDecor = (id: number) => {
     if (findDecor(id)) {
       onChangeDecor(decor.filter((d) => d.id !== id));
-      setQtyDrafts((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
     } else {
       onChangeDecor([...decor, { id, quantity: 1 }]);
     }
   };
 
-  const commitQuantity = (id: number, quantity: number) => {
+  const setQuantity = (id: number, quantity: number) => {
+    if (quantity < 1) {
+      // Dropping below 1 removes the item.
+      onChangeDecor(decor.filter((d) => d.id !== id));
+      return;
+    }
     onChangeDecor(decor.map((d) => (d.id === id ? { ...d, quantity } : d)));
-  };
-
-  const onQuantityInput = (id: number, raw: string) => {
-    setQtyDrafts((prev) => ({ ...prev, [id]: raw }));
-    const parsed = Number(raw);
-    if (raw !== '' && Number.isInteger(parsed) && parsed >= 1) {
-      commitQuantity(id, parsed);
-    }
-  };
-
-  const onQuantityBlur = (id: number) => {
-    const raw = qtyDrafts[id];
-    if (raw !== undefined) {
-      const parsed = Number(raw);
-      const resolved =
-        raw !== '' && Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
-      commitQuantity(id, resolved);
-      setQtyDrafts((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    }
   };
 
   const groups = CATEGORY_ORDER.map((category) => ({
@@ -94,37 +69,77 @@ export default function DecorByCategory({
           <h4 className="mb-2 text-sm font-semibold text-gray-900">
             {CATEGORY_LABELS[category]}
           </h4>
-          <ul className="space-y-2">
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {items.map((item) => {
               const selection = findDecor(item.id);
               const selected = selection !== undefined;
               return (
-                <li key={item.id} className="flex items-center gap-3">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleDecor(item.id)}
-                    />
-                    <span>
-                      {item.name} — {formatRupees(item.price_paise)}
-                    </span>
-                  </label>
+                <li key={item.id} className="flex flex-col">
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleDecor(item.id)}
+                    className={`flex w-full flex-col overflow-hidden rounded-xl border-2 text-left transition ${
+                      selected
+                        ? 'border-brand shadow-md'
+                        : 'border-gray-200 hover:border-brand/60'
+                    }`}
+                  >
+                    <div className="relative aspect-square w-full overflow-hidden bg-festive-hero">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          className="flex h-full w-full items-center justify-center text-3xl"
+                        >
+                          🎀
+                        </span>
+                      )}
+                      {selected && (
+                        <span className="absolute right-1.5 top-1.5 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-brand shadow">
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-2">
+                      <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatRupees(item.price_paise)}
+                      </p>
+                    </div>
+                  </button>
+
                   {selected && (
-                    <label className="flex items-center gap-1 text-sm">
-                      <span className="sr-only">Quantity for {item.name}</span>
-                      <span aria-hidden="true">×</span>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        value={qtyDrafts[item.id] ?? String(selection.quantity)}
-                        onChange={(e) => onQuantityInput(item.id, e.target.value)}
-                        onBlur={() => onQuantityBlur(item.id)}
+                    <div className="mt-1.5 flex items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        aria-label={`Decrease quantity for ${item.name}`}
+                        onClick={() => setQuantity(item.id, selection.quantity - 1)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-300 text-lg font-bold text-gray-700 transition hover:bg-gray-50"
+                      >
+                        −
+                      </button>
+                      <span
                         aria-label={`Quantity for ${item.name}`}
-                        className="w-16 rounded border border-gray-300 px-2 py-1"
-                      />
-                    </label>
+                        className="min-w-[1.5rem] text-center text-sm font-semibold"
+                      >
+                        {selection.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Increase quantity for ${item.name}`}
+                        onClick={() => setQuantity(item.id, selection.quantity + 1)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-300 text-lg font-bold text-gray-700 transition hover:bg-gray-50"
+                      >
+                        +
+                      </button>
+                    </div>
                   )}
                 </li>
               );
