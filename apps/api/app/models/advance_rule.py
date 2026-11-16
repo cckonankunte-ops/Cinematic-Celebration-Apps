@@ -15,7 +15,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
-    Index,
     UniqueConstraint,
     text,
 )
@@ -48,10 +47,10 @@ class AdvanceRule(Base, TimestampMixin):
             "advance_paise >= 0", name="ck_advance_rules_advance_nonneg"
         ),
         # One rule per threshold per branch -> deterministic "highest match wins".
+        # (location_id is already indexed via index=True on the column above.)
         UniqueConstraint(
             "location_id",
             "min_total_paise",
             name="uq_advance_rules_location_threshold",
         ),
-        Index("ix_advance_rules_location_id", "location_id"),
     )

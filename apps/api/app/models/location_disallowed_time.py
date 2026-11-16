@@ -15,7 +15,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
-    Index,
     SmallInteger,
     Text,
     Time,
@@ -46,9 +45,9 @@ class LocationDisallowedTime(Base, TimestampMixin):
         Boolean, nullable=False, server_default=text("true")
     )
 
+    # location_id is already indexed via index=True on the column above.
     __table_args__ = (
         CheckConstraint(
             "start_time < end_time", name="ck_location_disallowed_times_order"
         ),
-        Index("ix_location_disallowed_times_location_id", "location_id"),
     )
