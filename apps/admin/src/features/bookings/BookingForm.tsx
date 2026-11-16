@@ -593,26 +593,56 @@ export function BookingForm({
 
         <label className="space-y-1 text-sm">
           <span className="font-medium text-gray-700">Occasion</span>
-          <select className={inputClass} {...register('occasion_id', { valueAsNumber: true })}>
-            <option value="">None</option>
-            {occasions.data?.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
+          <Controller
+            control={control}
+            name="occasion_id"
+            render={({ field }) => (
+              <select
+                className={inputClass}
+                name={field.name}
+                ref={field.ref}
+                value={typeof field.value === 'number' ? field.value : ''}
+                onBlur={field.onBlur}
+                onChange={(e) =>
+                  field.onChange(e.target.value === '' ? undefined : Number(e.target.value))
+                }
+              >
+                <option value="">None</option>
+                {occasions.data?.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          />
         </label>
 
         <label className="space-y-1 text-sm">
           <span className="font-medium text-gray-700">Cake</span>
-          <select className={inputClass} {...register('cake_id', { valueAsNumber: true })}>
-            <option value="">None</option>
-            {cakes.data?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <Controller
+            control={control}
+            name="cake_id"
+            render={({ field }) => (
+              <select
+                className={inputClass}
+                name={field.name}
+                ref={field.ref}
+                value={typeof field.value === 'number' ? field.value : ''}
+                onBlur={field.onBlur}
+                onChange={(e) =>
+                  field.onChange(e.target.value === '' ? undefined : Number(e.target.value))
+                }
+              >
+                <option value="">None</option>
+                {cakes.data?.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          />
         </label>
 
         <label className="space-y-1 text-sm">
