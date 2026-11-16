@@ -23,6 +23,8 @@ export interface PlanAdminRead extends Validity {
   people_allowed: number;
   max_people_allowed: number;
   extra_guest_paise: number;
+  /** Kids (3-10 yrs) charged this % of the extra-guest rate (0-100). */
+  kid_price_pct: number;
   give_discount: boolean;
   max_discount_paise: number;
   advance_paise: number;
@@ -36,6 +38,7 @@ export interface PlanCreateBody {
   people_allowed: number;
   max_people_allowed: number;
   extra_guest_paise: number;
+  kid_price_pct?: number;
   give_discount: boolean;
   max_discount_paise: number;
   advance_paise: number;
@@ -52,11 +55,56 @@ export interface PlanUpdateBody {
   people_allowed?: number;
   max_people_allowed?: number;
   extra_guest_paise?: number;
+  kid_price_pct?: number;
   give_discount?: boolean;
   max_discount_paise?: number;
   advance_paise?: number;
   effective_from?: string;
   effective_to?: string;
+  is_active?: boolean;
+}
+
+/** Special-decor grouping category (stored lowercase; UI maps to labels). */
+export type DecorCategory = 'extra_decoration' | 'gifts' | 'special_service';
+
+/** Display labels for decor categories, in render order. */
+export const DECOR_CATEGORY_LABELS: Record<DecorCategory, string> = {
+  extra_decoration: 'Extra Decoration',
+  gifts: 'Choose Gifts',
+  special_service: 'Special Service',
+};
+
+/** A per-branch disallowed booking-time range (admin). */
+export interface DisallowedTimeRead {
+  id: number;
+  location_id: number;
+  start_time: string; // "HH:MM:SS"
+  end_time: string;
+  max_duration_minutes: number | null;
+  note: string | null;
+  is_active: boolean;
+}
+
+export interface DisallowedTimeCreateBody {
+  start_time: string; // "HH:MM"
+  end_time: string;
+  max_duration_minutes?: number | null;
+  note?: string | null;
+  is_active?: boolean;
+}
+
+/** A per-branch advance rule: final total >= min_total -> advance. */
+export interface AdvanceRuleRead {
+  id: number;
+  location_id: number;
+  min_total_paise: number;
+  advance_paise: number;
+  is_active: boolean;
+}
+
+export interface AdvanceRuleCreateBody {
+  min_total_paise: number;
+  advance_paise: number;
   is_active?: boolean;
 }
 
@@ -138,6 +186,8 @@ export interface CakeAdminRead extends AddonAdminRead {
 export interface NamedAddonAdminRead extends AddonAdminRead {
   name: string;
   description: string;
+  /** Decor-only: grouping category. Absent for cakes/combos. */
+  category?: DecorCategory;
   /** Combo-only: optional cake/LED baselines (paise). Null/absent otherwise. */
   cake_baseline_paise?: number | null;
   led_baseline_paise?: number | null;
@@ -212,6 +262,7 @@ export interface DecorCreateBody {
   location_id: number;
   name: string;
   description: string;
+  category?: DecorCategory;
   price_paise: number;
   object_key: string;
   sort_order: number;
@@ -222,6 +273,7 @@ export interface DecorCreateBody {
 export interface DecorUpdateBody {
   name?: string;
   description?: string;
+  category?: DecorCategory;
   price_paise?: number;
   object_key?: string;
   sort_order?: number;

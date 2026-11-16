@@ -15,6 +15,8 @@ import {
 
 import { api } from '@/api/client';
 import type {
+  AdvanceRuleCreateBody,
+  AdvanceRuleRead,
   CakeAdminRead,
   CakeCreateBody,
   CakeUpdateBody,
@@ -22,6 +24,8 @@ import type {
   ComboUpdateBody,
   DecorCreateBody,
   DecorUpdateBody,
+  DisallowedTimeCreateBody,
+  DisallowedTimeRead,
   LocationAdminRead,
   LocationHoursUpdateBody,
   NamedAddonAdminRead,
@@ -334,6 +338,104 @@ export function useUpdateLocationHours(): UseMutationResult<
       api.patch<LocationAdminRead>(`/api/v1/admin/locations/${locationId}`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['catalog', 'locations'] });
+    },
+  });
+}
+
+// --- Disallowed booking-time ranges (per branch) ---
+export function useDisallowedTimes(
+  locationId: number | null,
+): UseQueryResult<DisallowedTimeRead[]> {
+  return useQuery<DisallowedTimeRead[]>({
+    queryKey: ['catalog', 'disallowed-times', locationId],
+    queryFn: () =>
+      api.get<DisallowedTimeRead[]>(
+        `/api/v1/admin/locations/${locationId as number}/disallowed-times`,
+      ),
+    enabled: locationId !== null,
+  });
+}
+
+export function useCreateDisallowedTime(
+  locationId: number | null,
+): UseMutationResult<DisallowedTimeRead, unknown, DisallowedTimeCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<DisallowedTimeRead, unknown, DisallowedTimeCreateBody>({
+    mutationFn: (body) =>
+      api.post<DisallowedTimeRead>(
+        `/api/v1/admin/locations/${locationId as number}/disallowed-times`,
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: ['catalog', 'disallowed-times', locationId],
+      });
+    },
+  });
+}
+
+export function useDeleteDisallowedTime(
+  locationId: number | null,
+): UseMutationResult<void, unknown, number> {
+  const qc = useQueryClient();
+  return useMutation<void, unknown, number>({
+    mutationFn: (rowId) =>
+      api.del<void>(
+        `/api/v1/admin/locations/${locationId as number}/disallowed-times/${rowId}`,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: ['catalog', 'disallowed-times', locationId],
+      });
+    },
+  });
+}
+
+// --- Advance rules (per branch) ---
+export function useAdvanceRules(
+  locationId: number | null,
+): UseQueryResult<AdvanceRuleRead[]> {
+  return useQuery<AdvanceRuleRead[]>({
+    queryKey: ['catalog', 'advance-rules', locationId],
+    queryFn: () =>
+      api.get<AdvanceRuleRead[]>(
+        `/api/v1/admin/locations/${locationId as number}/advance-rules`,
+      ),
+    enabled: locationId !== null,
+  });
+}
+
+export function useCreateAdvanceRule(
+  locationId: number | null,
+): UseMutationResult<AdvanceRuleRead, unknown, AdvanceRuleCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<AdvanceRuleRead, unknown, AdvanceRuleCreateBody>({
+    mutationFn: (body) =>
+      api.post<AdvanceRuleRead>(
+        `/api/v1/admin/locations/${locationId as number}/advance-rules`,
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: ['catalog', 'advance-rules', locationId],
+      });
+    },
+  });
+}
+
+export function useDeleteAdvanceRule(
+  locationId: number | null,
+): UseMutationResult<void, unknown, number> {
+  const qc = useQueryClient();
+  return useMutation<void, unknown, number>({
+    mutationFn: (ruleId) =>
+      api.del<void>(
+        `/api/v1/admin/locations/${locationId as number}/advance-rules/${ruleId}`,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: ['catalog', 'advance-rules', locationId],
+      });
     },
   });
 }

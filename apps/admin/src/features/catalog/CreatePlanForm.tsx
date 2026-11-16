@@ -21,6 +21,7 @@ const EMPTY = {
   peopleAllowed: '4',
   maxPeople: '',
   extraGuestRupees: '0',
+  kidsPct: '50',
   advanceRupees: '0',
 };
 
@@ -47,6 +48,7 @@ export function CreatePlanForm({
       people_allowed: Number(form.peopleAllowed),
       max_people_allowed: Number(form.maxPeople),
       extra_guest_paise: rupeesToPaise(Number(form.extraGuestRupees)),
+      kid_price_pct: Number(form.kidsPct),
       give_discount: false,
       max_discount_paise: 0,
       advance_paise: rupeesToPaise(Number(form.advanceRupees)),
@@ -104,6 +106,16 @@ export function CreatePlanForm({
           placeholder="Extra guest (₹)"
           value={form.extraGuestRupees}
           onChange={(e) => update('extraGuestRupees')(e.target.value)}
+        />
+        <input
+          className={field}
+          type="number"
+          min={0}
+          max={100}
+          placeholder="Kids price %"
+          aria-label="Kids price %"
+          value={form.kidsPct}
+          onChange={(e) => update('kidsPct')(e.target.value)}
         />
         <input
           className={field}

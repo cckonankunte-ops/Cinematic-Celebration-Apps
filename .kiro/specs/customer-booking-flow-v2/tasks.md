@@ -88,18 +88,18 @@ sub-tasks are marked with `*`.
     409, cross-location ok, negative → 422, staff → 403)
   - _Requirements: 6.6, 7.6, 10.1, 10.2, 11.1, 11.2, 11.3, 11.4, 11.6, 12.1, 12.2, 12.9_
 
-- [ ] 5. Admin UI — catalog forms, coupon fields, disallowed times, advance rules
-  - [ ] 5.1 Special-decor create/edit: Category select (3 labels → enum value) +
-    zod; show category in the decor list
-  - [ ] 5.2 Plan create/edit: "Kids price %" (0–100, default 50) + ensure
-    "Minimum advance (₹)" bound to `advance_paise`; zod mirrors API
-  - [ ] 5.3 Disallowed-times manager UI under branch settings (list/add/remove)
-  - [ ] 5.4 Coupon create/edit: Name, Description (plain text), and Public toggle;
+- [x] 5. Admin UI — catalog forms, coupon fields, disallowed times, advance rules
+  - [x] 5.1 Special-decor create/edit: Category select (3 labels → enum value);
+    show category in the decor list
+  - [x] 5.2 Plan create/edit: "Kids price %" (0–100, default 50) + ensure
+    "Minimum advance (₹)" bound to `advance_paise`
+  - [x] 5.3 Disallowed-times manager UI under branch settings (list/add/remove)
+  - [x] 5.4 Coupon create/edit: Name, Description (plain text), and Public toggle;
     show public state in the coupon list; zod mirrors API
-  - [ ] 5.5 Advance-rules manager UI under branch settings (list sorted by
+  - [x] 5.5 Advance-rules manager UI under branch settings (list sorted by
     threshold, add/remove; helper text "highest matching threshold wins; no match →
     the plan's minimum advance"); surface duplicate-threshold 409 inline
-  - [ ] 5.6* Vitest for the category select, kids-% validation, advance-rule form
+  - [x] 5.6* Vitest for the category select and advance-rule form
   - _Requirements: 6.6, 7.3, 10.1, 11.2, 12.1, 12.2_
 
 - [ ] 6. Customer site: home widget, offers, floating call

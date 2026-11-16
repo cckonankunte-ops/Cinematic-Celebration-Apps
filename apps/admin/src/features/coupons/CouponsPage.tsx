@@ -49,6 +49,9 @@ const EMPTY_COMPONENTS: CouponComponents = {
 function emptyForm(): CouponFormInput {
   return {
     code: '',
+    name: '',
+    description: '',
+    is_public: false,
     type: 'flat',
     value: 0,
     cap_paise: undefined,
@@ -68,6 +71,9 @@ function emptyForm(): CouponFormInput {
 function toForm(coupon: CouponRead): CouponFormInput {
   return {
     code: coupon.code,
+    name: coupon.name ?? '',
+    description: coupon.description ?? '',
+    is_public: coupon.is_public,
     type: coupon.type,
     value: coupon.value,
     cap_paise: coupon.cap_paise ?? undefined,
@@ -122,6 +128,11 @@ export function CouponsPage(): JSX.Element {
                     ? formatRupees(c.value)
                     : `${c.value}% (${c.percentage_base})`}
                 </span>
+                {c.is_public && (
+                  <span className="ml-2 rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-700">
+                    public
+                  </span>
+                )}
                 {!c.is_active && <span className="ml-2 text-xs text-gray-500">(inactive)</span>}
               </span>
               <button
@@ -191,8 +202,13 @@ function CouponForm({ locationId, editing, onDone }: CouponFormProps): JSX.Eleme
     };
 
     // Shared authoring fields (everything except the immutable location scope).
+    const toNullableText = (v: string | undefined): string | null =>
+      v === undefined || v.trim() === '' ? null : v.trim();
     const fields: Omit<CouponCreateBody, 'location_id'> = {
       code: values.code,
+      name: toNullableText(values.name),
+      description: toNullableText(values.description),
+      is_public: Boolean(values.is_public),
       type: values.type,
       value: values.value,
       cap_paise: toNullableNumber(values.cap_paise),
@@ -233,6 +249,30 @@ function CouponForm({ locationId, editing, onDone }: CouponFormProps): JSX.Eleme
           <span className="font-medium text-gray-700">Code</span>
           <input type="text" className={inputClass} {...register('code')} />
           {errors.code && <p className="text-xs text-red-600">{errors.code.message}</p>}
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span className="font-medium text-gray-700">Offer name (optional)</span>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="e.g. Weekday Special"
+            {...register('name')}
+          />
+          {errors.name && <p className="text-xs text-red-600">{errors.name.message}</p>}
+        </label>
+
+        <label className="space-y-1 text-sm md:col-span-2">
+          <span className="font-medium text-gray-700">Offer description (optional)</span>
+          <textarea
+            rows={2}
+            className={inputClass}
+            placeholder="Shown on the home page when the offer is public."
+            {...register('description')}
+          />
+          {errors.description && (
+            <p className="text-xs text-red-600">{errors.description.message}</p>
+          )}
         </label>
 
         <label className="space-y-1 text-sm">
@@ -361,6 +401,10 @@ function CouponForm({ locationId, editing, onDone }: CouponFormProps): JSX.Eleme
         <label className="flex items-center gap-2">
           <input type="checkbox" {...register('one_time')} />
           One-time use
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" {...register('is_public')} />
+          Show on home page (public offer)
         </label>
       </div>
 

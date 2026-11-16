@@ -1,19 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { CakeManager } from './AddonManagers';
-import type { CakeAdminRead } from './types';
+import { CakeManager, DecorManager } from './AddonManagers';
+import type { CakeAdminRead, NamedAddonAdminRead } from './types';
 
 const deactivateCake = vi.fn();
+const createDecor = vi.fn().mockResolvedValue({});
 
 // Mutable fixtures the mocked hooks read from, reset per test.
 let cakeRows: CakeAdminRead[] = [];
+let decorRows: NamedAddonAdminRead[] = [];
 
 vi.mock('./queries', () => ({
   useCakes: () => ({ data: cakeRows }),
   useCreateCake: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
   useUpdateCake: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
   useDeactivateCake: () => ({ mutate: deactivateCake, isPending: false }),
+  useSpecialDecor: () => ({ data: decorRows }),
+  useCreateDecor: () => ({ mutateAsync: createDecor, isPending: false }),
+  useUpdateDecor: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
+  useDeactivateDecor: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 // The image-upload helper is network-bound; stub it.
@@ -61,5 +67,43 @@ describe('CakeManager', () => {
   it('shows an Activate button for an inactive cake', () => {
     render(<CakeManager locationId={1} showInactive />);
     expect(screen.getByRole('button', { name: 'Activate' })).toBeInTheDocument();
+  });
+});
+
+function decor(id: number, category: NamedAddonAdminRead['category']): NamedAddonAdminRead {
+  return {
+    id,
+    location_id: 1,
+    name: `Decor ${id}`,
+    description: '',
+    category,
+    price_paise: 30000,
+    object_key: 'k',
+    image_url: 'https://cdn/k',
+    effective_from: '2020-01-01',
+    effective_to: '2099-12-31',
+    is_active: true,
+  };
+}
+
+describe('DecorManager category', () => {
+  beforeEach(() => {
+    createDecor.mockClear();
+    decorRows = [];
+  });
+
+  it('renders a category select with the three labels in the create form', () => {
+    render(<DecorManager locationId={1} showInactive />);
+    const select = screen.getByRole('combobox', { name: 'Category' }) as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => o.textContent);
+    expect(options).toEqual(['Extra Decoration', 'Choose Gifts', 'Special Service']);
+    // Defaults to the first (extra_decoration) value.
+    expect(select.value).toBe('extra_decoration');
+  });
+
+  it('shows the category label in the decor list row', () => {
+    decorRows = [decor(1, 'gifts')];
+    render(<DecorManager locationId={1} showInactive />);
+    expect(screen.getByText(/Choose Gifts/)).toBeInTheDocument();
   });
 });

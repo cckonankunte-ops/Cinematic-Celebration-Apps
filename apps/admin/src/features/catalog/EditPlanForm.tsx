@@ -30,6 +30,7 @@ export function EditPlanForm({
     peopleAllowed: String(plan.people_allowed),
     maxPeople: String(plan.max_people_allowed),
     extraGuestRupees: String(paiseToRupees(plan.extra_guest_paise)),
+    kidsPct: String(plan.kid_price_pct ?? 50),
     advanceRupees: String(paiseToRupees(plan.advance_paise)),
     giveDiscount: plan.give_discount,
     maxDiscountRupees: String(paiseToRupees(plan.max_discount_paise)),
@@ -51,6 +52,7 @@ export function EditPlanForm({
       people_allowed: Number(form.peopleAllowed),
       max_people_allowed: Number(form.maxPeople),
       extra_guest_paise: rupeesToPaise(Number(form.extraGuestRupees)),
+      kid_price_pct: Number(form.kidsPct),
       advance_paise: rupeesToPaise(Number(form.advanceRupees)),
       give_discount: form.giveDiscount,
       max_discount_paise: rupeesToPaise(Number(form.maxDiscountRupees)),
@@ -120,6 +122,17 @@ export function EditPlanForm({
             step="0.01"
             value={form.extraGuestRupees}
             onChange={(e) => set('extraGuestRupees', e.target.value)}
+          />
+        </label>
+        <label className={label}>
+          Kids price %
+          <input
+            className={field}
+            type="number"
+            min={0}
+            max={100}
+            value={form.kidsPct}
+            onChange={(e) => set('kidsPct', e.target.value)}
           />
         </label>
         <label className={label}>

@@ -34,6 +34,12 @@ export interface CouponRead {
   id: number;
   location_id: number;
   code: string;
+  /** Customer-facing offer label (display-only). */
+  name: string | null;
+  /** Customer-facing offer blurb (display-only). */
+  description: string | null;
+  /** When true, the offer is shown on the public home page. */
+  is_public: boolean;
   type: CouponType;
   /** Flat → paise; percentage → whole-number percent (0..100). */
   value: number;
@@ -53,6 +59,9 @@ export interface CouponRead {
 export interface CouponCreateBody {
   location_id: number;
   code: string;
+  name?: string | null;
+  description?: string | null;
+  is_public?: boolean;
   type: CouponType;
   value: number;
   cap_paise?: number | null;
