@@ -50,7 +50,7 @@ sub-tasks are marked with `*`.
     pure/property-friendly
   - _Requirements: 6.1, 6.3, 6.3a, 6.4, 6.7, 12.3, 12.4, 12.6_
 
-- [-] 3. Validation + booking service: kids, disallowed times, advance wiring
+- [x] 3. Validation + booking service: kids, disallowed times, advance wiring
   - [x] 3.1 Add `kids` param to `validate_booking_request`; cap check on
     `people + kids` vs `max_people_allowed`; adults ≥ 1; populate
     `ValidatedRequest.kids`
@@ -63,7 +63,7 @@ sub-tasks are marked with `*`.
     is in every breakdown
   - [x] 3.5 Persist `bookings.kids` in `create_customer_booking` /
     `create_admin_booking`; thread `kids` through preview
-  - [ ] 3.6 Integration tests K5 (cap), T1/T3 (disallowed), adults=0 → 422;
+  - [x] 3.6 Integration tests K5 (cap), T1/T3 (disallowed), adults=0 → 422;
     A2 (advance identical in preview/create), A4 (advance vs final total w/ coupon)
   - _Requirements: 6.4, 6.5, 10.3, 10.4, 10.5, 12.5, 12.6, 12.8_
 
