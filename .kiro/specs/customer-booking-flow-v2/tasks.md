@@ -133,14 +133,20 @@ sub-tasks are marked with `*`.
   - [x] 7.7 Mobile overflow + a11y pass (labels, focus, aria-pressed)
   - _Requirements: 3.1–3.6, 4.1–4.9, 5.1–5.7, 8.1–8.5, 9.1–9.3, 12.5_
 
-- [ ] 8. Wire-up, docs, full verification
-  - [ ] 8.1 Regenerate admin/web TS types from the updated OpenAPI schema
-  - [ ] 8.2 Update docs (`docs/`) with the kids rule, decor categories, disallowed
-    times, coupon public offers, and the advance-rule resolution + plan-advance
-    fallback. `.env.example` unchanged (no new config)
-  - [ ] 8.3 Run `ruff`, `pytest`, `eslint`, `vitest`; fix to green
+- [x] 8. Wire-up, docs, full verification
+  - [x] 8.1 Admin/web use hand-written TS types (already mirror the new
+    fields/endpoints); `apps/admin/src/api/schema.ts` is an opt-in stub nothing
+    imports. Regenerate the OpenAPI contract in the Codespace with
+    `python -m scripts.export_openapi` (noted in VERIFICATION.md)
+  - [x] 8.2 Added `docs/BOOKING_FLOW_V2.md` (kids rule, decor categories,
+    disallowed times, coupon public offers, advance-rule resolution + plan-advance
+    fallback, customer flow, migrations, smoke checklist); cross-linked from
+    `VERIFICATION.md`. `.env.example` unchanged (no new config)
+  - [ ] 8.3 Run `ruff`, `pytest`, `eslint`, `vitest`; fix to green (web
+    `vitest`+`build` confirmed green this branch; run api `ruff`/`pytest` and
+    admin `eslint`/`vitest`/`build` in the Codespace per VERIFICATION.md)
   - [ ] 8.4 Manual smoke on staging: home widget → branch screen → 5 steps →
     submit; kids pricing; decor categories; disallowed time blocked; public offers
     shown (and hidden when none public); advance reflects the matched rule and the
-    plan-advance fallback when no rule matches
+    plan-advance fallback when no rule matches (checklist in `BOOKING_FLOW_V2.md`)
   - _Requirements: all; Definition of Done (structure.md)_
