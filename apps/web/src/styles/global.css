@@ -36,6 +36,17 @@
     max-width: 100%;
     height: auto;
   }
+
+  /* iOS Safari auto-zooms into any form field with a font-size under 16px,
+     which makes forms feel broken on phones. Keep fields at 16px on small
+     screens; larger screens keep the denser Tailwind text sizes. */
+  @media (max-width: 639px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
 }
 
 @layer components {

@@ -61,13 +61,19 @@ const image = ogImage ?? new URL('/og-default.png', Astro.site).toString();
     }
   </head>
   <body class="min-h-screen bg-festive-soft text-gray-900 antialiased">
-    <header class="sticky top-0 z-40 border-b border-white/40 bg-white/80 backdrop-blur">
-      <nav class="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <a href="/" class="flex items-center gap-2 text-lg font-extrabold">
-          <span class="text-2xl" aria-hidden="true">🎬</span>
-          <span class="text-gradient">Cinematic Celebration</span>
+    <header class="sticky top-0 z-40 border-b border-white/40 bg-white/90 backdrop-blur">
+      <!-- Mobile-first header. On phones: logo + "Book now" + hamburger menu, so
+           the bar always fits the screen (a wide non-wrapping link row made
+           Chrome for Android zoom the whole page out). From `sm` up: the full
+           inline link row. -->
+      <nav class="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-2.5 sm:py-3">
+        <a href="/" class="flex min-w-0 items-center gap-2 text-base font-extrabold sm:text-lg">
+          <span class="text-xl sm:text-2xl" aria-hidden="true">🎬</span>
+          <span class="text-gradient truncate">Cinematic Celebration</span>
         </a>
-        <div class="flex items-center gap-1 text-sm font-medium sm:gap-3">
+
+        <!-- Tablet / desktop links -->
+        <div class="hidden items-center gap-3 text-sm font-medium sm:flex">
           <a href="/locations" class="rounded-full px-3 py-1.5 text-gray-700 transition hover:bg-brand/10 hover:text-brand">Branches</a>
           <a href="/about" class="rounded-full px-3 py-1.5 text-gray-700 transition hover:bg-brand/10 hover:text-brand">About</a>
           <a href="/contact" class="rounded-full px-3 py-1.5 text-gray-700 transition hover:bg-brand/10 hover:text-brand">Contact</a>
@@ -79,8 +85,64 @@ const image = ogImage ?? new URL('/og-default.png', Astro.site).toString();
             Book now
           </a>
         </div>
+
+        <!-- Phone: primary action + menu button -->
+        <div class="flex shrink-0 items-center gap-1.5 sm:hidden">
+          <a
+            href="/locations"
+            class="rounded-full bg-festive-hero px-4 py-2 text-sm font-semibold text-white shadow-sm"
+          >
+            Book now
+          </a>
+          <button
+            id="nav-toggle"
+            type="button"
+            aria-label="Open menu"
+            aria-expanded="false"
+            aria-controls="mobile-menu"
+            class="flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-brand/10"
+          >
+            <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+        </div>
       </nav>
+
+      <!-- Phone menu panel (toggled by the script below) -->
+      <div id="mobile-menu" class="hidden border-t border-white/40 bg-white/95 px-4 pb-3 sm:hidden">
+        <ul class="flex flex-col py-1 text-base font-medium text-gray-800">
+          <li><a href="/locations" class="block rounded-lg px-3 py-3 hover:bg-brand/10">Branches</a></li>
+          <li><a href="/about" class="block rounded-lg px-3 py-3 hover:bg-brand/10">About</a></li>
+          <li><a href="/contact" class="block rounded-lg px-3 py-3 hover:bg-brand/10">Contact</a></li>
+          <li><a href="/booking-status" class="block rounded-lg px-3 py-3 hover:bg-brand/10">My Booking</a></li>
+        </ul>
+      </div>
     </header>
+
+    <script is:inline>
+      // Phone menu toggle. Closes on link tap and on outside tap.
+      (function () {
+        var btn = document.getElementById('nav-toggle');
+        var menu = document.getElementById('mobile-menu');
+        if (!btn || !menu) return;
+        function setOpen(open) {
+          menu.classList.toggle('hidden', !open);
+          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+          btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+        }
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          setOpen(menu.classList.contains('hidden'));
+        });
+        menu.addEventListener('click', function (e) {
+          if (e.target && e.target.closest && e.target.closest('a')) setOpen(false);
+        });
+        document.addEventListener('click', function (e) {
+          if (!menu.contains(e.target) && e.target !== btn) setOpen(false);
+        });
+      })();
+    </script>
 
     <main class="mx-auto max-w-5xl px-4 py-8">
       <slot />
