@@ -82,9 +82,12 @@ const why = [
       <HomeBookingWidget client:load />
     </div>
 
-    <!-- Public offers (renders nothing when there are none). -->
+    <!-- Public offers (renders nothing when there are none). Hydrate on load,
+         NOT client:visible: the island renders empty until its fetch resolves,
+         so it has nothing for Astro's visibility observer to watch and would
+         never hydrate (and never fetch). -->
     <div class="mt-6 animate-fade-up" style="animation-delay:0.4s">
-      <OffersShowcase client:visible />
+      <OffersShowcase client:load />
     </div>
   </section>
 
