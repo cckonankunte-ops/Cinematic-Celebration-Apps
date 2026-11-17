@@ -92,7 +92,7 @@ export default function HomeBookingWidget() {
           Branch
           <select
             aria-label="Branch"
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand focus:outline-none"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-3 text-base text-gray-900 focus:border-brand focus:outline-none sm:py-2 sm:text-sm"
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
           >
@@ -111,7 +111,7 @@ export default function HomeBookingWidget() {
             type="date"
             aria-label="Booking date"
             min={today}
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand focus:outline-none"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-3 text-base text-gray-900 focus:border-brand focus:outline-none sm:py-2 sm:text-sm"
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
@@ -122,14 +122,14 @@ export default function HomeBookingWidget() {
             type="button"
             onClick={onBook}
             disabled={!slug || !date}
-            className="flex-1 rounded-full bg-festive-hero px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50 sm:flex-none"
+            className="flex-1 rounded-full bg-festive-hero px-5 py-3 text-base font-semibold sm:py-2.5 sm:text-sm text-white shadow-sm transition hover:opacity-90 disabled:opacity-50 sm:flex-none"
           >
             Book Now
           </button>
           <button
             type="button"
             onClick={onCall}
-            className="flex-1 rounded-full border border-brand px-5 py-2.5 text-sm font-semibold text-brand transition hover:bg-brand/5 sm:flex-none"
+            className="flex-1 rounded-full border border-brand px-5 py-3 text-base font-semibold sm:py-2.5 sm:text-sm text-brand transition hover:bg-brand/5 sm:flex-none"
           >
             Call now
           </button>

@@ -49,20 +49,22 @@ const why = [
 <Base title={title} description={description} jsonLd={jsonLd}>
   <!-- Hero -->
   <section
-    class="bg-festive-animated relative -mx-4 overflow-hidden rounded-3xl px-6 py-16 text-center text-white shadow-lg sm:py-20"
+    class="bg-festive-animated relative -mx-4 overflow-hidden rounded-3xl px-4 py-8 text-center text-white shadow-lg sm:px-6 sm:py-20"
   >
     <div class="pointer-events-none absolute left-6 top-8 text-4xl animate-float" aria-hidden="true">🎉</div>
     <div class="pointer-events-none absolute right-8 top-16 text-3xl animate-float" style="animation-delay:1s" aria-hidden="true">🎈</div>
     <div class="pointer-events-none absolute bottom-10 left-12 text-3xl animate-float" style="animation-delay:2s" aria-hidden="true">🎂</div>
-    <h1 class="mx-auto max-w-3xl text-4xl font-extrabold leading-tight drop-shadow sm:text-5xl animate-fade-up">
+    <h1 class="mx-auto max-w-3xl text-3xl font-extrabold leading-tight drop-shadow sm:text-5xl animate-fade-up">
       Celebrate every moment on the big screen
     </h1>
-    <p class="mx-auto mt-5 max-w-2xl text-lg text-white/90 animate-fade-up" style="animation-delay:0.1s">
+    <p class="mx-auto mt-3 max-w-2xl text-base text-white/90 animate-fade-up sm:mt-5 sm:text-lg" style="animation-delay:0.1s">
       Private theatres for birthdays, anniversaries, bride-to-be, groom-to-be and
       every celebration — with curated decoration themes across three Bangalore
       branches.
     </p>
-    <div class="mt-8 flex flex-wrap justify-center gap-3 animate-fade-up" style="animation-delay:0.2s">
+    <!-- Secondary CTAs: hidden on phones so the booking widget sits right under
+         the headline (the primary action for ad traffic). -->
+    <div class="mt-8 hidden flex-wrap justify-center gap-3 animate-fade-up sm:flex" style="animation-delay:0.2s">
       <a
         href="/locations"
         class="rounded-full bg-white px-7 py-3 font-semibold text-brand shadow transition hover:scale-105"
@@ -78,7 +80,7 @@ const why = [
     </div>
 
     <!-- Quick booking: pick a branch + date and jump into the flow, or call. -->
-    <div class="mt-10 animate-fade-up" style="animation-delay:0.3s">
+    <div class="mt-6 animate-fade-up sm:mt-10" style="animation-delay:0.3s">
       <HomeBookingWidget client:load />
     </div>
 
