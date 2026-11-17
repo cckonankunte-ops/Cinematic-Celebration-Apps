@@ -51,6 +51,12 @@ three values). Stored lowercase; the UI maps to labels:
 | `extra_decoration` | Extra Decoration |
 | `gifts`            | Choose Gifts     |
 | `special_service`  | Special Service  |
+| `admin_only`       | Only Admin       |
+
+`admin_only` items (migration 0023) are staff-only: the public decor list omits
+them, customer create/preview reject their ids (422), and the admin booking form
+loads decor from `GET /api/v1/admin/booking-options/special-decor`, which
+includes them.
 
 The customer Add-ons step groups decor under these headings in that fixed
 order; empty categories are omitted. Admin creates/edits the category on each

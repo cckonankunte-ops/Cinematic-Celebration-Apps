@@ -65,13 +65,19 @@ export interface PlanUpdateBody {
 }
 
 /** Special-decor grouping category (stored lowercase; UI maps to labels). */
-export type DecorCategory = 'extra_decoration' | 'gifts' | 'special_service';
+export type DecorCategory =
+  | 'extra_decoration'
+  | 'gifts'
+  | 'special_service'
+  | 'admin_only';
 
 /** Display labels for decor categories, in render order. */
 export const DECOR_CATEGORY_LABELS: Record<DecorCategory, string> = {
   extra_decoration: 'Extra Decoration',
   gifts: 'Choose Gifts',
   special_service: 'Special Services',
+  // Staff-only: never shown to customers on the booking site.
+  admin_only: 'Only Admin',
 };
 
 /** A per-branch disallowed booking-time range (admin). */

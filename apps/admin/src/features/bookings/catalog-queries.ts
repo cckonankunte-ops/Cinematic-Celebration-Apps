@@ -119,7 +119,8 @@ export function useSpecialDecor(
 ): UseQueryResult<CatalogItemOption[]> {
   return useCatalog<CatalogItemOption[]>(
     ['special-decor', locationId],
-    `/api/v1/public/locations/${locationId}/special-decor`,
+    // Staff endpoint: includes 'admin_only' items that customers never see.
+    `/api/v1/admin/booking-options/special-decor?location_id=${locationId}`,
     locationId !== null,
   );
 }

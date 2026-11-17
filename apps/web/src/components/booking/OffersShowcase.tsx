@@ -90,7 +90,6 @@ export default function OffersShowcase() {
         }`}
       >
         {groups.map((g) => {
-          const multi = g.branches.length > 1;
           return (
             <li
               key={g.key}
@@ -105,9 +104,6 @@ export default function OffersShowcase() {
                 <span className="rounded-md bg-brand/10 px-2 py-0.5 font-mono text-sm font-bold text-brand">
                   {g.code}
                 </span>
-                <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                  {multi ? `${g.branches.length} branches` : g.branches[0]}
-                </span>
               </div>
               {g.name && (
                 <p className="mt-1.5 text-sm font-semibold text-gray-900">{g.name}</p>
@@ -117,11 +113,12 @@ export default function OffersShowcase() {
                   {g.description}
                 </p>
               )}
-              {multi && (
-                <p className="mt-1 truncate text-[11px] text-gray-500 sm:text-xs">
-                  {g.branches.join(', ')}
-                </p>
-              )}
+              {/* Branch names are always spelled out (and may wrap) so customers
+                  can see exactly where the offer applies. */}
+              <p className="mt-1.5 flex gap-1 text-[11px] font-medium leading-snug text-gray-700 sm:text-xs">
+                <span aria-hidden="true">📍</span>
+                <span>{g.branches.join(', ')}</span>
+              </p>
             </li>
           );
         })}
