@@ -180,3 +180,44 @@ def test_a3_staff_forbidden(client: TestClient, db: Session) -> None:
         headers=_ORIGIN,
     )
     assert resp.status_code == 403
+
+
+def test_o1_offers_follow_each_branchs_own_validity_window(db: Session) -> None:
+    """The same promo at two branches with different windows: on any given day
+    only the branches whose window covers that day are returned. (The customer
+    page then groups them into one card by code/name/description.)
+
+    Branch1: 15-25 Nov.  Branch2: 17-23 Nov.
+    """
+    from datetime import date
+
+    from app.services import coupon as coupon_service
+
+    b1 = make_location(db, "Branch1")
+    b2 = make_location(db, "Branch2")
+    c1 = make_coupon(
+        db, b1.id, code="EARLY",
+        effective_from=date(2026, 11, 15), effective_to=date(2026, 11, 25),
+    )
+    c2 = make_coupon(
+        db, b2.id, code="EARLY",
+        effective_from=date(2026, 11, 17), effective_to=date(2026, 11, 23),
+    )
+    c1.is_public = True
+    c2.is_public = True
+    db.commit()
+
+    def branches_on(day: date) -> list[str]:
+        return sorted(
+            o.location_name for o in coupon_service.list_public_offers(db, on=day)
+        )
+
+    both = sorted([b1.name, b2.name])
+    assert branches_on(date(2026, 11, 14)) == []          # before either window
+    assert branches_on(date(2026, 11, 15)) == [b1.name]   # only branch 1
+    assert branches_on(date(2026, 11, 16)) == [b1.name]
+    assert branches_on(date(2026, 11, 17)) == both        # both overlap
+    assert branches_on(date(2026, 11, 23)) == both        # last day for branch 2
+    assert branches_on(date(2026, 11, 24)) == [b1.name]   # branch 2 expired
+    assert branches_on(date(2026, 11, 25)) == [b1.name]   # last day for branch 1
+    assert branches_on(date(2026, 11, 26)) == []          # both expired

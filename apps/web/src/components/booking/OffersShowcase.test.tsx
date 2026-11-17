@@ -53,7 +53,59 @@ describe('OffersShowcase', () => {
     expect(screen.getByText('Weekday Special')).toBeInTheDocument();
     expect(screen.getByText('10% off on weekdays')).toBeInTheDocument();
     expect(screen.getByText('JP Nagar')).toBeInTheDocument();
-    expect(screen.getByText(/Valid 01 Jan 2027/)).toBeInTheDocument();
+    // Validity dates are intentionally not shown on the cards.
+    expect(screen.queryByText(/Valid/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/2027/)).not.toBeInTheDocument();
+  });
+
+  it('groups the same offer into ONE card even when validity dates differ', async () => {
+    vi.spyOn(publicApi, 'listOffers').mockResolvedValue([
+      offer('EARLY100', {
+        name: 'Early Bird',
+        location_name: 'Branch1',
+        effective_from: '2026-11-15',
+        effective_to: '2026-11-25',
+      }),
+      offer('EARLY100', {
+        name: 'Early Bird',
+        location_name: 'Branch2',
+        effective_from: '2026-11-17',
+        effective_to: '2026-11-23',
+      }),
+    ]);
+
+    render(<OffersShowcase />);
+
+    await waitFor(() => expect(screen.getByText('EARLY100')).toBeInTheDocument());
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.getByText('2 branches')).toBeInTheDocument();
+    expect(screen.getByText('Branch1, Branch2')).toBeInTheDocument();
+  });
+
+  it('shows just one branch when only one branch currently has the offer', async () => {
+    // The API only returns offers valid today, so a branch whose window has not
+    // started (or has ended) is simply absent from the list.
+    vi.spyOn(publicApi, 'listOffers').mockResolvedValue([
+      offer('EARLY100', { name: 'Early Bird', location_name: 'Branch1' }),
+    ]);
+
+    render(<OffersShowcase />);
+
+    await waitFor(() => expect(screen.getByText('EARLY100')).toBeInTheDocument());
+    expect(screen.getByText('Branch1')).toBeInTheDocument();
+    expect(screen.queryByText(/branches/)).not.toBeInTheDocument();
+  });
+
+  it('keeps offers separate when the description differs', async () => {
+    vi.spyOn(publicApi, 'listOffers').mockResolvedValue([
+      offer('EARLY100', { name: 'Early Bird', description: '₹100 off', location_name: 'Branch1' }),
+      offer('EARLY100', { name: 'Early Bird', description: '₹200 off', location_name: 'Branch2' }),
+    ]);
+
+    render(<OffersShowcase />);
+
+    await waitFor(() => expect(screen.getAllByText('EARLY100')).toHaveLength(2));
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 
   it('groups the same offer from several branches into ONE card', async () => {
