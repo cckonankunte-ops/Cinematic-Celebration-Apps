@@ -107,14 +107,29 @@ export default function HomeBookingWidget() {
 
         <label className="block text-sm font-semibold text-gray-700">
           Date
-          <input
-            type="date"
-            aria-label="Booking date"
-            min={today}
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-3 text-base text-gray-900 focus:border-brand focus:outline-none sm:py-2 sm:text-sm"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          {/* Native date inputs ignore `placeholder`, so while empty we hide the
+              browser's "dd-mm-yyyy" text and overlay our own label. On focus the
+              native text is shown again so typing on desktop stays visible. */}
+          <span className="relative mt-1 block">
+            <input
+              type="date"
+              aria-label="Booking date"
+              min={today}
+              className={`peer block w-full rounded-lg border border-gray-300 px-3 py-3 text-base focus:border-brand focus:text-gray-900 focus:outline-none sm:py-2 sm:text-sm ${
+                date ? 'text-gray-900' : 'text-transparent'
+              }`}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            {!date && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-base font-normal text-gray-500 peer-focus:hidden sm:text-sm"
+              >
+                Choose a Date
+              </span>
+            )}
+          </span>
         </label>
 
         <div className="flex gap-2">

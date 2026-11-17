@@ -101,6 +101,26 @@ describe('HomeBookingWidget', () => {
     expect(hrefValue).toBe('tel:+919876543210');
   });
 
+  it('shows a "Choose a Date" placeholder until a date is picked', async () => {
+    vi.spyOn(publicApi, 'listLocations').mockResolvedValue([
+      loc(1, 'Hulimavu', 'hulimavu', '9876543210'),
+    ]);
+
+    render(<HomeBookingWidget />);
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'Hulimavu' })).toBeInTheDocument(),
+    );
+
+    // Empty by default → placeholder visible.
+    expect(screen.getByText('Choose a Date')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Booking date'), {
+      target: { value: '2027-01-15' },
+    });
+    // Once a date is chosen the overlay goes away.
+    expect(screen.queryByText('Choose a Date')).not.toBeInTheDocument();
+  });
+
   it('prompts to choose a location when Call now is tapped with none selected', async () => {
     vi.spyOn(publicApi, 'listLocations').mockResolvedValue([
       loc(1, 'Hulimavu', 'hulimavu', '9876543210'),
