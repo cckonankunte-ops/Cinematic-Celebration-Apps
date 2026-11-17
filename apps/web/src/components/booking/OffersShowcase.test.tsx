@@ -78,7 +78,8 @@ describe('OffersShowcase', () => {
 
     await waitFor(() => expect(screen.getByText('EARLY100')).toBeInTheDocument());
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
-    expect(screen.getByText('2 branches')).toBeInTheDocument();
+    // Branch names are spelled out, not summarised as "2 branches".
+    expect(screen.queryByText(/\d branches/)).not.toBeInTheDocument();
     expect(screen.getByText('Branch1, Branch2')).toBeInTheDocument();
   });
 
@@ -121,10 +122,9 @@ describe('OffersShowcase', () => {
     // One card, not three.
     expect(screen.getAllByText('EARLY100')).toHaveLength(1);
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
-    expect(screen.getByText('3 branches')).toBeInTheDocument();
-    // Branch names are listed in the meta line.
+    // All three branch names are shown in full.
     expect(
-      screen.getByText(/Konankunte, Hulimavu, Electronic City/),
+      screen.getByText('Konankunte, Hulimavu, Electronic City'),
     ).toBeInTheDocument();
   });
 

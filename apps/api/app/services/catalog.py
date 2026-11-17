@@ -210,17 +210,19 @@ def list_cakes(db: Session, location_id: int, on: date) -> list[CakeRead]:
     ]
 
 
-def list_special_decor(db: Session, location_id: int, on: date) -> list[SpecialDecorRead]:
-    rows = db.execute(
-        select(SpecialDecorItem)
-        .where(
-            SpecialDecorItem.location_id == location_id,
-            SpecialDecorItem.is_active.is_(True),
-            SpecialDecorItem.effective_from <= on,
-            SpecialDecorItem.effective_to >= on,
-        )
-        .order_by(SpecialDecorItem.sort_order)
-    ).scalars()
+def list_special_decor(
+    db: Session, location_id: int, on: date, *, include_admin_only: bool = False
+) -> list[SpecialDecorRead]:
+    """Active decor for a location. Customers never see 'admin_only' items."""
+    stmt = select(SpecialDecorItem).where(
+        SpecialDecorItem.location_id == location_id,
+        SpecialDecorItem.is_active.is_(True),
+        SpecialDecorItem.effective_from <= on,
+        SpecialDecorItem.effective_to >= on,
+    )
+    if not include_admin_only:
+        stmt = stmt.where(SpecialDecorItem.category != "admin_only")
+    rows = db.execute(stmt.order_by(SpecialDecorItem.sort_order)).scalars()
     return [
         SpecialDecorRead(
             id=d.id,

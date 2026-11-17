@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ApiError,
   publicApi,
@@ -24,6 +24,20 @@ import type { Combo } from '../../lib/api';
 type Step = 1 | 2 | 3 | 4 | 5;
 
 const STEP_LABELS = ['Details', 'Occasion', 'Cake', 'Add-ons', 'Payment'];
+
+/** "19:30" or "19:30:00" -> "7:30 PM". */
+function formatClock(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+/** 60 -> "1 hour", 90 -> "1.5 hours", 120 -> "2 hours". */
+function formatDuration(minutes: number): string {
+  const hours = minutes / 60;
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+}
 
 /**
  * Customer booking flow (client:load island) mounted on /book.
@@ -52,6 +66,16 @@ export default function BookingWizard() {
   const [preview, setPreview] = useState<PriceBreakdownRead | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [agreedTerms, setAgreedTerms] = useState(false);
+  // Slot mode: description of the chosen slot, for the collapsed time summary.
+  const [slotLabel, setSlotLabel] = useState('');
+  // Once a time is chosen the picker collapses to a one-line summary so the
+  // Guests section is right below it; "Change" re-opens the picker.
+  const [pickerExpanded, setPickerExpanded] = useState(false);
+  // Scroll targets: the guests block (after picking a time) and the top of the
+  // step content (after Next/Back), just below the Branch/Date box.
+  const guestsRef = useRef<HTMLDivElement>(null);
+  const stepTopRef = useRef<HTMLDivElement>(null);
+  const nameOnCakeRef = useRef<HTMLInputElement>(null);
 
   // Load a branch's full catalog and set it as the active location.
   const loadBranch = (match: Location, preselectPlanId?: number) => {
@@ -118,25 +142,75 @@ export default function BookingWizard() {
   const selectPlan = (plan: Plan) =>
     patch({ plan, slotId: null, startTime: null, durationMinutes: null });
 
-  const selectSlot = (slot: Slot) =>
+  const selectSlot = (slot: Slot) => {
+    setSlotLabel(slot.description);
+    setPickerExpanded(false);
     patch({
       slotId: slot.id,
       startTime: null,
       durationMinutes: null,
       showCombos: slot.show_combos,
     });
+  };
 
-  const selectOpenWindow = (startTime: string, durationMinutes: number) =>
+  const selectOpenWindow = (startTime: string, durationMinutes: number) => {
+    // A full window (start + duration) collapses the picker; picking only a
+    // duration (start reset) keeps it open so the customer can choose a start.
+    if (startTime !== '') {
+      setPickerExpanded(false);
+    }
     patch({
       slotId: null,
       durationMinutes,
       startTime: startTime === '' ? null : startTime,
       showCombos: true,
     });
+  };
+
+  // Changing the date invalidates the chosen time (availability is per date),
+  // so clear it and make the customer pick again.
+  const changeDate = (value: string) => {
+    setPickerExpanded(false);
+    patch({
+      bookingDate: value,
+      slotId: null,
+      startTime: null,
+      durationMinutes: null,
+    });
+  };
 
   const hasWindow = isOpenMode
     ? draft.startTime !== null && draft.durationMinutes !== null
     : draft.slotId !== null;
+
+  // Human-readable chosen time for the collapsed summary.
+  const windowLabel = isOpenMode
+    ? draft.startTime !== null && draft.durationMinutes !== null
+      ? `${formatClock(draft.startTime)} · ${formatDuration(draft.durationMinutes)}`
+      : ''
+    : slotLabel;
+
+  // When a time becomes complete, bring the Guests section into view.
+  const prevHasWindow = useRef(false);
+  useEffect(() => {
+    if (hasWindow && !prevHasWindow.current) {
+      requestAnimationFrame(() => {
+        guestsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+    prevHasWindow.current = hasWindow;
+  }, [hasWindow]);
+
+  // On every step change (Next/Back), scroll to the top of the step content,
+  // i.e. just below the Branch/Date box. Skipped on the very first render.
+  const firstStepRender = useRef(true);
+  useEffect(() => {
+    if (firstStepRender.current) {
+      firstStepRender.current = false;
+      return;
+    }
+    stepTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [step]);
 
   // Change branch in place (from the Overview "Update" control). Resets the
   // plan/window since they belong to the old branch's catalog.
@@ -389,7 +463,7 @@ export default function BookingWizard() {
               aria-label="Booking date"
               min={todayIsoInIST()}
               value={draft.bookingDate}
-              onChange={(e) => patch({ bookingDate: e.target.value })}
+              onChange={(e) => changeDate(e.target.value)}
               className="rounded-lg border border-gray-300 px-3 py-2 focus:border-brand focus:outline-none"
             />
           </label>
@@ -398,6 +472,10 @@ export default function BookingWizard() {
           )}
         </div>
       </div>
+
+      {/* Scroll anchor: Next/Back scroll here, i.e. just below the Branch/Date
+          box (scroll-mt clears the sticky site header). */}
+      <div ref={stepTopRef} className="!mt-0 h-0 scroll-mt-16" aria-hidden="true" />
 
       {/* STEP 1 — Basic Details: plan + time + guests + name */}
       {step === 1 && (
@@ -469,34 +547,56 @@ export default function BookingWizard() {
 
           {draft.plan && (
             <div className="border-t border-gray-100 pt-4">
-              <h3 className="font-semibold text-gray-900">
-                {isOpenMode ? 'Choose a time' : 'Pick an available slot'}
-              </h3>
-              <div className="mt-3">
-                {isOpenMode ? (
-                  <OpenSlotPicker
-                    planId={draft.plan.id}
-                    locationId={location.id}
-                    bookingDate={draft.bookingDate}
-                    selectedStart={draft.startTime}
-                    selectedDuration={draft.durationMinutes}
-                    onSelect={selectOpenWindow}
-                  />
-                ) : (
-                  <SlotPicker
-                    planId={draft.plan.id}
-                    locationId={location.id}
-                    bookingDate={draft.bookingDate}
-                    selectedSlotId={draft.slotId}
-                    onSelect={selectSlot}
-                  />
-                )}
-              </div>
+              {hasWindow && !pickerExpanded ? (
+                // Time chosen: collapse the picker to a one-line summary so the
+                // Guests section sits right below it.
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500">Selected time</p>
+                    <p className="truncate font-semibold text-gray-900">
+                      {windowLabel}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPickerExpanded(true)}
+                    className="shrink-0 rounded-full border border-brand px-4 py-1.5 text-sm font-semibold text-brand transition hover:bg-brand/5"
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <h3 className="font-semibold text-gray-900">
+                    {isOpenMode ? 'Choose a time' : 'Pick an available slot'}
+                  </h3>
+                  <div className="mt-3">
+                    {isOpenMode ? (
+                      <OpenSlotPicker
+                        planId={draft.plan.id}
+                        locationId={location.id}
+                        bookingDate={draft.bookingDate}
+                        selectedStart={draft.startTime}
+                        selectedDuration={draft.durationMinutes}
+                        onSelect={selectOpenWindow}
+                      />
+                    ) : (
+                      <SlotPicker
+                        planId={draft.plan.id}
+                        locationId={location.id}
+                        bookingDate={draft.bookingDate}
+                        selectedSlotId={draft.slotId}
+                        onSelect={selectSlot}
+                      />
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           {draft.plan && (
-            <div className="border-t border-gray-100 pt-4">
+            <div ref={guestsRef} className="scroll-mt-20 border-t border-gray-100 pt-4">
               <h3 className="font-semibold text-gray-900">Guests</h3>
               <div className="mt-3">
                 <GuestCounter
@@ -607,11 +707,21 @@ export default function BookingWizard() {
             cakeWeightHalfKg={draft.cakeWeightHalfKg}
             onCakeChange={(cakeId) => patch({ cakeId })}
             onCakeWeightChange={(cakeWeightHalfKg) => patch({ cakeWeightHalfKg })}
+            onWeightPopupDone={() => {
+              // Weight chosen (or default 0.5 kg kept): go straight to the name.
+              requestAnimationFrame(() => {
+                const el = nameOnCakeRef.current;
+                if (!el) return;
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.focus({ preventScroll: true });
+              });
+            }}
           />
           {draft.cakeId !== null && (
             <label className="flex flex-col gap-1">
               <span className="text-sm font-medium">Name on cake</span>
               <input
+                ref={nameOnCakeRef}
                 type="text"
                 value={draft.nameOnCake}
                 onChange={(e) => patch({ nameOnCake: e.target.value })}

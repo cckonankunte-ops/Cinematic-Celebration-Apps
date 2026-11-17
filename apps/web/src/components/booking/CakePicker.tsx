@@ -16,6 +16,13 @@ interface Props {
   cakeWeightHalfKg: number;
   onCakeChange: (cakeId: number | null) => void;
   onCakeWeightChange: (halfKg: number) => void;
+  /**
+   * Called when the weight popup closes after a cake was chosen: either a
+   * weight was picked, or the customer tapped blank space (keeping the 0.5 kg
+   * default). The parent uses it to move on to the "Name on cake" field. NOT
+   * called when the popup closes because another button/link was tapped.
+   */
+  onWeightPopupDone?: () => void;
 }
 
 /** Cake weight options: 0.5kg..3kg mapped to half-kg units 1..6. */
@@ -34,17 +41,30 @@ export default function CakePicker({
   cakeWeightHalfKg,
   onCakeChange,
   onCakeWeightChange,
+  onWeightPopupDone,
 }: Props) {
   // Which cake's weight popup is open (null = none).
   const [popupId, setPopupId] = useState<number | null>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  // Always call the latest callback without re-subscribing the listener.
+  const doneRef = useRef(onWeightPopupDone);
+  doneRef.current = onWeightPopupDone;
 
-  // Close the popup when clicking outside it.
+  // Close the popup when clicking outside it. Tapping blank space keeps the
+  // current (default 0.5 kg) weight and moves on; tapping another control just
+  // closes the popup and lets that control do its own thing.
   useEffect(() => {
     if (popupId === null) return;
     const onDocClick = (e: MouseEvent) => {
       if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
         setPopupId(null);
+        const target = e.target as HTMLElement | null;
+        const onControl = target?.closest?.(
+          'button, a, input, select, textarea, label',
+        );
+        if (!onControl) {
+          doneRef.current?.();
+        }
       }
     };
     document.addEventListener('mousedown', onDocClick);
@@ -155,6 +175,7 @@ export default function CakePicker({
                           onClick={() => {
                             onCakeWeightChange(opt.halfKg);
                             setPopupId(null);
+                            onWeightPopupDone?.();
                           }}
                           className={`rounded border px-1 py-1 text-xs transition ${
                             cakeWeightHalfKg === opt.halfKg

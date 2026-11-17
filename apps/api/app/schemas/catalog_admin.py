@@ -211,9 +211,9 @@ class SpecialDecorCreate(BaseModel):
     # Description is optional: simple items (e.g. "Water Small") need none.
     # Consistent with combos, which also allow an empty description.
     description: str = ""
-    category: Literal["extra_decoration", "gifts", "special_service"] = (
-        "extra_decoration"
-    )
+    category: Literal[
+        "extra_decoration", "gifts", "special_service", "admin_only"
+    ] = "extra_decoration"
     price_paise: int = Field(ge=0)
     object_key: str = Field(min_length=1)
     sort_order: int = Field(ge=0, default=0)
@@ -225,7 +225,9 @@ class SpecialDecorUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1)
     # Optional on update too; "" clears the description.
     description: str | None = None
-    category: Literal["extra_decoration", "gifts", "special_service"] | None = None
+    category: (
+        Literal["extra_decoration", "gifts", "special_service", "admin_only"] | None
+    ) = None
     price_paise: int | None = Field(default=None, ge=0)
     object_key: str | None = Field(default=None, min_length=1)
     sort_order: int | None = Field(default=None, ge=0)

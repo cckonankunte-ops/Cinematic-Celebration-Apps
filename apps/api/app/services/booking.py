@@ -236,7 +236,12 @@ def _load_valid_cake(db: Session, location_id: int, cake_id: int, on: date) -> C
 
 
 def _load_valid_decor(
-    db: Session, location_id: int, decor_id: int, on: date
+    db: Session,
+    location_id: int,
+    decor_id: int,
+    on: date,
+    *,
+    allow_admin_only: bool = False,
 ) -> SpecialDecorItem:
     decor = db.get(SpecialDecorItem, decor_id)
     if (
@@ -244,6 +249,7 @@ def _load_valid_decor(
         or decor.location_id != location_id
         or not decor.is_active
         or not (decor.effective_from <= on <= decor.effective_to)
+        or (decor.category == "admin_only" and not allow_admin_only)
     ):
         raise ItemInvalidError("A selected decor item is not valid for this location or date.")
     return decor
@@ -276,6 +282,7 @@ def validate_booking_request(
     led_name: str | None = None,
     allow_exceed_max: bool = False,
     allow_past_date: bool = False,
+    allow_admin_only: bool = False,
 ) -> ValidatedRequest:
     """Validate a booking request and return loaded, de-duplicated catalog rows.
 
@@ -332,7 +339,13 @@ def validate_booking_request(
         decor_quantities[sel.id] += sel.quantity
     decor_selections = [
         DecorSelection(
-            item=_load_valid_decor(db, location_id, decor_id, booking_date),
+            item=_load_valid_decor(
+                db,
+                location_id,
+                decor_id,
+                booking_date,
+                allow_admin_only=allow_admin_only,
+            ),
             quantity=decor_quantities[decor_id],
         )
         for decor_id in decor_order
@@ -800,6 +813,8 @@ def create_admin_booking(
         # Admin/staff create: allow exceeding the plan's max people (walk-in
         # groups booked at the venue). Customer create keeps the cap.
         allow_exceed_max=True,
+        # Staff may add 'admin_only' decor; customers never can.
+        allow_admin_only=True,
     )
 
     location = db.get(Location, data.location_id)
@@ -1187,6 +1202,7 @@ def update_booking(
             # Admins may edit a past/completed booking; staff stay bound by the
             # past-date guard (mirrors the window-level guard above).
             allow_past_date=actor.role == "admin",
+            allow_admin_only=True,
         )
         # Re-price against the booking's (possibly just-updated) duration base.
         duration_pricing = resolve_duration_pricing(
@@ -1360,6 +1376,7 @@ def preview_booking(
         # Admin/staff previews may exceed the plan's max people (walk-in groups);
         # customer previews keep the cap so the preview matches what they can book.
         allow_exceed_max=not is_customer,
+        allow_admin_only=not is_customer,
     )
 
     if is_admin and not is_customer:

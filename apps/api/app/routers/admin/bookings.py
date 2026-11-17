@@ -14,7 +14,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, check_origin, require_role
+from app.core.security import (
+    CurrentUser,
+    assert_location_access,
+    check_origin,
+    require_role,
+)
 from app.models.booking import Booking
 from app.schemas.booking import (
     AcceptBookingRequest,
@@ -28,14 +33,18 @@ from app.schemas.booking import (
     CancelBookingRequest,
     PriceBreakdownRead,
 )
-from app.schemas.catalog import OpenAvailabilityRead, SlotAvailabilityRead
+from app.schemas.catalog import (
+    OpenAvailabilityRead,
+    SlotAvailabilityRead,
+    SpecialDecorRead,
+)
 from app.schemas.catalog_admin import LocationAdminRead
 from app.services import booking as booking_service
 from app.services import catalog as catalog_service
 from app.services import catalog_admin as catalog_admin_service
 from app.services import email as email_service
 from app.services import payments as payments_service
-from app.services.slots import actor_kind_from_role
+from app.services.slots import actor_kind_from_role, now_ist
 
 
 class AdminOpenAvailabilityRequest(BaseModel):
@@ -219,6 +228,25 @@ def preview_booking(
     actor: CurrentUser = Depends(require_role("admin", "staff")),
 ) -> PriceBreakdownRead:
     return booking_service.preview_booking(db, body, actor=actor, is_customer=False)
+
+
+@router.get(
+    "/booking-options/special-decor", response_model=list[SpecialDecorRead]
+)
+def list_booking_special_decor(
+    location_id: int,
+    booking_date: date | None = Query(default=None, alias="date"),
+    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    db: Session = Depends(get_db),
+) -> list[SpecialDecorRead]:
+    """Decor choices for the admin booking form, including 'admin_only' items."""
+    assert_location_access(actor, location_id)
+    return catalog_service.list_special_decor(
+        db,
+        location_id,
+        booking_date or now_ist().date(),
+        include_admin_only=True,
+    )
 
 
 @router.post("/bookings/open-availability", response_model=list[OpenAvailabilityRead])

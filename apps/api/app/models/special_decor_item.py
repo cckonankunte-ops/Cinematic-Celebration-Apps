@@ -23,7 +23,12 @@ from app.models._mixins import TimestampMixin
 # Allowed special-decor categories (stored lowercase snake_case; the UI maps to
 # display labels: extra_decoration -> "Extra Decoration", gifts -> "Choose
 # Gifts", special_service -> "Special Service").
-SPECIAL_DECOR_CATEGORIES = ("extra_decoration", "gifts", "special_service")
+SPECIAL_DECOR_CATEGORIES = (
+    "extra_decoration",
+    "gifts",
+    "special_service",
+    "admin_only",  # staff-only; hidden from and rejected for customers
+)
 
 
 class SpecialDecorItem(Base, TimestampMixin):
@@ -51,7 +56,7 @@ class SpecialDecorItem(Base, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "category IN ('extra_decoration', 'gifts', 'special_service')",
+            "category IN ('extra_decoration', 'gifts', 'special_service', 'admin_only')",
             name="ck_special_decor_items_category",
         ),
     )
