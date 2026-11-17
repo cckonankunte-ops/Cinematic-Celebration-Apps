@@ -19,7 +19,7 @@ from app.schemas.coupon import PublicOfferRead
 from app.services import catalog
 from app.services import coupon as coupon_service
 from app.services import plan_pricing as plan_pricing_service
-from app.services.slots import now_ist
+from app.services.slots import now_ist, today_ist
 
 router = APIRouter(prefix="/api/v1/public", tags=["public-catalog"])
 
@@ -51,7 +51,7 @@ class OpenAvailabilityRequest(BaseModel):
 
 @router.get("/plans/{plan_id}", response_model=PlanRead)
 def get_plan(plan_id: int, db: Session = Depends(get_db)) -> PlanRead:
-    plan = catalog.get_plan(db, plan_id, date.today())
+    plan = catalog.get_plan(db, plan_id, today_ist())
     if plan is None:
         raise NotFoundError("Plan not found.")
     return plan
@@ -59,7 +59,7 @@ def get_plan(plan_id: int, db: Session = Depends(get_db)) -> PlanRead:
 
 @router.get("/plans/{plan_id}/slots", response_model=list[SlotRead])
 def list_slots(plan_id: int, db: Session = Depends(get_db)) -> list[SlotRead]:
-    return catalog.list_active_slots(db, plan_id, date.today())
+    return catalog.list_active_slots(db, plan_id, today_ist())
 
 
 @router.post(
@@ -89,7 +89,7 @@ def plan_durations(plan_id: int, db: Session = Depends(get_db)) -> list[PlanDura
             price_paise=d.price_paise,
             advance_paise=d.advance_paise,
         )
-        for d in plan_pricing_service.list_plan_durations(db, plan_id, date.today())
+        for d in plan_pricing_service.list_plan_durations(db, plan_id, today_ist())
     ]
 
 
@@ -113,7 +113,7 @@ def open_availability(
 
 @router.get("/plans/{plan_id}/gallery", response_model=list[str])
 def plan_gallery(plan_id: int, db: Session = Depends(get_db)) -> list[str]:
-    plan = catalog.get_plan(db, plan_id, date.today())
+    plan = catalog.get_plan(db, plan_id, today_ist())
     if plan is None:
         raise NotFoundError("Plan not found.")
     return plan.gallery_urls

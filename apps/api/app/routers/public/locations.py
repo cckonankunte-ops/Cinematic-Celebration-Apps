@@ -1,7 +1,5 @@
 """Public location + per-location catalog endpoints."""
 
-from datetime import date
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -15,6 +13,7 @@ from app.schemas.catalog import (
     SpecialDecorRead,
 )
 from app.services import catalog
+from app.services.slots import today_ist
 
 router = APIRouter(prefix="/api/v1/public", tags=["public-catalog"])
 
@@ -26,12 +25,12 @@ def list_locations(db: Session = Depends(get_db)) -> list[LocationRead]:
 
 @router.get("/locations/{location_id}/plans", response_model=list[PlanRead])
 def list_plans(location_id: int, db: Session = Depends(get_db)) -> list[PlanRead]:
-    return catalog.list_active_plans(db, location_id, date.today())
+    return catalog.list_active_plans(db, location_id, today_ist())
 
 
 @router.get("/locations/{location_id}/cakes", response_model=list[CakeRead])
 def list_cakes(location_id: int, db: Session = Depends(get_db)) -> list[CakeRead]:
-    return catalog.list_cakes(db, location_id, date.today())
+    return catalog.list_cakes(db, location_id, today_ist())
 
 
 @router.get(
@@ -40,12 +39,12 @@ def list_cakes(location_id: int, db: Session = Depends(get_db)) -> list[CakeRead
 def list_special_decor(
     location_id: int, db: Session = Depends(get_db)
 ) -> list[SpecialDecorRead]:
-    return catalog.list_special_decor(db, location_id, date.today())
+    return catalog.list_special_decor(db, location_id, today_ist())
 
 
 @router.get("/locations/{location_id}/combos", response_model=list[ComboRead])
 def list_combos(location_id: int, db: Session = Depends(get_db)) -> list[ComboRead]:
-    return catalog.list_combos(db, location_id, date.today())
+    return catalog.list_combos(db, location_id, today_ist())
 
 
 @router.get("/locations/{location_id}/occasions", response_model=list[OccasionRead])
