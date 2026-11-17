@@ -53,6 +53,11 @@ def is_valid_start_minute(start: time) -> bool:
     return start.minute in _ALLOWED_START_MINUTES and start.second == 0 and start.microsecond == 0
 
 
+def today_ist() -> date:
+    """Today's calendar date in IST (the server clock is UTC)."""
+    return datetime.now(IST).date()
+
+
 def now_ist() -> datetime:
     """Current time in IST (naive wall-clock, matching stored local times)."""
     return datetime.now(IST).replace(tzinfo=None)

@@ -45,7 +45,7 @@ from app.schemas.catalog_admin import (
     UserAdminRead,
 )
 from app.services.catalog import combo_savings_paise
-from app.services.slots import full_window_within_working_hours
+from app.services.slots import full_window_within_working_hours, today_ist
 
 _FAR_FUTURE = date(2099, 12, 31)
 
@@ -154,7 +154,7 @@ def deactivate_plan(db: Session, plan_id: int) -> Plan:
     if plan is None:
         raise NotFoundError("Plan not found.")
     plan.is_active = False
-    plan.effective_to = date.today()
+    plan.effective_to = today_ist()
     db.commit()
     db.refresh(plan)
     return plan
@@ -187,7 +187,7 @@ def _derive_slot_label(start: time, duration_minutes: int) -> str:
     from datetime import datetime as _dt
     from datetime import timedelta as _td
 
-    end = (_dt.combine(date.today(), start) + _td(minutes=duration_minutes)).time()
+    end = (_dt.combine(today_ist(), start) + _td(minutes=duration_minutes)).time()
     return f"{_fmt_12h(start)} - {_fmt_12h(end)}"
 
 
@@ -208,7 +208,7 @@ def _assert_slot_within_working_hours(
     if location is None:
         raise NotFoundError("Location not found.")
     if not full_window_within_working_hours(
-        date.today(), start, duration_minutes, location.opens_at, location.closes_at
+        today_ist(), start, duration_minutes, location.opens_at, location.closes_at
     ):
         raise OutsideWorkingHoursError()
 
@@ -255,7 +255,7 @@ def deactivate_slot(db: Session, slot_id: int) -> Slot:
     if slot is None:
         raise NotFoundError("Slot not found.")
     slot.is_active = False
-    slot.effective_to = date.today()
+    slot.effective_to = today_ist()
     db.commit()
     db.refresh(slot)
     return slot
@@ -308,7 +308,7 @@ def deactivate_plan_pricing(db: Session, pricing_id: int) -> PlanPricing:
     if row is None:
         raise NotFoundError("Plan pricing not found.")
     row.is_active = False
-    row.effective_to = date.today()
+    row.effective_to = today_ist()
     db.commit()
     db.refresh(row)
     return row
@@ -373,7 +373,7 @@ def deactivate_cake(db: Session, cake_id: int) -> Cake:
     if cake is None:
         raise NotFoundError("Cake not found.")
     cake.is_active = False
-    cake.effective_to = date.today()
+    cake.effective_to = today_ist()
     db.commit()
     db.refresh(cake)
     return cake
@@ -415,7 +415,7 @@ def deactivate_special_decor(db: Session, decor_id: int) -> SpecialDecorItem:
     if decor is None:
         raise NotFoundError("Special decor item not found.")
     decor.is_active = False
-    decor.effective_to = date.today()
+    decor.effective_to = today_ist()
     db.commit()
     db.refresh(decor)
     return decor
@@ -457,7 +457,7 @@ def deactivate_combo(db: Session, combo_id: int) -> ComboItem:
     if combo is None:
         raise NotFoundError("Combo item not found.")
     combo.is_active = False
-    combo.effective_to = date.today()
+    combo.effective_to = today_ist()
     db.commit()
     db.refresh(combo)
     return combo

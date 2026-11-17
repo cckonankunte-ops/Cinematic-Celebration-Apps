@@ -41,6 +41,7 @@ from app.services.slots import (
     OccupiedWindow,
     is_time_disallowed,
     occupied_window,
+    today_ist,
     usable_end,
     validate_booking_time,
     working_window,
@@ -156,7 +157,7 @@ def slot_label(s: Slot) -> str:
         return s.description
     if s.start_time is not None and s.duration_minutes is not None:
         end = (
-            datetime.combine(date.today(), s.start_time)
+            datetime.combine(today_ist(), s.start_time)
             + timedelta(minutes=s.duration_minutes)
         ).time()
         return f"{_fmt_12h(s.start_time)} - {_fmt_12h(end)}"
@@ -422,7 +423,7 @@ def time_range_label(start: time | None, duration_minutes: int | None) -> str:
     if start is None or duration_minutes is None:
         return ""
     end = (
-        datetime.combine(date.today(), start) + timedelta(minutes=duration_minutes)
+        datetime.combine(today_ist(), start) + timedelta(minutes=duration_minutes)
     ).time()
     return f"{_fmt_12h(start)} - {_fmt_12h(end)}"
 

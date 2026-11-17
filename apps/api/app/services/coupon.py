@@ -16,6 +16,7 @@ from app.core.errors import CouponInvalidError, CouponNotApplicableError
 from app.models.coupon import Coupon
 from app.models.coupon_redemption import CouponRedemption
 from app.services.pricing import COMPONENT_KEYS, ValidatedCoupon
+from app.services.slots import today_ist
 
 
 def list_public_offers(db: Session, *, on: date):
@@ -115,7 +116,7 @@ def resolve_and_validate(
     ``on`` is the date used for the validity-window check; defaults to today so
     the function is usable from a preview that has no booking_date yet.
     """
-    check_date = on if on is not None else date.today()
+    check_date = on if on is not None else today_ist()
 
     # Step 1 — Location match + existence.
     coupon = resolve_coupon_row(db, location_id=location_id, code=code)
