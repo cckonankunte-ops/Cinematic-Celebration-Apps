@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 
 import { publicApi, type PublicOffer } from '../../lib/api';
-import { formatDate } from '../../lib/formatters';
 
 /**
- * Home-page offers showcase. Fetches the public, in-validity coupon offers at
- * runtime and renders them compactly. Renders NOTHING when there are no public
- * offers, so the hero stays clean.
+ * Home-page offers showcase. Fetches the public, currently-valid coupon offers
+ * at runtime and renders them compactly. Renders NOTHING when there are no
+ * public offers, so the hero stays clean.
  *
  * Space-saving design (most visitors are on phones):
- * - Identical offers (same code, name, description, validity) that exist in
- *   several branches are GROUPED into one card listing the branches, so a promo
- *   created in all 3 branches is one card, not three.
+ * - The same offer in several branches is GROUPED into one card listing those
+ *   branches. Offers are "the same" when their code, name and description match;
+ *   validity dates are deliberately NOT part of the match. The API only returns
+ *   offers valid today (IST), so each branch drops out of the list on its own
+ *   when its window ends, and the card's branch list always reflects the
+ *   branches where the offer can be used right now.
+ * - Validity dates are not shown on the cards.
  * - On phones the cards sit in a single swipeable row (scroll-snap, with the
  *   next card peeking in), so the block is one card tall however many offers
  *   exist. From `sm` up they flow into a grid.
@@ -22,22 +25,17 @@ interface OfferGroup {
   code: string;
   name: string | null;
   description: string | null;
-  effective_from: string | null;
-  effective_to: string | null;
   branches: string[];
 }
 
-/** Group offers that are identical except for the branch. Order is preserved. */
+/**
+ * Group offers that share code + name + description (dates are ignored). Order
+ * of first appearance is preserved, and a branch is listed once per group.
+ */
 export function groupOffers(offers: PublicOffer[]): OfferGroup[] {
   const groups = new Map<string, OfferGroup>();
   for (const o of offers) {
-    const key = [
-      o.code,
-      o.name ?? '',
-      o.description ?? '',
-      o.effective_from ?? '',
-      o.effective_to ?? '',
-    ].join('|');
+    const key = [o.code, o.name ?? '', o.description ?? ''].join('|');
     const existing = groups.get(key);
     if (existing) {
       if (!existing.branches.includes(o.location_name)) {
@@ -49,26 +47,11 @@ export function groupOffers(offers: PublicOffer[]): OfferGroup[] {
         code: o.code,
         name: o.name,
         description: o.description,
-        effective_from: o.effective_from,
-        effective_to: o.effective_to,
         branches: [o.location_name],
       });
     }
   }
   return Array.from(groups.values());
-}
-
-function validityText(g: OfferGroup): string | null {
-  if (g.effective_from && g.effective_to) {
-    return `Valid ${formatDate(g.effective_from)} – ${formatDate(g.effective_to)}`;
-  }
-  if (g.effective_to) {
-    return `Valid until ${formatDate(g.effective_to)}`;
-  }
-  if (g.effective_from) {
-    return `Valid from ${formatDate(g.effective_from)}`;
-  }
-  return null;
 }
 
 export default function OffersShowcase() {
@@ -107,12 +90,7 @@ export default function OffersShowcase() {
         }`}
       >
         {groups.map((g) => {
-          const validity = validityText(g);
           const multi = g.branches.length > 1;
-          // Meta line: validity, plus the branch list when it applies to several.
-          const meta = [validity, multi ? g.branches.join(', ') : null]
-            .filter(Boolean)
-            .join(' · ');
           return (
             <li
               key={g.key}
@@ -139,9 +117,9 @@ export default function OffersShowcase() {
                   {g.description}
                 </p>
               )}
-              {meta && (
+              {multi && (
                 <p className="mt-1 truncate text-[11px] text-gray-500 sm:text-xs">
-                  {meta}
+                  {g.branches.join(', ')}
                 </p>
               )}
             </li>
