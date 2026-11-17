@@ -212,6 +212,37 @@ export default function BookingWizard() {
     stepTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [step]);
 
+  // While a text field is focused (mobile keyboard open) the fixed action bar
+  // would sit on top of the content and hide the last fields. Switch it to a
+  // normal in-flow row at the end of the page so it can be scrolled to.
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const NON_TEXT = ['checkbox', 'radio', 'button', 'submit', 'range', 'date', 'file'];
+    const isTextField = (el: EventTarget | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el instanceof HTMLTextAreaElement) return true;
+      return el instanceof HTMLInputElement && !NON_TEXT.includes(el.type);
+    };
+    const onIn = (e: FocusEvent) => {
+      if (!isTextField(e.target)) return;
+      if (timer) clearTimeout(timer);
+      setTyping(true);
+    };
+    const onOut = () => {
+      if (timer) clearTimeout(timer);
+      // Delay so focus moving between two fields doesn't flicker the bar.
+      timer = setTimeout(() => setTyping(false), 150);
+    };
+    document.addEventListener('focusin', onIn);
+    document.addEventListener('focusout', onOut);
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('focusin', onIn);
+      document.removeEventListener('focusout', onOut);
+    };
+  }, []);
+
   // Change branch in place (from the Overview "Update" control). Resets the
   // plan/window since they belong to the old branch's catalog.
   const changeBranch = (slug: string) => {
@@ -922,13 +953,24 @@ export default function BookingWizard() {
       )}
 
       {/* Spacer so content isn't hidden behind the sticky bar. */}
-      <div className="h-28" aria-hidden="true"></div>
+      <div
+        className={typing ? 'hidden h-28 sm:block' : 'h-36 sm:h-28'}
+        aria-hidden="true"
+      ></div>
 
-      {/* Sticky summary + action bar. */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/40 bg-white/95 backdrop-blur">
+      {/* Summary + action bar: fixed to the bottom, except while the keyboard
+          is open on mobile, when it flows at the end of the page. On phones
+          it is two rows (total/advance, then Back/Next). */}
+      <div
+        className={`z-30 border-t border-white/40 bg-white/95 backdrop-blur ${
+          typing
+            ? 'relative sm:fixed sm:inset-x-0 sm:bottom-0'
+            : 'fixed inset-x-0 bottom-0'
+        }`}
+      >
         <div className="mx-auto max-w-5xl px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 sm:flex-1">
               <BookingSummary
                 breakdown={preview}
                 adults={draft.adults}
@@ -936,12 +978,12 @@ export default function BookingWizard() {
                 previewError={previewError}
               />
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex items-center gap-2 sm:shrink-0">
               {step > 1 && (
                 <button
                   type="button"
                   onClick={() => setStep((s) => (s - 1) as Step)}
-                  className="rounded-full border border-gray-300 px-5 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50"
+                  className="flex-1 rounded-full border border-gray-300 px-5 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50 sm:flex-none"
                 >
                   Back
                 </button>
@@ -951,7 +993,7 @@ export default function BookingWizard() {
                   type="button"
                   onClick={() => setStep((s) => (s + 1) as Step)}
                   disabled={!canNext}
-                  className="rounded-full bg-festive-hero px-7 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
+                  className="flex-1 rounded-full bg-festive-hero px-7 py-2.5 sm:flex-none font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
                 >
                   Next
                 </button>
@@ -960,7 +1002,7 @@ export default function BookingWizard() {
                   type="button"
                   onClick={submit}
                   disabled={submitting || !canSubmit}
-                  className="rounded-full bg-festive-hero px-7 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
+                  className="flex-1 rounded-full bg-festive-hero px-7 py-2.5 sm:flex-none font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
                 >
                   {submitting ? 'Submitting…' : 'Submit request'}
                 </button>
