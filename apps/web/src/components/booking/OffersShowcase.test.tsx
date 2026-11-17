@@ -55,4 +55,37 @@ describe('OffersShowcase', () => {
     expect(screen.getByText('JP Nagar')).toBeInTheDocument();
     expect(screen.getByText(/Valid 01 Jan 2027/)).toBeInTheDocument();
   });
+
+  it('groups the same offer from several branches into ONE card', async () => {
+    vi.spyOn(publicApi, 'listOffers').mockResolvedValue([
+      offer('EARLY100', { name: 'Early Bird', location_name: 'Konankunte' }),
+      offer('EARLY100', { name: 'Early Bird', location_name: 'Hulimavu' }),
+      offer('EARLY100', { name: 'Early Bird', location_name: 'Electronic City' }),
+    ]);
+
+    render(<OffersShowcase />);
+
+    await waitFor(() => expect(screen.getByText('EARLY100')).toBeInTheDocument());
+    // One card, not three.
+    expect(screen.getAllByText('EARLY100')).toHaveLength(1);
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.getByText('3 branches')).toBeInTheDocument();
+    // Branch names are listed in the meta line.
+    expect(
+      screen.getByText(/Konankunte, Hulimavu, Electronic City/),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps offers separate when they differ (e.g. different code or dates)', async () => {
+    vi.spyOn(publicApi, 'listOffers').mockResolvedValue([
+      offer('AAA', { location_name: 'Konankunte' }),
+      offer('BBB', { location_name: 'Konankunte' }),
+    ]);
+
+    render(<OffersShowcase />);
+
+    await waitFor(() => expect(screen.getByText('AAA')).toBeInTheDocument());
+    expect(screen.getByText('BBB')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
 });
