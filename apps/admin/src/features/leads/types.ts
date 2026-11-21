@@ -196,6 +196,38 @@ export const MANUAL_STATUSES: LeadStatus[] = [
 /** Open leads without a booking can be converted (R9.1). */
 export const CONVERTIBLE_STATUSES: LeadStatus[] = ['new', 'contacted', 'follow_up'];
 
+/** GET /admin/leads/dashboard (R13). Counts only; the UI computes percentages. */
+export interface DashboardDayRow {
+  day: string;
+  key: string;
+  count: number;
+}
+
+export interface DashboardGroupRow {
+  key: string;
+  total: number;
+  won: number;
+}
+
+export interface LeadDashboard {
+  location_id: number | null;
+  date_from: string;
+  date_to: string;
+  total: number;
+  won: number;
+  per_day_by_source: DashboardDayRow[];
+  per_day_by_channel: DashboardDayRow[];
+  by_source: DashboardGroupRow[];
+  by_channel: DashboardGroupRow[];
+  contacted: number;
+  avg_first_response_minutes: number | null;
+  median_first_response_minutes: number | null;
+  close_reasons: Array<{ reason: string; count: number }>;
+  campaigns: DashboardGroupRow[];
+  whatsapp_total: number;
+  whatsapp_with_code: number;
+}
+
 export const STATUS_LABELS: Record<LeadStatus, string> = {
   new: 'New',
   contacted: 'Contacted',

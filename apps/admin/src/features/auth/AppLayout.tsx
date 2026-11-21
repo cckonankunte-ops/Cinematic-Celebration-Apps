@@ -4,7 +4,7 @@
  * pinned location name. The nav is mobile-first (wraps on small screens).
  */
 
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation as useRouterLocation, useNavigate } from 'react-router-dom';
 
 import { LeadNavBadge } from '@/features/leads/LeadNavBadge';
 import { useLocation } from '@/features/location/useLocation';
@@ -42,6 +42,7 @@ function LocationSwitcher(): JSX.Element {
 export function AppLayout(): JSX.Element {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useRouterLocation();
 
   const onLogout = async (): Promise<void> => {
     await logout();
@@ -55,7 +56,13 @@ export function AppLayout(): JSX.Element {
           <NavLink to="/bookings" className={navClass}>
             Bookings
           </NavLink>
-          <NavLink to="/leads" className={navClass}>
+          <NavLink
+            to="/leads"
+            // Active for the list, quick-add and a lead, but not the dashboard.
+            className={({ isActive }) =>
+              navClass({ isActive: isActive && !pathname.startsWith('/leads/dashboard') })
+            }
+          >
             Leads
             <LeadNavBadge />
           </NavLink>
@@ -68,6 +75,11 @@ export function AppLayout(): JSX.Element {
           {user?.role === 'admin' && (
             <NavLink to="/analytics" className={navClass}>
               Analytics
+            </NavLink>
+          )}
+          {user?.role === 'admin' && (
+            <NavLink to="/leads/dashboard" className={navClass}>
+              Lead dashboard
             </NavLink>
           )}
           {user?.role === 'admin' && (

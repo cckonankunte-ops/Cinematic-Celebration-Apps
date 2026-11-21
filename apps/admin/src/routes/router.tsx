@@ -15,6 +15,7 @@ import { UsersPage } from '@/features/users/UsersPage';
 import { LeadsPage } from '@/features/leads/LeadsPage';
 import { QuickAddLeadPage } from '@/features/leads/QuickAddLeadPage';
 import { LeadDetailPage } from '@/features/leads/LeadDetailPage';
+import { LeadDashboardPage } from '@/features/leads/LeadDashboardPage';
 
 /**
  * Route tree. `/login` is public; everything else is wrapped in
@@ -44,9 +45,17 @@ export const router = createBrowserRouter([
       { path: 'bookings/new', element: <BookingFormPage /> },
       { path: 'bookings/:bookingId/edit', element: <BookingFormPage /> },
       // Leads: all signed-in users (staff are limited to their branch by the API).
-      // Static paths before `:leadId`; the admin-only dashboard is added with it.
+      // Static paths come before `:leadId`; the dashboard is admin-only (R12.5).
       { path: 'leads', element: <LeadsPage /> },
       { path: 'leads/new', element: <QuickAddLeadPage /> },
+      {
+        path: 'leads/dashboard',
+        element: (
+          <ProtectedRoute requiredRole="admin">
+            <LeadDashboardPage />
+          </ProtectedRoute>
+        ),
+      },
       { path: 'leads/:leadId', element: <LeadDetailPage /> },
       { path: 'timesheet', element: <TimesheetPage /> },
       { path: 'cakesheet', element: <CakesheetPage /> },

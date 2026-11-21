@@ -23,6 +23,7 @@ import type {
   LeadCounts,
   LeadCreateBody,
   LeadCreateResult,
+  LeadDashboard,
   LeadListPage,
   LeadRead,
   LeadUpdateBody,
@@ -113,6 +114,22 @@ export function useCreateLead(): UseMutationResult<LeadCreateResult, unknown, Le
   return useMutation({
     mutationFn: (body: LeadCreateBody) => api.post<LeadCreateResult>(BASE, body),
     onSuccess: (result) => invalidate(result.lead.id),
+  });
+}
+
+/** Lead dashboard (admin only, R13). `locationId` null = all branches. */
+export function useLeadDashboard(
+  locationId: number | null,
+  dateFrom: string,
+  dateTo: string,
+): UseQueryResult<LeadDashboard> {
+  const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+  if (locationId !== null) params.set('location_id', String(locationId));
+  return useQuery({
+    queryKey: ['lead-dashboard', locationId, dateFrom, dateTo],
+    queryFn: () => api.get<LeadDashboard>(`${BASE}/dashboard?${params.toString()}`),
+    enabled: dateFrom !== '' && dateTo !== '' && dateFrom <= dateTo,
+    placeholderData: (previous) => previous,
   });
 }
 

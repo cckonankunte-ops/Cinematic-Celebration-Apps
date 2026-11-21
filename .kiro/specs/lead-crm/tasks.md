@@ -253,12 +253,12 @@ screens. Optional sub-tasks are marked with `*`.
     sends `lead_id`
   - _Requirements: 6.3, 7.1–7.8, 9.1–9.5, 10.3–10.6, 11.1–11.5, 11.7, 18.12, 19.18_
 
-- [ ] 12. Admin panel: lead dashboard
-  - [ ] 12.1 `LeadDashboardPage.tsx` (admin): branch selector, date range (default
+- [x] 12. Admin panel: lead dashboard
+  - [x] 12.1 `LeadDashboardPage.tsx` (admin): branch selector, date range (default
     last 30 days), leads per day switchable by source or channel, per-source and
     per-channel totals/won/conversion, first-response average and median, close
     reasons, campaigns table, WhatsApp code share; usable at 360 px
-  - [ ]* 12.2 Vitest: renders figures from a mocked response and switches grouping
+  - [x]* 12.2 Vitest: renders figures from a mocked response and switches grouping
   - _Requirements: 13.1–13.8, 18.13_
 
 - [ ] 13. Final checks
