@@ -206,25 +206,30 @@ screens. Optional sub-tasks are marked with `*`.
     gzipped
   - _Requirements: 2.1, 2.4–2.6, 2.8, 2.15, 3.1, 3.4–3.6, 3.8, 15.4, 15.5, 16.4, 19.17_
 
-- [ ] 10. Admin panel: leads list, quick-add and navigation
-  - [ ] 10.1 `features/leads/types.ts`, `lead-queries.ts` (incl. `useLeadCounts`
+- [x] 10. Admin panel: leads list, quick-add and navigation
+  - [x] 10.1 `features/leads/types.ts`, `lead-queries.ts` (incl. `useLeadCounts`
     with 60 s refetch and refetch on focus), `lead-schema.ts`,
     `lead-filter-state.ts`, `Toast.tsx`
-  - [ ] 10.2 `LeadsPage.tsx` with sections (Not contacted, Overdue, Due today, New,
+  - [x] 10.2 `LeadsPage.tsx` with sections (Not contacted, Overdue, Due today, New,
     Others), red "Not contacted · N min" label, filters (status, source, channel,
     assignee, dates, search), cards below 768 px and table above, empty state,
     filters kept for the tab
-  - [ ] 10.3 `QuickAddLeadPage.tsx` (`/leads/new`): phone first with numeric
+  - [x] 10.3 `QuickAddLeadPage.tsx` (`/leads/new`): phone first with numeric
     keypad, source default WhatsApp incl. "WhatsApp (from ad)", name, branch,
     note, follow-up presets, enquiry code; toast and open the lead, showing any
     code warning or notice
-  - [ ] 10.4 Routes in `router.tsx` (`leads`, `leads/new`, `leads/dashboard`
+  - [x] 10.4 Routes in `router.tsx` (`leads`, `leads/new`, `leads/dashboard`
     admin-only, `leads/:leadId`); `AppLayout.tsx` Leads nav with `LeadNavBadge`
     (uncontacted pill + overdue/due-today pill) and Lead dashboard nav for admins
-  - [ ] 10.5 `LocationGate` maps `phone` and `whatsapp_phone`; `LocationSettings.tsx`
+  - [x] 10.5 `LocationGate` maps `phone` and `whatsapp_phone`; `LocationSettings.tsx`
     adds the "Branch WhatsApp number" field
-  - [ ] 10.6 Vitest: quick-add phone normalisation; section ordering and uncontacted
+  - [x] 10.6 Vitest: quick-add phone normalisation; section ordering and uncontacted
     label; empty state; dashboard nav hidden from staff; badge counts
+  - Note: the `leads/dashboard` route, its nav link and the "hidden from staff"
+    test land with the dashboard page in group 12 (no placeholder screen). A first
+    read-only `LeadDetailPage` ships here so quick-add can open the saved lead;
+    group 11 completes it. `follow-up-presets.ts` and `FollowUpPicker.tsx` (11.2)
+    are built here because quick-add needs them.
   - _Requirements: 4.1, 4.4–4.6, 4.8, 5.1, 5.2, 5.5–5.10, 10.1, 11.6, 16.6, 19.18_
 
 - [ ] 11. Admin panel: lead detail, follow-ups and WhatsApp actions
@@ -232,7 +237,7 @@ screens. Optional sub-tasks are marked with `*`.
     summary, linked booking, same-phone leads, enquiry-code link, status /
     close reason / assignee / follow-up editors, `ActivityTimeline`,
     `AddActivityForm`, `CloseLeadDialog` (reason required)
-  - [ ] 11.2 `follow-up-presets.ts` and `FollowUpPicker.tsx` (1 h, 7 pm, tomorrow
+  - [x] 11.2 `follow-up-presets.ts` and `FollowUpPicker.tsx` (1 h, 7 pm, tomorrow
     11 am, +3 days, custom; IST)
   - [ ] 11.3 `lead-whatsapp.ts`: `telHref`, `customerWhatsappUrl`,
     `buildFollowUpDigest` (3,500-char cap, "+N more in admin"); `LogContactPrompt`

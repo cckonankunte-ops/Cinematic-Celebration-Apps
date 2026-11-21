@@ -15,6 +15,8 @@ interface LocationApiRow {
   id: number;
   name: string;
   slug: string;
+  phone?: string | null;
+  whatsapp_phone?: string | null;
 }
 
 export function LocationGate({ children }: { children: ReactNode }): JSX.Element {
@@ -32,7 +34,14 @@ export function LocationGate({ children }: { children: ReactNode }): JSX.Element
     return <div className="p-4 text-sm text-red-600">Failed to load locations.</div>;
   }
 
-  const all: LocationOption[] = data.map((l) => ({ id: l.id, name: l.name, slug: l.slug }));
+  const all: LocationOption[] = data.map((l) => ({
+    id: l.id,
+    name: l.name,
+    slug: l.slug,
+    // Branch numbers for lead WhatsApp links / the follow-up digest (R11.3).
+    phone: l.phone ?? null,
+    whatsapp_phone: l.whatsapp_phone ?? null,
+  }));
   const isAdmin = user?.role === 'admin';
   const locations = isAdmin
     ? all

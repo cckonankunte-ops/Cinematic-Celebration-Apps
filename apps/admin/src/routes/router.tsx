@@ -12,6 +12,9 @@ import { AnalyticsPage } from '@/features/analytics/AnalyticsPage';
 import { CatalogPage } from '@/features/catalog/CatalogPage';
 import { CouponsPage } from '@/features/coupons/CouponsPage';
 import { UsersPage } from '@/features/users/UsersPage';
+import { LeadsPage } from '@/features/leads/LeadsPage';
+import { QuickAddLeadPage } from '@/features/leads/QuickAddLeadPage';
+import { LeadDetailPage } from '@/features/leads/LeadDetailPage';
 
 /**
  * Route tree. `/login` is public; everything else is wrapped in
@@ -40,6 +43,11 @@ export const router = createBrowserRouter([
       { path: 'bookings', element: <BookingListPage /> },
       { path: 'bookings/new', element: <BookingFormPage /> },
       { path: 'bookings/:bookingId/edit', element: <BookingFormPage /> },
+      // Leads: all signed-in users (staff are limited to their branch by the API).
+      // Static paths before `:leadId`; the admin-only dashboard is added with it.
+      { path: 'leads', element: <LeadsPage /> },
+      { path: 'leads/new', element: <QuickAddLeadPage /> },
+      { path: 'leads/:leadId', element: <LeadDetailPage /> },
       { path: 'timesheet', element: <TimesheetPage /> },
       { path: 'cakesheet', element: <CakesheetPage /> },
       {

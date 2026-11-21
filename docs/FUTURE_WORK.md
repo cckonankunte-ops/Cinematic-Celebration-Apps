@@ -287,3 +287,31 @@ once per visit. Must not cover the booking wizard's action bar.
 
 **Status:** deferred. Decide later whether it is needed at all, based on lead
 volume after lead-crm goes live.
+
+## Lead data retention: clear contact details on old closed leads (deferred)
+
+**Context.** Leads store a phone (required) and an optional name, used only so
+staff can call or WhatsApp the customer about their enquiry. Once a lead is
+closed (`won`, `lost`, `not_interested`), those details are no longer needed
+for that purpose, but today they are kept indefinitely.
+
+**Idea.** A daily cron CLI job (like `app.jobs.auto_close_leads`) that, for
+leads closed more than N months ago (for example 12), clears `name` and
+replaces `phone` with a non-identifying placeholder, and clears free-text notes
+on their timeline. Keep `source`, `channel`, `status`, `close_reason`,
+attribution fields and timestamps so the lead dashboard and conversion figures
+stay correct. `won` leads keep their link to the booking, which holds the
+customer's details under the booking rules.
+
+**Why.** Data minimisation and storage limitation under India's DPDP Act 2023:
+keep personal data only as long as needed for the purpose it was collected for.
+
+**Decisions needed.**
+- The retention period, and whether `won` leads are included.
+- How to replace the phone given the `ck_leads_phone_digits` check (for example
+  a migration that allows NULL for anonymised leads, plus an `anonymised_at`
+  column).
+- Whether notes are cleared or kept.
+- Update the privacy policy to state the period.
+
+**Status:** deferred (recorded with lead-crm, Nov 2026). Decide later.

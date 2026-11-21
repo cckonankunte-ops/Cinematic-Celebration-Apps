@@ -6,6 +6,7 @@
 
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
+import { LeadNavBadge } from '@/features/leads/LeadNavBadge';
 import { useLocation } from '@/features/location/useLocation';
 import { useAuth } from './useAuth';
 
@@ -53,6 +54,10 @@ export function AppLayout(): JSX.Element {
         <nav className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-2 px-4 py-3">
           <NavLink to="/bookings" className={navClass}>
             Bookings
+          </NavLink>
+          <NavLink to="/leads" className={navClass}>
+            Leads
+            <LeadNavBadge />
           </NavLink>
           <NavLink to="/timesheet" className={navClass}>
             Timesheet
