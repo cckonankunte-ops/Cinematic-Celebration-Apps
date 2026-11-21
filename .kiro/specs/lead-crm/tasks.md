@@ -261,8 +261,8 @@ screens. Optional sub-tasks are marked with `*`.
   - [x]* 12.2 Vitest: renders figures from a mocked response and switches grouping
   - _Requirements: 13.1–13.8, 18.13_
 
-- [ ] 13. Final checks
-  - [ ] 13.1 Run `ruff`, `pytest`, admin `npm run lint && npm run test && npm run
+- [x] 13. Final checks
+  - [x] 13.1 Run `ruff`, `pytest`, admin `npm run lint && npm run test && npm run
     build`, web `npm run test && npm run build`; fix failures
   - [x] 13.2 Update `docs/` with the public allowlist entries for the three new
     public endpoints, and the cron line for the auto-close job
