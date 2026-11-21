@@ -11,11 +11,12 @@ TODAY's catalog, so fix the data directly instead.
 
 ## Source data
 `New_Application/scripts/cine_celebration_data.sql`, a phpMyAdmin dump generated
-14 Nov 2026 09:18: 3,164 bookings (ids 1..3164). Only bookings created BEFORE
-14 Nov (3,160 of them; ids 3161..3164 are excluded) are fixed.
+14 Nov 2026 09:18: 3,164 bookings (ids 1..3164). Only bookings whose CELEBRATION
+date is on or before 13 Nov 2026 (3,129 of them) are fixed; upcoming bookings
+are left alone.
 
-Checks on those 3,160 bookings:
-- 2,712 have `advanceamount + amountdue <> amount`. All but 4 are explained by
+Checks on those 3,129 bookings:
+- 2,685 have `advanceamount + amountdue <> amount`. All but 4 are explained by
   food/other/cleaning/discount (for example `otheramount = 1` was used to round
   1999 up to 2000). The 4 exceptions are ids 5, 198, 210, 1076; for them the old
   app's own figure (`advanceamount + amountdue`) is used.
@@ -26,13 +27,13 @@ Checks on those 3,160 bookings:
   are fixed by `fix_advance_gap_4_bookings.sql`.
 
 ## The generated file
-`fix_migrated_totals.sql` (2,678 rows) is produced by:
+`fix_migrated_totals.sql` (2,651 rows) is produced by:
 
 ```bash
 py New_Application/scripts/migrate_from_mariadb/gen_total_fix.py \
    New_Application/scripts/cine_celebration_data.sql \
    New_Application/scripts/migrate_from_mariadb/fix_migrated_totals.sql \
-   --created-before 2026-11-14
+   --date-through 2026-11-13
 ```
 
 It loads the rows into a temp table and updates `bookings` from it in one
