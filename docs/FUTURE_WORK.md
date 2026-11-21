@@ -254,3 +254,15 @@ offers into banners).
 
 **Status:** deferred (recorded 2026). Not scheduled. Recommend writing a small
 spec (requirements → design → tasks) if option 2 is chosen.
+
+## Analytics: column filter builder (Step B)
+
+Let the admin add rows of `column / operator / value` (for example Due > 1000,
+Food >= 500) on the analytics tabs, combined with AND. The API must accept only
+a whitelist of columns (total, paid, due, discount, food, cleaning, other,
+status, celebration date) and operators (=, !=, >, >=, <, <=) and build the
+query itself. Never accept raw SQL. Paid and due are derived from the payments
+ledger, so those filters need to run on the grouped query (HAVING), not on
+stored columns. Skipped OR groups and free-form group-by on purpose: too much
+UI and risk for tens of bookings a day. Fixed breakdowns (by plan, by day) may
+answer most performance questions faster.

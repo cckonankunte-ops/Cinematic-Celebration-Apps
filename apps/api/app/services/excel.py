@@ -7,7 +7,7 @@ their headers are suffixed ``(Rs.)``; the raw ledger stays in paise elsewhere.
 
 Each builder takes already-assembled rows (from ``services.sheets`` /
 ``services.analytics``) plus a column spec, so this module holds no business
-logic — only presentation.
+logic â€” only presentation.
 """
 
 from __future__ import annotations
@@ -15,11 +15,16 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from io import BytesIO
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from app.schemas.analytics import AdvanceAmountsResult, SlotAmountsResult
+from app.schemas.analytics import (
+    CreatedBookingsResult,
+    SlotAmountsResult,
+    TodayIncomeResult,
+)
 from app.schemas.sheets import CakesheetRow, TimesheetRow
 
 # A column spec entry: (header, accessor). The accessor pulls a display value
@@ -83,15 +88,40 @@ def build_cakesheet_xlsx(rows: Sequence[CakesheetRow]) -> BytesIO:
     return _finalize(wb)
 
 
+_METHOD_ORDER = ("cash", "upi", "card", "other")
+_IST = ZoneInfo("Asia/Kolkata")
+
+
+def _method_label(method: str) -> str:
+    return method.upper() if method == "upi" else method.capitalize()
+
+
+def _method_order(per_row: Sequence[dict[str, int]], totals: dict[str, int]) -> list[str]:
+    """Known methods first (cash, upi, card, other), then any new ones sorted."""
+    seen: set[str] = set(totals)
+    for methods in per_row:
+        seen.update(methods)
+    known = [m for m in _METHOD_ORDER if m in seen]
+    return known + sorted(seen - set(_METHOD_ORDER))
+
+
 def build_slot_amounts_xlsx(result: SlotAmountsResult) -> BytesIO:
-    """Build a slot-amounts workbook with a Day Summary footer row."""
+    """Slot-amounts workbook: one row per booking + a Summary footer row."""
+    methods = _method_order(
+        [r.paid_by_method for r in result.rows], result.summary.paid_by_method
+    )
     columns: list[Column] = [
-        ("Booking Name", lambda r: r.booking_name),
         ("Reference", lambda r: r.booking_reference),
+        ("Name", lambda r: r.booking_name),
+        ("Celebration Date", lambda r: r.booking_date.isoformat()),
+        ("Status", lambda r: r.status),
         ("Total (Rs.)", lambda r: _rupees(r.total_paise)),
         ("Paid (Rs.)", lambda r: _rupees(r.amount_paid_paise)),
-        ("Today Income (Rs.)", lambda r: _rupees(r.today_income_paise)),
-        ("Amount Due (Rs.)", lambda r: _rupees(r.amount_due_paise)),
+        *[
+            (f"{_method_label(m)} (Rs.)", lambda r, m=m: _rupees(r.paid_by_method.get(m, 0)))
+            for m in methods
+        ],
+        ("Due (Rs.)", lambda r: _rupees(r.amount_due_paise)),
         ("Discount (Rs.)", lambda r: _rupees(r.discount_paise)),
         ("Food (Rs.)", lambda r: _rupees(r.food_paise)),
         ("Cleaning (Rs.)", lambda r: _rupees(r.cleaning_paise)),
@@ -104,11 +134,13 @@ def build_slot_amounts_xlsx(result: SlotAmountsResult) -> BytesIO:
     s = result.summary
     ws.append(
         [
-            "Day Summary",
+            f"Summary ({s.booking_count} bookings)",
+            "",
+            "",
             "",
             _rupees(s.total_paise),
             _rupees(s.amount_paid_paise),
-            _rupees(s.amount_paid_paise),
+            *[_rupees(s.paid_by_method.get(m, 0)) for m in methods],
             _rupees(s.amount_due_paise),
             _rupees(s.discount_paise),
             _rupees(s.food_paise),
@@ -119,25 +151,61 @@ def build_slot_amounts_xlsx(result: SlotAmountsResult) -> BytesIO:
     return _finalize(wb)
 
 
-def build_advance_amounts_xlsx(result: AdvanceAmountsResult) -> BytesIO:
-    """Build an advance-amounts workbook with a Day Summary footer row."""
+def build_created_bookings_xlsx(result: CreatedBookingsResult) -> BytesIO:
+    """Bookings-created workbook with a Summary footer row."""
     columns: list[Column] = [
-        ("Booking Name", lambda r: r.booking_name),
         ("Reference", lambda r: r.booking_reference),
+        ("Name", lambda r: r.booking_name),
+        ("Created At", lambda r: r.created_at.astimezone(_IST).strftime("%Y-%m-%d %H:%M")),
+        ("Celebration Date", lambda r: r.booking_date.isoformat()),
+        ("Status", lambda r: r.status),
+        ("Plan", lambda r: r.plan_title),
+        ("Cake", lambda r: r.cake or ""),
+        ("Special Decor", lambda r: ", ".join(r.special_decor)),
+        ("Combos", lambda r: ", ".join(r.combos)),
         ("Total (Rs.)", lambda r: _rupees(r.total_paise)),
         ("Paid (Rs.)", lambda r: _rupees(r.amount_paid_paise)),
+        ("Due (Rs.)", lambda r: _rupees(r.amount_due_paise)),
     ]
     wb = Workbook()
     ws = wb.active
-    ws.title = "Advance Amounts"
+    ws.title = "Bookings Created"
     _write_sheet(ws, columns, result.rows)
     s = result.summary
     ws.append(
-        [
-            "Day Summary",
-            "",
-            _rupees(s.total_paise),
-            _rupees(s.amount_paid_paise),
-        ]
+        [f"Summary ({s.booking_count} bookings)"]
+        + [""] * 8
+        + [_rupees(s.total_paise), _rupees(s.amount_paid_paise), _rupees(s.amount_due_paise)]
+    )
+    return _finalize(wb)
+
+
+def build_today_income_xlsx(result: TodayIncomeResult) -> BytesIO:
+    """Income-received workbook (per method) with a Summary footer row."""
+    methods = _method_order(
+        [r.received_by_method for r in result.rows], result.summary.received_by_method
+    )
+    columns: list[Column] = [
+        ("Reference", lambda r: r.booking_reference),
+        ("Name", lambda r: r.booking_name),
+        ("Celebration Date", lambda r: r.booking_date.isoformat()),
+        ("Status", lambda r: r.status),
+        ("Received (Rs.)", lambda r: _rupees(r.received_paise)),
+        *[
+            (f"{_method_label(m)} (Rs.)", lambda r, m=m: _rupees(r.received_by_method.get(m, 0)))
+            for m in methods
+        ],
+        ("Total (Rs.)", lambda r: _rupees(r.total_paise)),
+        ("Paid To Date (Rs.)", lambda r: _rupees(r.amount_paid_paise)),
+        ("Due (Rs.)", lambda r: _rupees(r.amount_due_paise)),
+    ]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Income"
+    _write_sheet(ws, columns, result.rows)
+    s = result.summary
+    ws.append(
+        [f"Summary ({s.booking_count} bookings)", "", "", "", _rupees(s.received_paise)]
+        + [_rupees(s.received_by_method.get(m, 0)) for m in methods]
     )
     return _finalize(wb)
