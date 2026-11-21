@@ -184,7 +184,7 @@ screens. Optional sub-tasks are marked with `*`.
     message, reuse, opens on failure, no phone/name in the body)
   - _Requirements: 17.1–17.7, 18.1–18.4, 18.14, 19.20, 19.23_
 
-- [ ] 9. Customer site: booking wizard lead capture and enquiry forms
+- [x] 9. Customer site: booking wizard lead capture and enquiry forms
   - [x] 9.1 `lib/lead-capture.ts` (`sendStep1Lead` fire-and-forget, `cc.leadToken`
     in sessionStorage, never throws; `getLeadToken`); `publicApi.createLead`,
     `publicApi.submitEnquiry`, `publicApi.registerEnquiryCode`; `lead_token` on the
@@ -202,7 +202,7 @@ screens. Optional sub-tasks are marked with `*`.
   - [x] 9.6 Vitest: Next sends the lead without blocking; failed lead request does
     not block; token reused; booking body includes the token; QuickEnquiry and
     ContactForm submit, field errors, honeypot not visible
-  - [ ] 9.7 `npm run build` and confirm the booking page stays at or below 150 KB
+  - [x] 9.7 `npm run build` and confirm the booking page stays at or below 150 KB
     gzipped
   - _Requirements: 2.1, 2.4–2.6, 2.8, 2.15, 3.1, 3.4–3.6, 3.8, 15.4, 15.5, 16.4, 19.17_
 

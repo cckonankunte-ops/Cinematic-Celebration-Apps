@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import ColumnElement, Date, and_, case, cast, extract, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -376,6 +377,59 @@ def _set_token(db: Session, lead: Lead) -> str:
 # --- public capture ---------------------------------------------------------
 
 
+PHONE_CORRECTED_TEXT = "Phone number corrected on the website"
+
+
+def _correct_phone(db: Session, lead: Lead, phone: str, *, now: datetime) -> tuple[Lead, bool]:
+    """Apply a Step 1 phone change made with the lead's own token.
+
+    Returns ``(lead_to_continue_on, is_same_lead)``. A changed phone is almost
+    always a typo fix, so it corrects this lead rather than starting a second
+    one. If the corrected number already has its own open lead at the branch
+    (one per number, ``uq_leads_prebooking_phone``), work continues on that
+    lead and the mistyped one is closed so nobody calls the wrong number.
+    """
+    if lead.phone == phone:
+        return lead, True
+    other = _select_open_lead(db, lead.location_id, phone, PREBOOKING_LEAD_STATUSES)
+    if other is None:
+        try:
+            with db.begin_nested():
+                lead.phone = phone
+                db.flush()
+        except IntegrityError:
+            # A concurrent insert took the number first: continue on that lead.
+            other = _select_open_lead(db, lead.location_id, phone, PREBOOKING_LEAD_STATUSES)
+            if other is None:
+                raise ValidationFailedError(
+                    "Could not save the enquiry. Please try again."
+                ) from None
+        else:
+            _add_activity(
+                db, lead, "system", text=PHONE_CORRECTED_TEXT, data={"source": "website"}, now=now
+            )
+            return lead, True
+    _transition(
+        db,
+        lead,
+        "lost",
+        now=now,
+        reason="other",
+        reason_text=PHONE_CORRECTED_TEXT,
+        note="Continued on the lead for the corrected number",
+    )
+    lead.lead_token_hash = None
+    _add_activity(
+        db,
+        other,
+        "system",
+        text=f"Repeat enquiry via {_SOURCE_LABELS['website']}",
+        data={"source": "website"},
+        now=now,
+    )
+    return other, False
+
+
 def capture_website_lead(
     db: Session, data: WebsiteLeadIn, *, now: datetime | None = None
 ) -> str:
@@ -391,14 +445,20 @@ def capture_website_lead(
         "guests": data.guests,
     }
     lead = resolve_lead_token(db, data.lead_token, location_id=data.location_id, now=now)
-    if lead is not None and lead.phone == data.phone:
-        # Same browser editing Step 1 again: update details, keep attribution (R17.10).
+    if lead is not None:
+        # Same browser editing Step 1 again (R2.3): keep attribution (R17.10).
+        target, same_lead = _correct_phone(db, lead, data.phone, now=now)
         for name, value in enquiry.items():
-            if value is not None:
-                setattr(lead, name, value)
+            # Our own lead takes the new details; another lead only fills gaps.
+            if value is not None and (same_lead or getattr(target, name) is None):
+                setattr(target, name, value)
+        if same_lead:
+            db.commit()
+            assert data.lead_token is not None
+            return data.lead_token
+        token = _set_token(db, target)
         db.commit()
-        assert data.lead_token is not None
-        return data.lead_token
+        return token
 
     attribution = clean_attribution(data.attribution, own_hosts=_own_hosts())
     new = _NewLead(

@@ -95,6 +95,64 @@ def test_step1_returns_token_and_second_call_updates_same_lead(
     assert (leads[0].source, leads[0].status) == ("website", "new")
 
 
+def test_step1_phone_change_corrects_the_same_lead(client: TestClient, db: Session) -> None:
+    """A typo fix on Step 1 must not leave a second, wrong-number lead behind."""
+    loc_id = _branch(db)
+    token = _post(client, "/leads", {"location_id": loc_id, "phone": "9487578375"}).json()[
+        "lead_token"
+    ]
+    again = _post(
+        client, "/leads", {"location_id": loc_id, "phone": "9487576275", "lead_token": token}
+    )
+    assert again.status_code == 201
+    assert again.json() == {"lead_token": token}
+
+    leads = _leads(db)
+    assert [(lead.phone, lead.status) for lead in leads] == [("9487576275", "new")]
+    texts = [
+        a.text
+        for a in db.execute(
+            select(LeadActivity).where(LeadActivity.lead_id == leads[0].id)
+        ).scalars()
+    ]
+    assert leads_service.PHONE_CORRECTED_TEXT in texts
+
+
+def test_step1_phone_change_to_number_with_open_lead_continues_there(
+    client: TestClient, db: Session
+) -> None:
+    loc_id = _branch(db)
+    _post(client, "/enquiries", _enquiry(loc_id, phone="9487576275"))
+    token = _post(client, "/leads", {"location_id": loc_id, "phone": "9487578375"}).json()[
+        "lead_token"
+    ]
+
+    again = _post(
+        client,
+        "/leads",
+        {"location_id": loc_id, "phone": "9487576275", "lead_token": token, "guests": 5},
+    )
+    assert again.status_code == 201
+    new_token = again.json()["lead_token"]
+    assert new_token != token
+
+    by_phone = {lead.phone: lead for lead in _leads(db)}
+    assert (by_phone["9487576275"].status, by_phone["9487576275"].guests) == ("new", 5)
+    wrong = by_phone["9487578375"]
+    assert (wrong.status, wrong.close_reason) == ("lost", "other")
+    assert wrong.close_reason_text == leads_service.PHONE_CORRECTED_TEXT
+    assert wrong.lead_token_hash is None
+
+    # The new token keeps working on the right lead; the old one no longer does.
+    third = _post(
+        client,
+        "/leads",
+        {"location_id": loc_id, "phone": "9487576275", "lead_token": new_token},
+    )
+    assert third.json() == {"lead_token": new_token}
+    assert sum(1 for lead in _leads(db) if lead.status == "new") == 1
+
+
 def test_step1_invalid_phone_is_422_and_stores_nothing(client: TestClient, db: Session) -> None:
     loc_id = _branch(db)
     resp = _post(client, "/leads", {"location_id": loc_id, "phone": "12345"})
