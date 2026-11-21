@@ -16,7 +16,7 @@ import secrets
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, fields
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -32,6 +32,7 @@ from app.models.booking import Booking
 from app.models.lead import (
     CLOSED_LEAD_STATUSES,
     PREBOOKING_LEAD_STATUSES,
+    TEXT_MAX,
     EnquiryCode,
     Lead,
     LeadActivity,
@@ -40,9 +41,11 @@ from app.models.location import Location
 from app.models.plan import Plan
 from app.models.user import User
 from app.models.user_role import UserRole
+from app.schemas.booking import ContactCreate
 from app.schemas.lead import (
     ActivityCreate,
     ActivityRead,
+    AttributionIn,
     AttributionSummary,
     EnquiryCodeIn,
     EnquiryIn,
@@ -396,31 +399,88 @@ def capture_website_lead(
     return token
 
 
-def create_enquiry_lead(db: Session, data: EnquiryIn, *, now: datetime | None = None) -> None:
-    """Homepage / contact page enquiry (R3.2, R3.3, R3.7)."""
-    if data.website:  # honeypot filled -> pretend success, store nothing
-        return
-    now = now or _utcnow()
-    _location_or_422(db, data.location_id)
-    attribution = clean_attribution(data.attribution, own_hosts=_own_hosts())
+def _store_enquiry(
+    db: Session,
+    *,
+    location_id: int,
+    phone: str,
+    source: str,
+    name: str | None,
+    preferred_date: date | None,
+    message: str | None,
+    email: str | None,
+    attribution_in: AttributionIn | None,
+    extra_note: str | None,
+    now: datetime,
+) -> None:
+    attribution = clean_attribution(attribution_in, own_hosts=_own_hosts())
     new = _NewLead(
-        location_id=data.location_id,
-        phone=data.phone,
-        source=data.source,
+        location_id=location_id,
+        phone=phone,
+        source=source,
         channel=derive_channel(attribution),
-        fields={
-            "name": data.name,
-            "preferred_date": data.preferred_date,
-            "message": data.message,
-        },
+        fields={"name": name, "preferred_date": preferred_date, "message": message},
         attribution=attribution,
         author_id=None,
     )
     lead, _ = _find_or_create_lead(db, new, now=now, attach_to_booked=True)
-    parts = [p for p in (data.message, f"Email: {data.email}" if data.email else None) if p]
+    email_line = f"Email: {email}" if email else None
+    parts = [p for p in (message, email_line, extra_note) if p]
     if parts:
-        _add_activity(db, lead, "note", text="\n".join(parts)[:2000], now=now)
+        _add_activity(db, lead, "note", text="\n".join(parts)[:TEXT_MAX], now=now)
     db.commit()
+
+
+def create_enquiry_lead(db: Session, data: EnquiryIn, *, now: datetime | None = None) -> None:
+    """Homepage / contact page enquiry (R3.2, R3.3, R3.7)."""
+    if data.website:  # honeypot filled -> pretend success, store nothing
+        return
+    _location_or_422(db, data.location_id)
+    _store_enquiry(
+        db,
+        location_id=data.location_id,
+        phone=data.phone,
+        source=data.source,
+        name=data.name,
+        preferred_date=data.preferred_date,
+        message=data.message,
+        email=data.email,
+        attribution_in=data.attribution,
+        extra_note=None,
+        now=now or _utcnow(),
+    )
+
+
+def create_contact_form_lead(
+    db: Session, data: ContactCreate, *, now: datetime | None = None
+) -> None:
+    """Legacy ``POST /public/contact``: now a ``contact_form`` lead (R3.8).
+
+    Without a usable branch the lead goes to the first active branch with a
+    "Branch unknown" note so staff can move it.
+    """
+    location = db.get(Location, data.location_id) if data.location_id is not None else None
+    extra_note = None
+    if location is None or not location.is_active:
+        location = db.execute(
+            select(Location).where(Location.is_active.is_(True)).order_by(Location.id).limit(1)
+        ).scalar_one_or_none()
+        if location is None:
+            raise ValidationFailedError("No branch is accepting enquiries right now.")
+        extra_note = "Branch unknown (contact form)"
+    _store_enquiry(
+        db,
+        location_id=location.id,
+        phone=data.phone,
+        source="contact_form",
+        name=data.name,
+        preferred_date=None,
+        message=data.message,
+        email=data.email,
+        attribution_in=None,
+        extra_note=extra_note,
+        now=now or _utcnow(),
+    )
 
 
 def register_enquiry_code(

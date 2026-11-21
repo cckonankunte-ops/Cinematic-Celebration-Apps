@@ -112,20 +112,20 @@ screens. Optional sub-tasks are marked with `*`.
     unchanged status, events and payments, and the log has the error code only
   - _Requirements: 2.8–2.11, 8.1–8.7, 9.3, 9.4, 9.6, 16.1, 16.2, 19.4–19.8_
 
-- [ ] 5. Public API
-  - [ ] 5.1 `routers/public/leads.py`: `POST /leads` (10/min), `POST /enquiries`
+- [x] 5. Public API
+  - [x] 5.1 `routers/public/leads.py`: `POST /leads` (10/min), `POST /enquiries`
     (5/min, honeypot returns success and stores nothing), `POST /enquiry-codes`
     (10/min, 204); register in `main.py`
-  - [ ] 5.2 Update `POST /contact` to create a `contact_form` lead (email and
+  - [x] 5.2 Update `POST /contact` to create a `contact_form` lead (email and
     `location_id` optional, first active branch with note when missing); stop
     writing `contact_leads`
-  - [ ] 5.3 Add `whatsapp_phone` to public `LocationRead` and its mapper
-  - [ ] 5.4 Integration tests: Step 1 capture returns a token and a second call
+  - [x] 5.3 Add `whatsapp_phone` to public `LocationRead` and its mapper
+  - [x] 5.4 Integration tests: Step 1 capture returns a token and a second call
     updates the same lead; invalid phone 422 and no lead; client status/notes
     ignored; enquiries and contact create leads; honeypot stores nothing; 429 over
     the limits; enquiry-code register/re-register/invalid format; no lead data in
     any public response
-  - [ ] 5.5 Logging test: lead endpoint logs contain no phone or name
+  - [x] 5.5 Logging test: lead endpoint logs contain no phone or name
   - _Requirements: 2.1–2.3, 2.12–2.14, 3.2, 3.3, 3.7, 3.11, 12.6, 15.2, 15.3, 18.5–18.7,
     19.2, 19.3, 19.14, 19.16, 19.21_
 

@@ -17,6 +17,8 @@ class LocationRead(BaseModel):
     slug: str
     address: str | None
     phone: str | None
+    # Branch WhatsApp number (10 digits); the site falls back to ``phone``.
+    whatsapp_phone: str | None = None
     map_url: str | None = None
     # Working hours + online-booking policy (IST "HH:MM"). closes_at may be
     # earlier than opens_at, meaning close is the next day.

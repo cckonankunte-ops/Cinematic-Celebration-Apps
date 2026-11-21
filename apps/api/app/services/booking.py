@@ -36,7 +36,6 @@ from app.models.booking import Booking
 from app.models.booking_item import BookingItem
 from app.models.cake import Cake
 from app.models.combo_item import ComboItem
-from app.models.contact_lead import ContactLead
 from app.models.coupon import Coupon
 from app.models.coupon_redemption import CouponRedemption
 from app.models.location import Location
@@ -53,7 +52,6 @@ from app.schemas.booking import (
     BookingCreate,
     BookingUpdate,
     ComboSelectionIn,
-    ContactCreate,
     CustomerBookingResult,
     DecorSelectionIn,
     PriceBreakdownRead,
@@ -761,20 +759,6 @@ def get_booking_by_token(db: Session, public_token: str) -> Booking:
     if booking is None:
         raise NotFoundError("Booking not found.")
     return booking
-
-
-def create_contact_lead(db: Session, data: ContactCreate) -> ContactLead:
-    """Persist a public contact-form submission."""
-    lead = ContactLead(
-        name=data.name,
-        phone=data.phone,
-        email=data.email,
-        message=data.message,
-    )
-    db.add(lead)
-    db.commit()
-    db.refresh(lead)
-    return lead
 
 
 def _money_snapshot(booking: Booking) -> dict:

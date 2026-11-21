@@ -26,6 +26,7 @@ from app.routers.admin import sheets as admin_sheets
 from app.routers.admin import users as admin_users
 from app.routers.public import bookings as public_bookings
 from app.routers.public import contact as public_contact
+from app.routers.public import leads as public_leads
 from app.routers.public import locations as public_locations
 from app.routers.public import plans as public_plans
 
@@ -104,6 +105,7 @@ def create_app() -> FastAPI:
     app.include_router(public_plans.router)
     app.include_router(public_bookings.router)
     app.include_router(public_contact.router)
+    app.include_router(public_leads.router)
     app.include_router(admin_catalog.router)
     app.include_router(admin_users.router)
     app.include_router(admin_bookings.router)
