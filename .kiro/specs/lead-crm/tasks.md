@@ -87,27 +87,27 @@ screens. Optional sub-tasks are marked with `*`.
   - _Requirements: 1.5–1.9, 2.2, 2.3, 2.7, 2.13, 4.2, 4.3, 4.7, 4.8, 6.1–6.5, 7.3–7.7,
     17.8, 17.10, 18.5, 18.8–18.11, 19.9–19.11, 19.21_
 
-- [ ] 4. Booking hooks: lead follows its booking
-  - [ ] 4.1 `_lead_savepoint(db, code)` context manager (savepoint, rollback only
+- [x] 4. Booking hooks: lead follows its booking
+  - [x] 4.1 `_lead_savepoint(db, code)` context manager (savepoint, rollback only
     the savepoint, log `lead_hook_failed` with code only)
-  - [ ] 4.2 `link_public_booking`: link by token, else `_find_or_create_lead`
+  - [x] 4.2 `link_public_booking`: link by token, else `_find_or_create_lead`
     (source `website`), set `booked`, `booking_linked` activity; call it in
     `create_customer_booking` after the `created` event and before commit, inside
     the reference-retry loop; add optional `lead_token` to `BookingCreate`
-  - [ ] 4.3 `link_admin_booking`: add optional `lead_id` to `AdminBookingCreate`;
+  - [x] 4.3 `link_admin_booking`: add optional `lead_id` to `AdminBookingCreate`;
     validate (same branch, open, unlinked) at the top of `create_admin_booking`
     returning 422; link before commit; `won` when the booking is created accepted
-  - [ ] 4.4 `on_booking_status_changed`: accepted → `won`; rejected/expired/cancelled
+  - [x] 4.4 `on_booking_status_changed`: accepted → `won`; rejected/expired/cancelled
     → `follow_up` with `follow_up_at = now` and a system note; review (expired →
     pending) → `booked`; no-op when no linked lead; call it in `accept_booking`,
     `reject_booking`, `cancel_booking`, `review_booking`, and per booking inside
     `expire_pending_bookings`
-  - [ ] 4.5 Integration tests: booking with token links and sets `booked`; without
+  - [x] 4.5 Integration tests: booking with token links and sets `booked`; without
     token creates a linked `booked` lead; accept → `won`; reject/cancel/expire →
     `follow_up`; review → `booked`; admin create without lead creates no lead;
     convert links; invalid `lead_id` → 422 before the booking exists; a slot `409`
     links nothing
-  - [ ] 4.6 Failure-isolation test: monkeypatch the link/transition helper to raise;
+  - [x] 4.6 Failure-isolation test: monkeypatch the link/transition helper to raise;
     booking create, accept, reject, cancel, review and expiry still succeed with
     unchanged status, events and payments, and the log has the error code only
   - _Requirements: 2.8–2.11, 8.1–8.7, 9.3, 9.4, 9.6, 16.1, 16.2, 19.4–19.8_

@@ -60,6 +60,7 @@ from app.schemas.booking import (
     PublicPreviewRequest,
 )
 from app.services import coupon as coupon_service
+from app.services import leads as leads_service
 from app.services import payments as payments_service
 from app.services.events import write_booking_event
 from app.services.plan_pricing import resolve_duration_pricing
@@ -727,6 +728,9 @@ def create_customer_booking(db: Session, data: BookingCreate) -> CustomerBooking
                     "people": data.people,
                 },
             )
+            # Lead CRM: link this request to its lead (savepoint; never fails
+            # the booking). Re-runs on a reference-collision retry.
+            leads_service.link_public_booking(db, booking, data.lead_token)
             final_reference = booking_reference
             db.commit()
             break
@@ -798,6 +802,9 @@ def create_admin_booking(
     collisions regenerate and retry.
     """
     assert_location_access(actor, data.location_id)
+    if data.lead_id is not None:
+        # Booking created from a lead: refuse up front if the lead can't take it.
+        leads_service.validate_admin_lead(db, data.lead_id, data.location_id, actor)
     req = validate_booking_request(
         db,
         location_id=data.location_id,
@@ -978,6 +985,8 @@ def create_admin_booking(
                         "amount_paise": data.advance_amount_paise,
                     },
                 )
+            if data.lead_id is not None:
+                leads_service.link_admin_booking(db, booking, data.lead_id, actor)
             db.commit()
             db.refresh(booking)
             return booking
@@ -1474,6 +1483,7 @@ def accept_booking(
         old_value=old_snapshot,
         new_value={"status": "accepted"},
     )
+    leads_service.on_booking_status_changed(db, booking, "accepted")
     db.commit()
     db.refresh(booking)
     return booking
@@ -1492,6 +1502,7 @@ def reject_booking(db: Session, booking_id: int, *, actor: CurrentUser) -> Booki
         old_value=old_snapshot,
         new_value={"status": "rejected"},
     )
+    leads_service.on_booking_status_changed(db, booking, "rejected")
     db.commit()
     db.refresh(booking)
     return booking
@@ -1535,6 +1546,7 @@ def review_booking(db: Session, booking_id: int, *, actor: CurrentUser) -> Booki
         old_value={"status": "expired"},
         new_value={"status": "pending", "action": "reviewed"},
     )
+    leads_service.on_booking_status_changed(db, booking, "pending")
     db.commit()
     db.refresh(booking)
     return booking
@@ -1572,6 +1584,7 @@ def cancel_booking(
         old_value=old_snapshot,
         new_value={"status": "cancelled", "reason": cleaned_reason or None},
     )
+    leads_service.on_booking_status_changed(db, booking, "cancelled")
     db.commit()
     db.refresh(booking)
     return booking
@@ -1733,5 +1746,8 @@ def expire_pending_bookings(db: Session) -> int:
             old_value={"status": "pending"},
             new_value={"status": "expired"},
         )
+        # One savepoint per booking, so a failing lead update never blocks
+        # the batch.
+        leads_service.on_booking_status_changed(db, booking, "expired")
     db.commit()
     return len(bookings)

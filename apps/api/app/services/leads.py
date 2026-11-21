@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, fields
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -24,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.errors import NotFoundError, ValidationFailedError
 from app.core.logging import get_logger
+from app.core.phone import normalize_indian_mobile
 from app.core.security import CurrentUser, assert_location_access
 from app.models.booking import Booking
 from app.models.lead import (
@@ -781,3 +784,191 @@ def to_lead_read(
 def get_lead(db: Session, lead_id: int, actor: CurrentUser) -> LeadRead:
     lead = _load_lead(db, lead_id, actor)
     return to_lead_read(db, lead, actor, detail=True)
+
+
+# --- booking hooks (lead follows its booking, R2.9-R2.11, R8, R9.3) -----------
+#
+# Called from services/booking.py inside the booking's own transaction, right
+# before it commits. Each hook runs in a SAVEPOINT: if anything goes wrong only
+# the lead change is rolled back, an error code is logged, and the booking
+# operation commits exactly as it would without leads (R16.1).
+
+_OUTCOME_WORDS = {
+    "rejected": "was rejected",
+    "expired": "expired",
+    "cancelled": "was cancelled",
+}
+
+
+@contextmanager
+def _lead_savepoint(db: Session, code: str, booking_id: int | None) -> Iterator[None]:
+    savepoint = db.begin_nested()
+    try:
+        yield
+        savepoint.commit()
+    except Exception:  # noqa: BLE001 - lead work must never break a booking
+        savepoint.rollback()
+        log.error("lead_hook_failed", code=code, booking_id=booking_id)
+
+
+def _booking_enquiry_fields(booking: Booking) -> dict[str, Any]:
+    return {
+        "name": (booking.booking_name or "").strip()[:120] or None,
+        "preferred_date": booking.booking_date,
+        "plan_id": booking.plan_id,
+        "start_time": booking.start_time,
+        "duration_minutes": booking.duration_minutes,
+        "guests": (booking.people or 0) + (booking.kids or 0) or None,
+    }
+
+
+def _link(
+    db: Session,
+    lead: Lead,
+    booking: Booking,
+    *,
+    author_id: int | None,
+    now: datetime,
+) -> None:
+    for name, value in _booking_enquiry_fields(booking).items():
+        if value is not None:
+            setattr(lead, name, value)
+    lead.booking_id = booking.id
+    db.flush()
+    target = "won" if booking.status == "accepted" else "booked"
+    _transition(
+        db,
+        lead,
+        target,
+        now=now,
+        author_id=None,  # status follows the booking; not a manual contact
+        note=f"Booking {booking.booking_reference}",
+    )
+    _add_activity(
+        db,
+        lead,
+        "booking_linked",
+        text=f"Booking {booking.booking_reference} created",
+        data={"booking_reference": booking.booking_reference},
+        author_id=author_id,
+        now=now,
+    )
+
+
+def _apply_public_link(
+    db: Session, booking: Booking, lead_token: str | None, now: datetime
+) -> None:
+    phone = normalize_indian_mobile(booking.phone or "")
+    if phone is None:
+        return
+    lead = resolve_lead_token(db, lead_token, location_id=booking.location_id, now=now)
+    if lead is not None and lead.phone != phone:
+        lead = None
+    if lead is None:
+        new = _NewLead(
+            location_id=booking.location_id,
+            phone=phone,
+            source="website",
+            channel="direct",
+            fields=_booking_enquiry_fields(booking),
+            attribution=None,
+            author_id=None,
+        )
+        lead, _ = _find_or_create_lead(db, new, now=now, attach_to_booked=False)
+    _link(db, lead, booking, author_id=None, now=now)
+
+
+def link_public_booking(db: Session, booking: Booking, lead_token: str | None) -> None:
+    """Link a new customer booking to its lead (by token, else by phone). R2.9, R2.10."""
+    with _lead_savepoint(db, "link_public_booking", booking.id):
+        _apply_public_link(db, booking, lead_token, _utcnow())
+
+
+def validate_admin_lead(
+    db: Session, lead_id: int, location_id: int, actor: CurrentUser
+) -> None:
+    """Checked before an admin booking is created from a lead (422 on any problem)."""
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        raise ValidationFailedError("The lead does not exist.")
+    assert_location_access(actor, lead.location_id)
+    if lead.location_id != location_id:
+        raise ValidationFailedError("The lead belongs to another branch.")
+    if lead.status not in PREBOOKING_LEAD_STATUSES:
+        raise ValidationFailedError("This lead is already booked or closed.")
+
+
+def link_admin_booking(
+    db: Session, booking: Booking, lead_id: int, actor: CurrentUser
+) -> None:
+    """Link a booking created from a lead in the admin panel (R9.3)."""
+    with _lead_savepoint(db, "link_admin_booking", booking.id):
+        lead = db.execute(
+            select(Lead).where(Lead.id == lead_id).with_for_update()
+        ).scalar_one()
+        _link(db, lead, booking, author_id=actor.id, now=_utcnow())
+
+
+def _apply_status_change(db: Session, booking: Booking, new_status: str, now: datetime) -> None:
+    lead = db.execute(
+        select(Lead).where(Lead.booking_id == booking.id).with_for_update()
+    ).scalar_one_or_none()
+    if lead is None:
+        return
+    ref = booking.booking_reference
+    if new_status == "accepted":
+        _transition(db, lead, "won", now=now, note=f"Booking {ref} accepted")
+        return
+    if new_status == "pending":  # reinstated (expired -> pending)
+        if lead.status == "follow_up":
+            _transition(db, lead, "booked", now=now, note=f"Booking {ref} reinstated")
+        return
+    outcome = _OUTCOME_WORDS.get(new_status)
+    if outcome is None or lead.status not in ("booked", "won"):
+        return
+    other = db.execute(
+        select(Lead.id).where(
+            Lead.location_id == lead.location_id,
+            Lead.phone == lead.phone,
+            Lead.id != lead.id,
+            Lead.status.in_(PREBOOKING_LEAD_STATUSES),
+        )
+    ).scalar_one_or_none()
+    if other is not None:
+        # The customer already has another open enquiry; keep work on that one.
+        _transition(
+            db,
+            lead,
+            "lost",
+            now=now,
+            reason="other",
+            reason_text="Customer has another open enquiry",
+            note=f"Booking {ref} {outcome}",
+        )
+        other_lead = db.get(Lead, other)
+        assert other_lead is not None
+        _add_activity(
+            db,
+            other_lead,
+            "system",
+            text=f"Earlier booking {ref} {outcome}",
+            data={"booking_reference": ref},
+            now=now,
+        )
+        return
+    _transition(db, lead, "follow_up", now=now, note=f"Booking {ref} {outcome}")
+    lead.follow_up_at = now
+    _add_activity(
+        db,
+        lead,
+        "system",
+        text=f"Booking {ref} {outcome}. Follow up with the customer.",
+        data={"booking_reference": ref, "booking_status": new_status},
+        now=now,
+    )
+
+
+def on_booking_status_changed(db: Session, booking: Booking, new_status: str) -> None:
+    """Move the linked lead with its booking (R8.1-R8.7). No-op without a linked lead."""
+    with _lead_savepoint(db, "booking_status_changed", booking.id):
+        _apply_status_change(db, booking, new_status, _utcnow())

@@ -168,6 +168,8 @@ class BookingCreate(BaseModel):
     combos: list[ComboSelectionIn] = Field(default_factory=list)
     led_name: str | None = None
     coupon_code: str | None = None
+    # Lead CRM: token from wizard Step 1, links this request to its lead.
+    lead_token: str | None = Field(default=None, max_length=64)
 
     @field_validator("phone")
     @classmethod
@@ -242,6 +244,8 @@ class AdminBookingCreate(BookingCreate):
     # total); when None, no payment is recorded.
     advance_amount_paise: int | None = Field(default=None, gt=0)
     advance_method: Literal["cash", "upi", "card", "other"] | None = None
+    # Lead CRM: set when the booking is created from a lead (R9.3).
+    lead_id: int | None = None
 
 
 class BookingUpdate(BaseModel):
