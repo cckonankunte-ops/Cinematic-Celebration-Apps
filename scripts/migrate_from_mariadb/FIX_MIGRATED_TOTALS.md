@@ -5,64 +5,66 @@ The migration stored `bookings.total_paise = old amount`. In the old app,
 `amount` was only the base amount; the real total was
 `amount + foodamount + otheramount + cleaningcharge - discount`, which equals
 `advanceamount + amountdue` (what staff saw). Payments were migrated correctly,
-so migrated bookings with extras show a total that is too low and a negative
-(or wrong) amount due. Saving a booking in the admin panel recalculates it, but
-that re-prices with TODAY's catalog, so fix the data directly instead.
+so migrated bookings with extras show a total that is too low and a wrong amount
+due. Saving a booking in the admin panel recalculates it, but that re-prices with
+TODAY's catalog, so fix the data directly instead.
 
-A check on the old DB found only 4 rows (ids 5, 198, 210, 1076) where
-`amount + extras - discount` differs from `advanceamount + amountdue`. We use
-`advanceamount + amountdue` for all rows (the old app's own figure).
+Checks on the old data (2,833 bookings in the dump):
+- 2,431 bookings have `advanceamount + amountdue <> amount`. 2,427 are fully
+  explained by food/other/cleaning/discount (for example `otheramount = 1` was
+  used to round 1999 up to 2000). The other 4 (ids 5, 198, 210, 1076) are the
+  ones the old-DB check found.
+- 28 bookings have `advanceamount = 0` AND `amountdue = 0` while `amount > 0`
+  (27 accepted, 1 rejected). Their real total is unknown, so they are NOT
+  updated and are listed at the top of the generated file for manual review.
 
-Run `fix_advance_gap_4_bookings.sql` FIRST (it corrects paid on 4 bookings), so
-paid and total are both right afterwards.
+## The generated file
+`fix_migrated_totals.sql` (2,403 guarded UPDATEs) was produced from
+`Old_Application/cine_celebration_data.sql` by:
 
-## Step 1 - generate the UPDATE statements (old MariaDB, phpMyAdmin)
-```sql
-SELECT CONCAT('UPDATE bookings SET total_paise=', (advanceamount + amountdue) * 100,
-              ' WHERE id=', id, ' AND total_paise=', amount * 100, ';') AS stmt
-FROM booking
-WHERE (advanceamount + amountdue) <> amount;
-```
-Each statement only changes a booking whose total is STILL the migrated value
-(`total_paise = amount * 100`). Bookings you already re-saved in the admin panel
-have a different total, so they are skipped automatically. Ids that do not exist
-in the new DB update 0 rows.
-
-Copy the `stmt` column (phpMyAdmin: "Copy to clipboard" or Export as text).
-
-## Step 2 - save them in a file on the droplet
 ```bash
-mkdir -p ~/backups
-cat > ~/fix_totals.sql <<'EOF'
-BEGIN;
--- paste the generated UPDATE statements here
--- sanity check inside the transaction (migrated bookings now overpaid?):
-SELECT count(*) AS still_overpaid FROM bookings b
-JOIN (SELECT booking_id, SUM(amount_paise) paid FROM payments GROUP BY booking_id) p
-  ON p.booking_id = b.id
-WHERE p.paid > b.total_paise AND b.id IN (SELECT booking_id FROM payments WHERE note LIKE 'migrated%');
-COMMIT;
-EOF
+py New_Application/scripts/migrate_from_mariadb/gen_total_fix.py \
+   Old_Application/cine_celebration_data.sql \
+   New_Application/scripts/migrate_from_mariadb/fix_migrated_totals.sql
 ```
-Edit the file (`nano ~/fix_totals.sql`) and paste the statements between BEGIN and
-the SELECT.
 
-## Step 3 - back up, then apply
-```bash
-cd ~/Cinematic-Celebration-Apps/deploy
-docker compose --env-file ../.env exec -T postgres \
-  pg_dump -U cinematic cinematic > ~/backups/pre-total-fix-$(date +%F-%H%M).sql
-docker compose --env-file ../.env exec -T postgres \
-  psql -U cinematic -d cinematic -v ON_ERROR_STOP=1 < ~/fix_totals.sql
-```
-psql prints `UPDATE n` for each statement. `still_overpaid` should be 0 or a
-handful of rows that were genuinely overpaid in the old system.
+Each statement is `UPDATE bookings SET total_paise = <new> WHERE id = <id> AND
+total_paise = <old amount x 100>`. A booking is only changed if it still holds the
+migrated total, so bookings already re-saved in the admin panel are skipped, and
+ids missing from the new DB update 0 rows. The file runs in one transaction.
+
+The dump is dated 4 Oct 2026 (latest `createts` 2026-10-04 03:00). Old bookings
+created after that are not in it. Compare `SELECT COUNT(*), MAX(id) FROM booking`
+on the old DB with the dump (2,833 rows, max id 2833).
+
+## Run order (droplet, from `~/Cinematic-Celebration-Apps/deploy`)
+1. `git pull` (main containing these files).
+2. Back up:
+   ```bash
+   mkdir -p ~/backups
+   docker compose --env-file ../.env exec -T postgres \
+     pg_dump -U cinematic cinematic > ~/backups/pre-total-fix-$(date +%F-%H%M).sql
+   ```
+3. Paid fix for 4 bookings FIRST:
+   ```bash
+   docker compose --env-file ../.env exec -T postgres \
+     psql -U cinematic -d cinematic -v ON_ERROR_STOP=1 \
+     < ../scripts/migrate_from_mariadb/fix_advance_gap_4_bookings.sql
+   ```
+4. Totals fix:
+   ```bash
+   docker compose --env-file ../.env exec -T postgres \
+     psql -U cinematic -d cinematic -v ON_ERROR_STOP=1 \
+     < ../scripts/migrate_from_mariadb/fix_migrated_totals.sql
+   ```
+   psql prints `UPDATE 1` for each changed booking (`UPDATE 0` for a skipped
+   one) and then `still_overpaid`, which should be 0 or a few genuinely
+   overpaid bookings.
 
 ## Verify
 Open an old booking WITHOUT saving: amount due should match what the old app
-showed. Spot-check ids 1209, 1218, 1278 (also covered by the advance fix) and
-one booking with food/cleaning charges.
+showed. Spot-check ids 1209 (total 2000), 1076 (total 2499) and one booking with
+food/cleaning charges. Then re-run your March collected report.
 
 ## Rollback
-Restore the `pg_dump` from step 3, or re-run with totals set back to
-`amount * 100` (swap the two numbers in each statement).
+Restore the `pg_dump` from step 2.
