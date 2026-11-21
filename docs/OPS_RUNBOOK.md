@@ -140,6 +140,9 @@ Frontends (admin + web) auto-build on Cloudflare Pages on push to `main`.
 ```bash
 # expire pending bookings (also runs every minute via cron)
 cd ~/Cinematic-Celebration-Apps/deploy && docker compose --env-file ../.env exec -T api python -m app.jobs.expire_pending
+
+# auto-close stale leads (daily via cron; does nothing while LEAD_AUTO_CLOSE_DAYS=0)
+cd ~/Cinematic-Celebration-Apps/deploy && docker compose --env-file ../.env exec -T api python -m app.jobs.auto_close_leads
 ```
 
 ---
@@ -152,6 +155,81 @@ cd ~/Cinematic-Celebration-Apps/deploy && docker compose --env-file ../.env exec
 
 Prefer the admin panel + API for any change to users, money, or bookings. Use
 `psql` for read-only inspection only — never hand-edit those tables.
+
+---
+
+## 8. Lead CRM (lead-crm spec)
+
+### Public endpoints (deliberately unauthenticated, rate-limited per IP)
+
+These are the only public lead routes. They return just a token or a fixed
+message, never lead data.
+
+| Route | Limit | Used by |
+|---|---|---|
+| `POST /api/v1/public/leads` | 10/min | Booking wizard Step 1 (returns a lead token) |
+| `POST /api/v1/public/enquiries` | 5/min | Homepage quick enquiry, Contact page form |
+| `POST /api/v1/public/enquiry-codes` | 10/min | WhatsApp links (enquiry code + source, no personal data) |
+| `POST /api/v1/public/contact` | 5/min | Legacy contact form; now saved as a `contact_form` lead |
+
+Every `/api/v1/admin/leads/...` route needs a session (`admin` or `staff`);
+staff see only their branch. `/api/v1/admin/leads/dashboard` is admin-only.
+
+### Server settings (`.env`, not editable in the admin panel)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LEAD_RESPONSE_ALERT_MINUTES` | `10` | A new lead not contacted for this long is shown in red ("Not contacted · N min") and counted in the red nav badge |
+| `LEAD_AUTO_CLOSE_DAYS` | `0` | `0` = never auto-close. Otherwise the daily job closes `new`/`contacted`/`follow_up` leads with no activity for this many days (and no future follow-up) as Lost / No response |
+
+Change a value by editing `.env`, then `docker compose --env-file ../.env up -d api`.
+The cron job reads `LEAD_AUTO_CLOSE_DAYS` on every run.
+
+### Cron
+
+Add the auto-close line to the host crontab (`crontab -e`), next to the
+existing `expire_pending` line (`crontab -l` shows it). Copy that line's path
+and log folder; only the job name, schedule and log file change. 21:30 UTC is
+03:00 IST:
+
+```cron
+30 21 * * * cd ~/Cinematic-Celebration-Apps/deploy && docker compose --env-file ../.env exec -T api python -m app.jobs.auto_close_leads >> <same log folder as expire_pending>/leads.log 2>&1
+```
+
+(`deploy/cron/crontab` holds the same schedule with a placeholder path.) It is
+safe to install while `LEAD_AUTO_CLOSE_DAYS=0`: the job logs `closed=0` and exits.
+
+### Deploying lead-crm (migration `0024`)
+
+`0024_create_leads_crm` creates `leads`, `lead_activities`, `enquiry_codes`,
+adds `locations.whatsapp_phone`, and copies `contact_leads` rows into leads
+(`contact_leads` itself is left untouched).
+
+```bash
+cd ~/Cinematic-Celebration-Apps/deploy
+# 1. Backup first
+docker compose --env-file ../.env exec -T postgres pg_dump -U cinematic -d cinematic -Fc > ~/pre_0024_$(date +%F).dump
+# 2. Code + image, then migrate
+cd .. && git pull && cd deploy
+docker compose --env-file ../.env up -d --build api
+docker compose --env-file ../.env exec -T api alembic upgrade head
+# 3. Check
+curl -fsS https://api.cinematiccelebration.in/healthz
+docker compose --env-file ../.env exec -T postgres psql -U cinematic -d cinematic \
+  -c "SELECT source, count(*) FROM leads GROUP BY 1;"
+```
+
+Roll back (if needed): `docker compose --env-file ../.env exec -T api alembic downgrade -1`
+drops the lead tables and the new column; or restore the dump.
+
+### After deploy
+
+- In **Catalog → Location settings**, set a **Branch WhatsApp number** for every
+  branch. It is used for the website WhatsApp links and the "Send today's
+  follow-ups" message. Without it the branch phone is used, and a landline
+  written as `080 …` looks like a mobile number, so WhatsApp would open a chat
+  that cannot be delivered.
+- Logs contain only codes, ids and counts for leads (no phone, name or notes).
 
 ---
 

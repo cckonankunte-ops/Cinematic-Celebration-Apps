@@ -264,6 +264,6 @@ screens. Optional sub-tasks are marked with `*`.
 - [ ] 13. Final checks
   - [ ] 13.1 Run `ruff`, `pytest`, admin `npm run lint && npm run test && npm run
     build`, web `npm run test && npm run build`; fix failures
-  - [ ] 13.2 Update `docs/` with the public allowlist entries for the three new
+  - [x] 13.2 Update `docs/` with the public allowlist entries for the three new
     public endpoints, and the cron line for the auto-close job
   - _Requirements: 12.6, 14.1, 19.1, 19.24_
