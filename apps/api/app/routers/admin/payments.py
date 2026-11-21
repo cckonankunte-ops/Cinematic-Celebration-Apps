@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.errors import NotFoundError
-from app.core.security import CurrentUser, check_origin, require_role
+from app.core.security import STAFF_ACCESS, CurrentUser, check_origin, require_role
 from app.models.payment import Payment
 from app.schemas.payment import PaymentCreate, PaymentRead, PaymentVoidRequest
 from app.services import booking as booking_service
@@ -18,7 +18,7 @@ from app.services import payments as payments_service
 router = APIRouter(
     prefix="/api/v1/admin",
     tags=["admin-payments"],
-    dependencies=[Depends(require_role("admin", "staff")), Depends(check_origin)],
+    dependencies=[Depends(require_role(*STAFF_ACCESS)), Depends(check_origin)],
 )
 
 
@@ -26,7 +26,7 @@ router = APIRouter(
 def list_payments(
     booking_id: int,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> list[PaymentRead]:
     # Enforce location access by loading the booking through the service.
     booking_service.get_booking(db, booking_id, actor)
@@ -44,7 +44,7 @@ def record_payment(
     booking_id: int,
     body: PaymentCreate,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> PaymentRead:
     payment = payments_service.record_payment(db, booking_id, body, actor)
     return payments_service.to_payment_reads([payment])[0]

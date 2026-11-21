@@ -365,7 +365,7 @@ Lead_Token: `secrets.token_urlsafe(24)` (192 bits, A3). Stored as `sha256(token)
 
 ### Admin API (`routers/admin/leads.py`)
 
-Router: `APIRouter(prefix="/api/v1/admin", tags=["admin-leads"], dependencies=[Depends(require_role("admin","staff")), Depends(check_origin)])` (R12.1). Branch access enforced in the service with `assert_location_access` (R12.2/12.3).
+Router: `APIRouter(prefix="/api/v1/admin", tags=["admin-leads"], dependencies=[Depends(require_role(*LEAD_ACCESS)), Depends(check_origin)])` where `LEAD_ACCESS = ("admin", "receptionist")` (R12.1; staff get 403). Staff routers use `STAFF_ACCESS = ("admin", "staff", "receptionist")`, so a receptionist has every staff permission (R12.8). Branch access enforced in the service with `assert_location_access` (R12.2/12.3).
 
 | Method + path | Purpose | Notes |
 |---|---|---|

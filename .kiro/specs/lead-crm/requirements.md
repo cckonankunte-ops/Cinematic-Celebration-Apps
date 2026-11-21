@@ -257,17 +257,24 @@ When the payment gateway is added later, a website booking goes straight to `acc
 
 ### Requirement 12: Assignment and access control
 
-**User Story:** As an owner, I want staff to see only their branch's leads, so that data stays with the right team.
+**User Story:** As an owner, I want only receptionists (and admins) to work leads, each on their own branch, so that customer numbers and sales notes stay with the people trained to use them.
+
+> Changed after design approval (owner request): a new **Receptionist** role
+> (`receptionist`) has everything Staff can do plus the lead CRM. Staff no longer
+> see or change leads. Receptionist_User below means a user with that role.
 
 #### Acceptance Criteria
 
-1. THE API SHALL protect every endpoint under `/api/v1/admin/leads` with `require_role("admin", "staff")` applied at router level.
-2. THE API SHALL enforce branch access in the service layer: Staff_Users read and change only Leads of their branch; Admin_Users access all branches.
-3. IF a Staff_User requests a Lead of another branch, THEN THE API SHALL return `403`.
-4. THE API SHALL allow assigning a Lead only to an active user who may access the Lead's branch, and SHALL return `422` otherwise.
-5. THE lead dashboard endpoints SHALL be admin-only and SHALL return `403` to Staff_Users.
+1. THE API SHALL protect every endpoint under `/api/v1/admin/leads` with `require_role("admin", "receptionist")` applied at router level, and SHALL return `403` to Staff_Users.
+2. THE API SHALL enforce branch access in the service layer: Receptionist_Users read and change only Leads of their branch; Admin_Users access all branches.
+3. IF a Receptionist_User requests a Lead of another branch, THEN THE API SHALL return `403`.
+4. THE API SHALL allow assigning a Lead only to an active Admin_User or an active Receptionist_User of the Lead's branch, and SHALL return `422` otherwise.
+5. THE lead dashboard endpoints SHALL be admin-only and SHALL return `403` to Receptionist_Users and Staff_Users.
 6. THE public lead endpoints SHALL be listed explicitly in the public route allowlist.
 7. IF a request without a valid session reaches an admin lead endpoint, THEN THE API SHALL return `401`.
+8. THE API SHALL give Receptionist_Users every permission Staff_Users have (bookings, payments, time and cake sheets, late-booking switch) with the same branch limit and the staff booking-time rules.
+9. IF a Staff_User sends an admin booking with `lead_id`, THEN THE API SHALL return `403` and create no booking. Booking status changes made by Staff_Users SHALL still update the linked Lead (Requirement 8).
+10. THE Admin_Panel SHALL show the Leads navigation, badge and pages only to Admin_Users and Receptionist_Users, and SHALL let an Admin_User create a Receptionist_User and change an existing user's role and branch. A role change applies from that user's next login.
 
 ### Requirement 13: Lead dashboard
 

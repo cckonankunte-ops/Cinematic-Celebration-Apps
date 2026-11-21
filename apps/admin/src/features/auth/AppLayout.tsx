@@ -8,6 +8,7 @@ import { NavLink, Outlet, useLocation as useRouterLocation, useNavigate } from '
 
 import { LeadNavBadge } from '@/features/leads/LeadNavBadge';
 import { useLocation } from '@/features/location/useLocation';
+import { canUseLeads } from './roles';
 import { useAuth } from './useAuth';
 
 function navClass({ isActive }: { isActive: boolean }): string {
@@ -56,16 +57,18 @@ export function AppLayout(): JSX.Element {
           <NavLink to="/bookings" className={navClass}>
             Bookings
           </NavLink>
-          <NavLink
-            to="/leads"
-            // Active for the list, quick-add and a lead, but not the dashboard.
-            className={({ isActive }) =>
-              navClass({ isActive: isActive && !pathname.startsWith('/leads/dashboard') })
-            }
-          >
-            Leads
-            <LeadNavBadge />
-          </NavLink>
+          {canUseLeads(user?.role) && (
+            <NavLink
+              to="/leads"
+              // Active for the list, quick-add and a lead, but not the dashboard.
+              className={({ isActive }) =>
+                navClass({ isActive: isActive && !pathname.startsWith('/leads/dashboard') })
+              }
+            >
+              Leads
+              <LeadNavBadge />
+            </NavLink>
+          )}
           <NavLink to="/timesheet" className={navClass}>
             Timesheet
           </NavLink>

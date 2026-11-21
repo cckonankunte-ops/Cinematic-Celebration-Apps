@@ -38,7 +38,7 @@ PHONE = "9876543210"
 
 
 def _actor(user) -> CurrentUser:
-    role = "admin" if user.location_id is None else "staff"
+    role = "admin" if user.location_id is None else "receptionist"
     return CurrentUser(id=user.id, username=user.username, role=role, location_id=user.location_id)
 
 
@@ -282,7 +282,7 @@ def test_close_rules_and_manual_booked_won_rejected(db: Session) -> None:
 
 def test_call_marks_contacted_and_first_contacted(db: Session) -> None:
     loc = make_location(db)
-    staff = make_user(db, "staff", location_id=loc.id)
+    staff = make_user(db, "receptionist", location_id=loc.id)
     db.commit()
     actor = _actor(staff)
     lead_id = svc.create_manual_lead(db, LeadCreate(location_id=loc.id, phone=PHONE), actor).lead.id
@@ -316,10 +316,10 @@ def test_follow_up_moves_new_to_follow_up(db: Session) -> None:
 def test_assignment_and_branch_access(db: Session) -> None:
     a = make_location(db)
     b = make_location(db, name="Ecity")
-    staff_a = make_user(db, "staff", location_id=a.id)
-    staff_b = make_user(db, "staff", location_id=b.id)
+    staff_a = make_user(db, "receptionist", location_id=a.id)
+    staff_b = make_user(db, "receptionist", location_id=b.id)
     admin = make_user(db, "admin")
-    inactive = make_user(db, "staff", location_id=a.id, is_active=False)
+    inactive = make_user(db, "receptionist", location_id=a.id, is_active=False)
     db.commit()
     lead_id = svc.create_manual_lead(
         db, LeadCreate(location_id=a.id, phone=PHONE), _actor(staff_a)
@@ -430,7 +430,7 @@ def test_detail_read_has_timeline_and_same_phone_leads(db: Session) -> None:
     a = make_location(db)
     b = make_location(db, name="Ecity")
     admin = make_user(db, "admin")
-    staff_a = make_user(db, "staff", location_id=a.id)
+    staff_a = make_user(db, "receptionist", location_id=a.id)
     db.commit()
     lead_a = svc.create_manual_lead(
         db, LeadCreate(location_id=a.id, phone=PHONE, note="first"), _actor(admin)

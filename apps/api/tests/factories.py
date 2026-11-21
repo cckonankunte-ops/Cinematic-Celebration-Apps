@@ -25,9 +25,9 @@ FAR_FUTURE = date(2099, 12, 31)
 
 
 def ensure_roles(db: Session) -> dict[str, int]:
-    """Create 'admin' and 'staff' roles if missing; return name -> id."""
+    """Create the 'admin', 'staff' and 'receptionist' roles if missing; return name -> id."""
     out: dict[str, int] = {}
-    for name in ("admin", "staff"):
+    for name in ("admin", "staff", "receptionist"):
         role = db.execute(select(UserRole).where(UserRole.name == name)).scalar_one_or_none()
         if role is None:
             role = UserRole(name=name)

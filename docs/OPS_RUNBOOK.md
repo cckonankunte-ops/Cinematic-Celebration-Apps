@@ -172,8 +172,21 @@ message, never lead data.
 | `POST /api/v1/public/enquiry-codes` | 10/min | WhatsApp links (enquiry code + source, no personal data) |
 | `POST /api/v1/public/contact` | 5/min | Legacy contact form; now saved as a `contact_form` lead |
 
-Every `/api/v1/admin/leads/...` route needs a session (`admin` or `staff`);
-staff see only their branch. `/api/v1/admin/leads/dashboard` is admin-only.
+Every `/api/v1/admin/leads/...` route needs a session with the `admin` or
+`receptionist` role; receptionists see only their branch, and `staff` get 403.
+`/api/v1/admin/leads/dashboard` is admin-only.
+
+### Roles
+
+| Role | Can do |
+|---|---|
+| `admin` | Everything, all branches |
+| `staff` | Bookings, payments, time and cake sheets for their branch (no leads) |
+| `receptionist` | Everything staff can do, plus Leads for their branch |
+
+Migration `0025_add_receptionist_role` adds the role. Give it to people in
+**Staff** (admin panel): pick the role and branch on their row. The change
+applies when that person next logs in.
 
 ### Server settings (`.env`, not editable in the admin panel)
 
@@ -203,7 +216,8 @@ safe to install while `LEAD_AUTO_CLOSE_DAYS=0`: the job logs `closed=0` and exit
 
 `0024_create_leads_crm` creates `leads`, `lead_activities`, `enquiry_codes`,
 adds `locations.whatsapp_phone`, and copies `contact_leads` rows into leads
-(`contact_leads` itself is left untouched).
+(`contact_leads` itself is left untouched). `0025_add_receptionist_role` adds
+the receptionist role. `alembic upgrade head` applies both.
 
 ```bash
 cd ~/Cinematic-Celebration-Apps/deploy
@@ -224,6 +238,8 @@ drops the lead tables and the new column; or restore the dump.
 
 ### After deploy
 
+- In **Staff**, change the people who handle enquiries to **Receptionist**.
+  Until then only admins can open Leads.
 - In **Catalog → Location settings**, set a **Branch WhatsApp number** for every
   branch. It is used for the website WhatsApp links and the "Send today's
   follow-ups" message. Without it the branch phone is used, and a landline

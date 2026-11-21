@@ -1,7 +1,8 @@
 """Admin lead CRM endpoints (lead-crm R4, R5, R7, R10-R13, R18.8).
 
-Router-level ``require_role("admin", "staff")`` plus the Origin check, so every
-lead endpoint needs a session (R12.1, R12.7). Branch access is enforced in
+Router-level ``require_role(*LEAD_ACCESS)`` plus the Origin check: only admins
+and receptionists may use the lead CRM (staff get 403), and every lead endpoint
+needs a session (R12.1, R12.7). Branch access is enforced in
 ``services/leads.py`` (R12.2, R12.3). The dashboard is admin-only on top of
 that (R12.5). Thin router: parse, call one service function, return a schema.
 """
@@ -12,7 +13,7 @@ from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, check_origin, require_role
+from app.core.security import LEAD_ACCESS, CurrentUser, check_origin, require_role
 from app.schemas.lead import (
     ActivityCreate,
     AssignableUser,
@@ -32,10 +33,10 @@ from app.services.slots import today_ist
 router = APIRouter(
     prefix="/api/v1/admin",
     tags=["admin-leads"],
-    dependencies=[Depends(require_role("admin", "staff")), Depends(check_origin)],
+    dependencies=[Depends(require_role(*LEAD_ACCESS)), Depends(check_origin)],
 )
 
-_any_user = require_role("admin", "staff")
+_any_user = require_role(*LEAD_ACCESS)
 
 DASHBOARD_DEFAULT_DAYS = 30
 

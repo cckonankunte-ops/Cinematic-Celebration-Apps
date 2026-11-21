@@ -102,10 +102,10 @@ def test_create_needs_a_session(client: TestClient) -> None:
     assert resp.status_code == 401
 
 
-def test_staff_sees_only_own_branch(client: TestClient, db: Session) -> None:
+def test_receptionist_sees_only_own_branch(client: TestClient, db: Session) -> None:
     own = make_location(db, name="Hulimavu")
     other = make_location(db, name="Ecity")
-    staff = make_user(db, "staff", location_id=own.id)
+    staff = make_user(db, "receptionist", location_id=own.id)
     mine = _lead(db, own.id)
     theirs = _lead(db, other.id)
     db.commit()
@@ -135,9 +135,9 @@ def test_staff_sees_only_own_branch(client: TestClient, db: Session) -> None:
     assert create.status_code == 403
 
 
-def test_staff_cannot_open_dashboard_admin_can(client: TestClient, db: Session) -> None:
+def test_receptionist_cannot_open_dashboard_admin_can(client: TestClient, db: Session) -> None:
     loc = make_location(db)
-    staff = make_user(db, "staff", location_id=loc.id)
+    staff = make_user(db, "receptionist", location_id=loc.id)
     admin = make_user(db, "admin")
     db.commit()
 
@@ -164,10 +164,10 @@ def test_admin_reads_any_branch(client: TestClient, db: Session) -> None:
 def test_assignment_rules(client: TestClient, db: Session) -> None:
     own = make_location(db, name="Hulimavu")
     other = make_location(db, name="Ecity")
-    staff = make_user(db, "staff", location_id=own.id)
-    colleague = make_user(db, "staff", location_id=own.id)
-    outsider = make_user(db, "staff", location_id=other.id)
-    inactive = make_user(db, "staff", location_id=own.id, is_active=False)
+    staff = make_user(db, "receptionist", location_id=own.id)
+    colleague = make_user(db, "receptionist", location_id=own.id)
+    outsider = make_user(db, "receptionist", location_id=other.id)
+    inactive = make_user(db, "receptionist", location_id=own.id, is_active=False)
     admin = make_user(db, "admin")
     lead = _lead(db, own.id)
     db.commit()
@@ -193,7 +193,7 @@ def test_assignment_rules(client: TestClient, db: Session) -> None:
 
 def test_create_detail_activity_flow_over_http(client: TestClient, db: Session) -> None:
     loc = make_location(db)
-    staff = make_user(db, "staff", location_id=loc.id)
+    staff = make_user(db, "receptionist", location_id=loc.id)
     db.commit()
     _login(client, staff.username)
 

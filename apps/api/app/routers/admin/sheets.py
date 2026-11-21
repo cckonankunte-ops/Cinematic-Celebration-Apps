@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, check_origin, require_role
+from app.core.security import STAFF_ACCESS, CurrentUser, check_origin, require_role
 from app.schemas.sheets import CakesheetRow, TimesheetRow
 from app.services import excel as excel_service
 from app.services import sheets as sheets_service
@@ -21,7 +21,7 @@ from app.services import sheets as sheets_service
 router = APIRouter(
     prefix="/api/v1/admin",
     tags=["admin-sheets"],
-    dependencies=[Depends(require_role("admin", "staff")), Depends(check_origin)],
+    dependencies=[Depends(require_role(*STAFF_ACCESS)), Depends(check_origin)],
 )
 
 _XLSX_MEDIA_TYPE = (
@@ -43,7 +43,7 @@ def get_timesheet(
     location_id: int,
     on_date: _date = Query(alias="date"),
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> list[TimesheetRow]:
     return sheets_service.timesheet(db, actor, location_id=location_id, on_date=on_date)
 
@@ -53,7 +53,7 @@ def get_cakesheet(
     location_id: int,
     on_date: _date = Query(alias="date"),
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> list[CakesheetRow]:
     return sheets_service.cakesheet(db, actor, location_id=location_id, on_date=on_date)
 
@@ -63,7 +63,7 @@ def export_timesheet(
     location_id: int,
     on_date: _date = Query(alias="date"),
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> StreamingResponse:
     rows = sheets_service.timesheet(db, actor, location_id=location_id, on_date=on_date)
     buffer = excel_service.build_timesheet_xlsx(rows)
@@ -75,7 +75,7 @@ def export_cakesheet(
     location_id: int,
     on_date: _date = Query(alias="date"),
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> StreamingResponse:
     rows = sheets_service.cakesheet(db, actor, location_id=location_id, on_date=on_date)
     buffer = excel_service.build_cakesheet_xlsx(rows)

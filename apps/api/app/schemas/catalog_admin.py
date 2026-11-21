@@ -320,14 +320,15 @@ class ComboAdminRead(BaseModel):
 class UserCreate(BaseModel):
     username: str = Field(min_length=1, max_length=250)
     password: str = Field(min_length=8, max_length=1024)
-    role: Literal["admin", "staff"]
+    # receptionist = staff + the lead CRM (see app.core.security roles).
+    role: Literal["admin", "staff", "receptionist"]
     location_id: int | None = None
 
 
 class UserUpdate(BaseModel):
     username: str | None = Field(default=None, min_length=1, max_length=250)
     password: str | None = Field(default=None, min_length=8, max_length=1024)
-    role: Literal["admin", "staff"] | None = None
+    role: Literal["admin", "staff", "receptionist"] | None = None
     location_id: int | None = None
     is_active: bool | None = None
 

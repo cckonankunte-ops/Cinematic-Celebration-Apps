@@ -1,7 +1,8 @@
 /**
  * Route guard. Redirects to `/login` when there is no authenticated user
  * (after the initial session restore completes). An optional `requiredRole`
- * gates admin-only areas; non-matching users are redirected to `/bookings`.
+ * (one role or a list) gates restricted areas; other users are redirected to
+ * `/bookings`.
  */
 
 import type { ReactNode } from 'react';
@@ -12,7 +13,7 @@ import type { UserRole } from './types';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  requiredRole?: UserRole;
+  requiredRole?: UserRole | UserRole[];
 }
 
 export function ProtectedRoute({
@@ -33,7 +34,10 @@ export function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole !== undefined && user.role !== requiredRole) {
+  const allowed =
+    requiredRole === undefined ||
+    (Array.isArray(requiredRole) ? requiredRole.includes(user.role) : user.role === requiredRole);
+  if (!allowed) {
     return <Navigate to="/bookings" replace />;
   }
 

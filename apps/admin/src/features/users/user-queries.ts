@@ -14,7 +14,9 @@ import {
 
 import { api } from '@/api/client';
 
-export type UserRole = 'admin' | 'staff';
+import type { UserRole } from '@/features/auth/types';
+
+export type { UserRole };
 
 export interface UserAdminRead {
   id: number;

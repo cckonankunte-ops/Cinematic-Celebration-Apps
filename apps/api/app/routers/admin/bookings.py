@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import (
+    STAFF_ACCESS,
     CurrentUser,
     assert_location_access,
     check_origin,
@@ -73,7 +74,7 @@ class LateBookingToggleRequest(BaseModel):
 router = APIRouter(
     prefix="/api/v1/admin",
     tags=["admin-bookings"],
-    dependencies=[Depends(require_role("admin", "staff")), Depends(check_origin)],
+    dependencies=[Depends(require_role(*STAFF_ACCESS)), Depends(check_origin)],
 )
 
 
@@ -198,7 +199,7 @@ def list_bookings(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> BookingListPage:
     items, total = booking_service.list_bookings(
         db,
@@ -225,7 +226,7 @@ def list_bookings(
 def preview_booking(
     body: AdminPreviewRequest,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> PriceBreakdownRead:
     return booking_service.preview_booking(db, body, actor=actor, is_customer=False)
 
@@ -236,7 +237,7 @@ def preview_booking(
 def list_booking_special_decor(
     location_id: int,
     booking_date: date | None = Query(default=None, alias="date"),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
     db: Session = Depends(get_db),
 ) -> list[SpecialDecorRead]:
     """Decor choices for the admin booking form, including 'admin_only' items."""
@@ -253,7 +254,7 @@ def list_booking_special_decor(
 def open_availability(
     body: AdminOpenAvailabilityRequest,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> list[OpenAvailabilityRead]:
     """OPEN-mode candidate start times for the admin booking form.
 
@@ -275,7 +276,7 @@ def open_availability(
 def slot_availability(
     body: AdminSlotAvailabilityRequest,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> list[SlotAvailabilityRead]:
     """SLOT-mode availability for the admin booking form.
 
@@ -296,7 +297,7 @@ def slot_availability(
 def create_booking(
     body: AdminBookingCreate,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> BookingRead:
     booking = booking_service.create_admin_booking(db, body, actor)
     return to_booking_read(db, booking)
@@ -306,7 +307,7 @@ def create_booking(
 def get_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> BookingRead:
     booking = booking_service.get_booking(db, booking_id, actor)
     return to_booking_read(db, booking)
@@ -317,7 +318,7 @@ def update_booking(
     booking_id: int,
     body: BookingUpdate,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> BookingRead:
     booking = booking_service.update_booking(db, booking_id, body, actor)
     return to_booking_read(db, booking)
@@ -329,7 +330,7 @@ def accept_booking(
     background_tasks: BackgroundTasks,
     body: AcceptBookingRequest | None = None,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> BookingRead:
     override = body.override_advance if body is not None else False
     booking = booking_service.accept_booking(
@@ -344,7 +345,7 @@ def accept_booking(
 def reject_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> BookingRead:
     booking = booking_service.reject_booking(db, booking_id, actor=actor)
     return to_booking_read(db, booking)
@@ -393,9 +394,9 @@ def set_late_booking(
     location_id: int,
     body: LateBookingToggleRequest,
     db: Session = Depends(get_db),
-    # Staff-accessible (admin + staff); the service enforces the 21:15 IST gate
-    # for staff and the per-location access check.
-    actor: CurrentUser = Depends(require_role("admin", "staff")),
+    # Staff-accessible (admin, staff, receptionist); the service enforces the
+    # 21:15 IST gate for non-admins and the per-location access check.
+    actor: CurrentUser = Depends(require_role(*STAFF_ACCESS)),
 ) -> LocationAdminRead:
     """Enable/disable late online booking for a branch (staff after 9:15 PM IST)."""
     location = catalog_admin_service.set_location_late_booking(

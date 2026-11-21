@@ -13,7 +13,7 @@ import {
 import type { LeadDashboard } from './types';
 
 let dashboard: LeadDashboard | undefined;
-let role: 'admin' | 'staff' = 'admin';
+let role: 'admin' | 'staff' | 'receptionist' = 'admin';
 
 vi.mock('./lead-queries', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./lead-queries')>();
@@ -143,11 +143,20 @@ describe('Lead dashboard nav', () => {
     );
   });
 
-  it('is hidden from staff', () => {
-    role = 'staff';
+  it('shows receptionists Leads but not the dashboard', () => {
+    role = 'receptionist';
     renderLayout();
     expect(screen.queryByRole('link', { name: 'Lead dashboard' })).toBeNull();
     expect(screen.getByRole('link', { name: /^Leads/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Bookings' })).toBeInTheDocument();
+  });
+
+  it('hides Leads and the dashboard from staff', () => {
+    role = 'staff';
+    renderLayout();
+    expect(screen.queryByRole('link', { name: 'Lead dashboard' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /^Leads/ })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Bookings' })).toBeInTheDocument();
   });
 });
 

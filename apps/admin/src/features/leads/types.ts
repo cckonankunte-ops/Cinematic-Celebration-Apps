@@ -147,7 +147,7 @@ export interface FollowUpDigest {
 export interface AssignableUser {
   id: number;
   username: string;
-  role: 'admin' | 'staff';
+  role: 'admin' | 'receptionist';
 }
 
 export interface LeadCreateBody {

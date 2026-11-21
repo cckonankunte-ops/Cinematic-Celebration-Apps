@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/features/auth/AppLayout';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
+import { LEAD_ROLES } from '@/features/auth/roles';
 import { LocationGate } from '@/features/location/LocationGate';
 import { BookingListPage } from '@/features/bookings/BookingListPage';
 import { BookingFormPage } from '@/features/bookings/BookingFormPage';
@@ -44,10 +45,25 @@ export const router = createBrowserRouter([
       { path: 'bookings', element: <BookingListPage /> },
       { path: 'bookings/new', element: <BookingFormPage /> },
       { path: 'bookings/:bookingId/edit', element: <BookingFormPage /> },
-      // Leads: all signed-in users (staff are limited to their branch by the API).
-      // Static paths come before `:leadId`; the dashboard is admin-only (R12.5).
-      { path: 'leads', element: <LeadsPage /> },
-      { path: 'leads/new', element: <QuickAddLeadPage /> },
+      // Leads: admins and receptionists only (staff are sent to /bookings; the
+      // API also refuses them). Static paths come before `:leadId`; the
+      // dashboard is admin-only (R12.5).
+      {
+        path: 'leads',
+        element: (
+          <ProtectedRoute requiredRole={LEAD_ROLES}>
+            <LeadsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'leads/new',
+        element: (
+          <ProtectedRoute requiredRole={LEAD_ROLES}>
+            <QuickAddLeadPage />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'leads/dashboard',
         element: (
@@ -56,7 +72,14 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      { path: 'leads/:leadId', element: <LeadDetailPage /> },
+      {
+        path: 'leads/:leadId',
+        element: (
+          <ProtectedRoute requiredRole={LEAD_ROLES}>
+            <LeadDetailPage />
+          </ProtectedRoute>
+        ),
+      },
       { path: 'timesheet', element: <TimesheetPage /> },
       { path: 'cakesheet', element: <CakesheetPage /> },
       {

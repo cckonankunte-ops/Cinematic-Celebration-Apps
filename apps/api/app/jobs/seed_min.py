@@ -1,7 +1,7 @@
 """CLI job: seed the MINIMAL data needed to operate and smoke-test a fresh deploy.
 
 Creates (idempotently):
-- the 'admin' and 'staff' user roles (if missing),
+- the 'admin', 'staff' and 'receptionist' user roles (if missing),
 - one admin user (username + password from env: SEED_ADMIN_USERNAME /
   SEED_ADMIN_PASSWORD), password stored as an argon2 hash,
 - the 3 Bangalore branch locations,
@@ -37,7 +37,7 @@ from app.models.user_role import UserRole
 
 log = get_logger("app.jobs.seed_min")
 
-_ROLES = ("admin", "staff")
+_ROLES = ("admin", "staff", "receptionist")
 _LOCATIONS = (
     ("Hulimavu", "hulimavu"),
     ("Konankunte", "konankunte"),
@@ -47,7 +47,7 @@ _FAR_PAST = date(2020, 1, 1)
 
 
 def _ensure_roles(db: Session) -> dict[str, int]:
-    """Create the admin/staff roles if missing; return name -> id."""
+    """Create the admin/staff/receptionist roles if missing; return name -> id."""
     ids: dict[str, int] = {}
     for name in _ROLES:
         role = db.execute(

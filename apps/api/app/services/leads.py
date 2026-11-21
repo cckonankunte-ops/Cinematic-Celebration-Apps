@@ -35,7 +35,13 @@ from app.core.errors import (
 )
 from app.core.logging import get_logger
 from app.core.phone import normalize_indian_mobile
-from app.core.security import CurrentUser, assert_location_access
+from app.core.security import (
+    LEAD_ACCESS,
+    ROLE_ADMIN,
+    ROLE_RECEPTIONIST,
+    CurrentUser,
+    assert_location_access,
+)
 from app.models.booking import Booking
 from app.models.lead import (
     CLOSED_LEAD_STATUSES,
@@ -729,14 +735,15 @@ def add_activity(
 
 
 def _assignable(db: Session, user_id: int, location_id: int) -> bool:
+    """Only people who can open leads: admins, and receptionists of the lead's branch."""
     row = db.execute(
         select(User.is_active, User.location_id, UserRole.name)
         .join(UserRole, User.role_id == UserRole.id)
         .where(User.id == user_id)
     ).one_or_none()
-    if row is None or not row.is_active:
+    if row is None or not row.is_active or row.name not in LEAD_ACCESS:
         return False
-    return row.name == "admin" or row.location_id == location_id
+    return row.name == ROLE_ADMIN or row.location_id == location_id
 
 
 def update_lead(
@@ -1191,14 +1198,20 @@ def follow_up_digest(
 def assignable_users(
     db: Session, actor: CurrentUser, location_id: int
 ) -> list[AssignableUser]:
-    """Active users who may work this branch: its staff plus all admins (R12.4)."""
+    """Active users who can work this branch's leads: its receptionists plus all admins.
+
+    Staff cannot open leads, so they are not offered for assignment (R12.4).
+    """
     assert_location_access(actor, location_id)
     rows = db.execute(
         select(User.id, User.username, UserRole.name)
         .join(UserRole, User.role_id == UserRole.id)
         .where(
             User.is_active.is_(True),
-            or_(UserRole.name == "admin", User.location_id == location_id),
+            or_(
+                UserRole.name == ROLE_ADMIN,
+                and_(UserRole.name == ROLE_RECEPTIONIST, User.location_id == location_id),
+            ),
         )
         .order_by(User.username)
     ).all()
@@ -1437,7 +1450,13 @@ def link_public_booking(db: Session, booking: Booking, lead_token: str | None) -
 def validate_admin_lead(
     db: Session, lead_id: int, location_id: int, actor: CurrentUser
 ) -> None:
-    """Checked before an admin booking is created from a lead (422 on any problem)."""
+    """Checked before an admin booking is created from a lead (422 on any problem).
+
+    Only roles that can open leads may book from one: staff get 403, and the
+    booking is not created.
+    """
+    if actor.role not in LEAD_ACCESS:
+        raise ForbiddenError()
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise ValidationFailedError("The lead does not exist.")

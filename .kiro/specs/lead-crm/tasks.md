@@ -267,3 +267,20 @@ screens. Optional sub-tasks are marked with `*`.
   - [x] 13.2 Update `docs/` with the public allowlist entries for the three new
     public endpoints, and the cron line for the auto-close job
   - _Requirements: 12.6, 14.1, 19.1, 19.24_
+
+- [x] 14. Receptionist role (owner request, after design approval; R12 updated)
+  - [x] 14.1 API: role groups in `core/security.py` (`STAFF_ACCESS`, `LEAD_ACCESS`);
+    staff routers use `STAFF_ACCESS`, the leads router `LEAD_ACCESS`; receptionists
+    book under staff time rules (`actor_kind_from_role`); assignable users = admins +
+    the branch's receptionists; `validate_admin_lead` refuses non-lead roles (403);
+    `UserCreate`/`UserUpdate` accept `receptionist`; `seed_min` creates the role
+  - [x] 14.2 Migration `0025_add_receptionist_role` (data-only, idempotent insert)
+  - [x] 14.3 Admin: `UserRole` adds `receptionist`; `roles.ts` (`LEAD_ROLES`,
+    `canUseLeads`); `ProtectedRoute` accepts a role list; Leads routes and nav for
+    admin + receptionist only; Staff page creates receptionists and changes an
+    existing user's role and branch
+  - [x] 14.4 Tests: staff 403 on every lead endpoint and on booking with `lead_id`;
+    receptionist uses leads, bookings and time sheet but not admin areas or the
+    dashboard; branch limit; assignment rules; admin creates a receptionist who logs
+    in with that role; admin nav, route guard and helper tests
+  - _Requirements: 12.1–12.10_
