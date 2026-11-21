@@ -165,20 +165,20 @@ screens. Optional sub-tasks are marked with `*`.
   - [x]* 7.4 Hypothesis idempotence property (property 8)
   - _Requirements: 14.1–14.8, 16.3, 19.13_
 
-- [ ] 8. Customer site: landing attribution and enquiry codes
-  - [ ] 8.1 `lib/landing.ts` (Landing_Store `cc.landing.v1`: capture on every page,
+- [x] 8. Customer site: landing attribution and enquiry codes
+  - [x] 8.1 `lib/landing.ts` (Landing_Store `cc.landing.v1`: capture on every page,
     campaign params replace, plain visits keep, 30-day expiry, no query strings, no
     PII, storage errors swallowed) and a bundled `<script>` in `Base.astro` that
     runs it on every page
-  - [ ] 8.2 `lib/enquiry-code.ts` (6-char unambiguous code, reused for 30 days) and
+  - [x] 8.2 `lib/enquiry-code.ts` (6-char unambiguous code, reused for 30 days) and
     `lib/whatsapp.ts` (`buildWhatsappLink` using `whatsapp_phone ?? phone`,
     message with "Enquiry code: <code>", `registerEnquiryCode` via keepalive fetch)
-  - [ ] 8.3 Convert the floating WhatsApp script in `Base.astro` from `is:inline`
+  - [x] 8.3 Convert the floating WhatsApp script in `Base.astro` from `is:inline`
     to a bundled script using the helpers; update `LocationList.tsx` WhatsApp links;
     WhatsApp opens even if registration fails
-  - [ ] 8.4 Add `whatsapp_phone` to the web `Location` type; add
+  - [x] 8.4 Add `whatsapp_phone` to the web `Location` type; add
     `normaliseIndianMobile` to `lib/phone.ts`
-  - [ ] 8.5 Vitest: `landing.test.ts` (homepage UTM then `/book` keeps it; plain
+  - [x] 8.5 Vitest: `landing.test.ts` (homepage UTM then `/book` keeps it; plain
     revisit keeps; new campaign replaces; 30-day expiry; no query strings;
     storage unavailable); `enquiry-code.test.ts` and `whatsapp.test.ts` (code in
     message, reuse, opens on failure, no phone/name in the body)

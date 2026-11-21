@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidIndianMobile, telHref } from './phone';
+import { isValidIndianMobile, normaliseIndianMobile, telHref } from './phone';
 
 describe('isValidIndianMobile', () => {
   it('accepts a bare 10-digit mobile', () => {
@@ -56,5 +56,26 @@ describe('telHref', () => {
 
   it('returns null for a number that is not a 10-digit mobile', () => {
     expect(telHref('12345')).toBeNull();
+  });
+});
+
+describe('normaliseIndianMobile (mirrors the server rule)', () => {
+  it.each([
+    ['9876543210', '9876543210'],
+    ['+91 98765 43210', '9876543210'],
+    ['098765 43210', '9876543210'],
+    ['91-98765-43210', '9876543210'],
+    ['  9876543210 ', '9876543210'],
+  ])('normalises %s', (raw, expected) => {
+    expect(normaliseIndianMobile(raw)).toBe(expected);
+  });
+
+  it.each(['12345', '1234567890', '', 'abcd'])('rejects %s', (raw) => {
+    expect(normaliseIndianMobile(raw)).toBeNull();
+  });
+
+  it('handles null and undefined', () => {
+    expect(normaliseIndianMobile(null)).toBeNull();
+    expect(normaliseIndianMobile(undefined)).toBeNull();
   });
 });

@@ -28,7 +28,8 @@ export class ApiError extends Error {
   }
 }
 
-function buildUrl(path: string): string {
+/** Absolute API URL for a path (exported for keepalive calls outside `api`). */
+export function buildUrl(path: string): string {
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
   }
@@ -111,6 +112,8 @@ export interface Location {
   slug: string;
   address: string | null;
   phone: string | null;
+  /** Branch WhatsApp number (10 digits); WhatsApp links fall back to `phone`. */
+  whatsapp_phone?: string | null;
   /** Google Maps share link for the branch (shown on Locations/Contact). */
   map_url?: string | null;
   /** 'slot' (pick a configured slot) | 'open' (pick start + duration). */

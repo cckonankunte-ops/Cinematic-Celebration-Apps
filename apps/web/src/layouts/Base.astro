@@ -206,67 +206,86 @@ const image = ogImage ?? new URL('/og-default.png', Astro.site).toString();
          styled to match the WhatsApp FAB and stacked just above it. -->
     <FloatingCall client:idle />
 
-    <script is:inline define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE_URL }}>
-      (function () {
-        const toggle = document.getElementById('wa-toggle');
-        const panel = document.getElementById('wa-panel');
-        const list = document.getElementById('wa-branches');
-        if (!toggle || !panel || !list) return;
+    <!-- Bundled (not inline) so it can share the lead-crm helpers. Runs on every
+         page: records landing attribution (R17), then wires the floating
+         WhatsApp panel with the branch WhatsApp number and an enquiry code (R18).
+         Registration is fire-and-forget, so WhatsApp always opens. -->
+    <script>
+      import { publicApi, type Location } from '../lib/api';
+      import { getOrCreateEnquiryCode } from '../lib/enquiry-code';
+      import { captureLanding } from '../lib/landing';
+      import { buildWhatsappLink, registerEnquiryCode } from '../lib/whatsapp';
+
+      try {
+        captureLanding(window.location.href, document.referrer, new Date());
+      } catch {
+        // Attribution is best-effort; never break the page.
+      }
+
+      const toggle = document.getElementById('wa-toggle');
+      const panel = document.getElementById('wa-panel');
+      const list = document.getElementById('wa-branches');
+      const float = document.getElementById('wa-float');
+
+      function message(text: string, className: string): HTMLLIElement {
+        const li = document.createElement('li');
+        li.className = `px-4 py-3 text-sm ${className}`;
+        li.textContent = text;
+        return li;
+      }
+
+      function branchItem(loc: Location, href: string, code: string): HTMLLIElement {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.className =
+          'flex items-center justify-between px-4 py-3 text-sm text-gray-800 hover:bg-gray-50';
+        a.href = href;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.addEventListener('click', () => registerEnquiryCode(code, loc.id));
+        const name = document.createElement('span');
+        name.textContent = loc.name;
+        const arrow = document.createElement('span');
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.className = 'text-[#25D366]';
+        arrow.textContent = '›';
+        a.append(name, arrow);
+        li.append(a);
+        return li;
+      }
+
+      async function load(target: HTMLElement): Promise<void> {
+        try {
+          const code = getOrCreateEnquiryCode();
+          const locations = await publicApi.listLocations();
+          const items = locations.flatMap((loc) => {
+            const href = buildWhatsappLink(loc, code);
+            return href ? [branchItem(loc, href, code)] : [];
+          });
+          target.replaceChildren(
+            ...(items.length ? items : [message('No branches available.', 'text-gray-500')]),
+          );
+        } catch {
+          target.replaceChildren(message('Could not load branches.', 'text-red-600'));
+        }
+      }
+
+      if (toggle && panel && list && float) {
         let loaded = false;
-
-        function waDigits(phone) {
-          const d = String(phone || '').replace(/\D/g, '');
-          if (d.length === 10) return '91' + d;        // bare 10-digit -> +91
-          return d.replace(/^0+/, '');                 // strip leading zeros
-        }
-
-        async function load() {
-          try {
-            const res = await fetch(apiBase + '/api/v1/public/locations');
-            const locs = await res.json();
-            const withPhone = locs.filter((l) => l.phone);
-            if (withPhone.length === 0) {
-              list.innerHTML =
-                '<li class="px-4 py-3 text-sm text-gray-500">No branches available.</li>';
-              return;
-            }
-            list.innerHTML = withPhone
-              .map(function (l) {
-                const wa = waDigits(l.phone);
-                // Prefilled, editable opener so staff get a branch + intent
-                // instead of a blank "hi"; customers can still edit before send.
-                const msg = encodeURIComponent(
-                  'Hi Cinematic Celebration (' + l.name + ')! ' +
-                  "I'd like to know more about booking a celebration. \uD83C\uDFAC"
-                );
-                return (
-                  '<li><a class="flex items-center justify-between px-4 py-3 text-sm text-gray-800 hover:bg-gray-50" ' +
-                  'href="https://wa.me/' + wa + '?text=' + msg + '" target="_blank" rel="noopener">' +
-                  '<span>' + l.name + '</span>' +
-                  '<span aria-hidden="true" class="text-[#25D366]">›</span></a></li>'
-                );
-              })
-              .join('');
-          } catch (e) {
-            list.innerHTML =
-              '<li class="px-4 py-3 text-sm text-red-600">Could not load branches.</li>';
-          }
-        }
-
-        toggle.addEventListener('click', function () {
+        toggle.addEventListener('click', () => {
           const hidden = panel.classList.toggle('hidden');
           if (!hidden && !loaded) {
             loaded = true;
-            load();
+            void load(list);
           }
         });
         // Close when clicking outside.
-        document.addEventListener('click', function (e) {
-          if (!document.getElementById('wa-float').contains(e.target)) {
+        document.addEventListener('click', (e) => {
+          if (!float.contains(e.target as Node)) {
             panel.classList.add('hidden');
           }
         });
-      })();
+      }
     </script>
 
     <!-- Scroll-reveal: add `.is-visible` to `.reveal` elements as they enter the
