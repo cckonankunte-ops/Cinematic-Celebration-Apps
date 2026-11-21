@@ -99,12 +99,28 @@ def test_step1_capture_creates_lead_and_token_updates_same_lead(db: Session) -> 
     assert lead.channel == "meta_ads"  # attribution from creation is kept (R17.10)
 
 
-def test_token_with_different_phone_starts_a_new_lead(db: Session) -> None:
+def test_token_with_different_phone_corrects_the_same_lead(db: Session) -> None:
+    """A changed phone on Step 1 is a typo fix: same lead, same token, new number."""
     loc = make_location(db)
     db.commit()
     token = svc.capture_website_lead(db, WebsiteLeadIn(location_id=loc.id, phone=PHONE))
-    other = svc.capture_website_lead(
+    again = svc.capture_website_lead(
         db, WebsiteLeadIn(lead_token=token, location_id=loc.id, phone="9123456780")
+    )
+    assert again == token
+    assert _count(db) == 1
+    lead = db.execute(select(Lead)).scalar_one()
+    assert (lead.phone, lead.status) == ("9123456780", "new")
+    assert svc.PHONE_CORRECTED_TEXT in [a.text for a in _activities(db, lead.id)]
+
+
+def test_token_from_another_branch_starts_a_new_lead(db: Session) -> None:
+    loc = make_location(db)
+    other_branch = make_location(db, name="Ecity")
+    db.commit()
+    token = svc.capture_website_lead(db, WebsiteLeadIn(location_id=loc.id, phone=PHONE))
+    other = svc.capture_website_lead(
+        db, WebsiteLeadIn(lead_token=token, location_id=other_branch.id, phone=PHONE)
     )
     assert other != token
     assert _count(db) == 2
