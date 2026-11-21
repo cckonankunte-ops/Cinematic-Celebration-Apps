@@ -266,3 +266,24 @@ ledger, so those filters need to run on the grouped query (HAVING), not on
 stored columns. Skipped OR groups and free-form group-by on purpose: too much
 UI and risk for tens of bookings a day. Fixed breakdowns (by plan, by day) may
 answer most performance questions faster.
+
+## Lead capture: "offer for a number" (deferred)
+
+**Idea.** On the homepage quick enquiry, offer a small discount ("Get ₹200 off —
+enter your number to unlock"). Submitting creates a Lead (source
+`homepage_form`) and reveals or WhatsApps a coupon code. Reuses the existing
+location-scoped coupons (server-authoritative; the client never computes the
+discount). Needs decisions on: which coupon, one-per-phone limit, abuse
+controls, and whether the code is shown on screen or sent via WhatsApp.
+
+**Status:** deferred (recorded with the lead-crm spec). Explore later.
+
+## Lead capture: exit-intent popup / timed enquiry bar (deferred)
+
+**Idea.** Desktop: a popup when the visitor moves to leave the page. Mobile
+(~95% of traffic): a gentle bottom bar after ~30 seconds ("Planning a
+celebration? Leave your number, we'll call you"), dismissible and shown at most
+once per visit. Must not cover the booking wizard's action bar.
+
+**Status:** deferred. Decide later whether it is needed at all, based on lead
+volume after lead-crm goes live.

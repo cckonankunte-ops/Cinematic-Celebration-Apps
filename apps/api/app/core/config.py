@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,6 +55,13 @@ class Settings(BaseSettings):
     # Minutes reserved after a booking's usable time for cleaning/preparation.
     # Applied when checking slot availability/overlap; invisible to customers.
     CLEANING_BUFFER_MINUTES: int = 30
+
+    # --- Lead CRM (server-level only; not editable in the admin panel) ---
+    # Leads with no activity for this many days are closed as "No response" by
+    # the nightly auto-close job. 0 = never auto-close (the default).
+    LEAD_AUTO_CLOSE_DAYS: int = Field(default=0, ge=0, le=365)
+    # New leads not contacted within this many minutes are highlighted in red.
+    LEAD_RESPONSE_ALERT_MINUTES: int = Field(default=10, ge=1, le=1440)
 
     # --- Manual payment (Phase 1) ---
     MANUAL_UPI_VPA: str = "cinematic@upi"

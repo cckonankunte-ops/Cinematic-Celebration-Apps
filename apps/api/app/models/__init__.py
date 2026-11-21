@@ -13,6 +13,7 @@ from app.models.combo_item import ComboItem
 from app.models.contact_lead import ContactLead
 from app.models.coupon import Coupon
 from app.models.coupon_redemption import CouponRedemption
+from app.models.lead import EnquiryCode, Lead, LeadActivity
 from app.models.location import Location
 from app.models.location_disallowed_time import LocationDisallowedTime
 from app.models.occasion import Occasion
@@ -34,6 +35,9 @@ __all__ = [
     "ContactLead",
     "Coupon",
     "CouponRedemption",
+    "EnquiryCode",
+    "Lead",
+    "LeadActivity",
     "Location",
     "LocationDisallowedTime",
     "Occasion",

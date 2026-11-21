@@ -21,6 +21,9 @@ class Location(Base, TimestampMixin):
     phone: Mapped[str | None] = mapped_column(String, nullable=True)
     # Google Maps share link shown to customers (e.g. in the WhatsApp message).
     map_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Optional branch WhatsApp number (10 digits). Used for WhatsApp links and
+    # the "send today's follow-ups" message; falls back to ``phone`` when unset.
+    whatsapp_phone: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # --- Working hours & online-booking policy (IST wall-clock) ---
     # The bookable window. closes_at may be < opens_at, meaning close is the
