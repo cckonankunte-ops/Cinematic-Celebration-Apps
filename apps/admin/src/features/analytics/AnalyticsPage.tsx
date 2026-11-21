@@ -60,7 +60,7 @@ function chipClass(isOn: boolean): string {
 
 export function AnalyticsPage(): JSX.Element {
   const { user } = useAuth();
-  const { selectedLocationId } = useLocation();
+  const { locations, selectedLocationId, canSwitch, selectLocation } = useLocation();
   const [tab, setTab] = useState<Tab>('slot');
   const [dateFrom, setDateFrom] = useState<string>(todayIsoInIST());
   const [dateTo, setDateTo] = useState<string>(todayIsoInIST());
@@ -134,6 +134,24 @@ export function AnalyticsPage(): JSX.Element {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
+        {/* Same state as the header switcher: changing it reloads the report
+            for the chosen branch. */}
+        <label className="text-sm">
+          <span className="mr-2 text-gray-600">Branch</span>
+          <select
+            aria-label="Branch"
+            value={selectedLocationId ?? ''}
+            disabled={!canSwitch}
+            onChange={(e) => selectLocation(Number(e.target.value))}
+            className="rounded border border-gray-300 px-2 py-1 text-sm"
+          >
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="text-sm">
           <span className="mr-2 text-gray-600">From</span>
           <input
