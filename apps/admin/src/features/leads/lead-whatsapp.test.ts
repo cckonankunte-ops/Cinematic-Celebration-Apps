@@ -54,7 +54,7 @@ describe('branchWhatsappNumber', () => {
   });
 
   it('is null without a usable mobile', () => {
-    expect(branchWhatsappNumber({ name: 'X', phone: '080 4123 4567', whatsapp_phone: null })).toBeNull();
+    expect(branchWhatsappNumber({ name: 'X', phone: '4123 4567', whatsapp_phone: null })).toBeNull();
     expect(branchWhatsappNumber(null)).toBeNull();
   });
 });
@@ -103,10 +103,10 @@ describe('buildFollowUpDigest (property 9 cases)', () => {
 describe('digestState', () => {
   it.each([
     [{ name: 'X', phone: null, whatsapp_phone: null }, [item(1)], 'no_number'],
-    [{ name: 'X', phone: '080 4123 4567', whatsapp_phone: null }, [item(1)], 'no_number'],
+    [{ name: 'X', phone: '4123 4567', whatsapp_phone: null }, [item(1)], 'no_number'],
     [BRANCH, [], 'nothing_due'],
     [BRANCH, [item(1)], 'ready'],
-  ] as const)('%o with %i items → %s', (branch, items, kind) => {
+  ] as const)('case %#: %s', (branch, items, kind) => {
     expect(digestState(branch, [...items]).kind).toBe(kind);
   });
 
