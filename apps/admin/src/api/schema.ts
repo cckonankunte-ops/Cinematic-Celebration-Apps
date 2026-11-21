@@ -4057,7 +4057,7 @@ export interface components {
              * Role
              * @enum {string}
              */
-            role: "admin" | "staff";
+            role: "admin" | "staff" | "receptionist";
             /** Username */
             username: string;
         };
@@ -4070,7 +4070,7 @@ export interface components {
             /** Password */
             password?: string | null;
             /** Role */
-            role?: ("admin" | "staff") | null;
+            role?: ("admin" | "staff" | "receptionist") | null;
             /** Username */
             username?: string | null;
         };
