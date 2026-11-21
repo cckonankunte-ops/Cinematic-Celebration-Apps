@@ -111,7 +111,11 @@ def test_token_with_different_phone_corrects_the_same_lead(db: Session) -> None:
     assert _count(db) == 1
     lead = db.execute(select(Lead)).scalar_one()
     assert (lead.phone, lead.status) == ("9123456780", "new")
-    assert svc.PHONE_CORRECTED_TEXT in [a.text for a in _activities(db, lead.id)]
+    note = next(
+        a for a in _activities(db, lead.id) if (a.text or "").startswith(svc.PHONE_CORRECTED_TEXT)
+    )
+    assert note.text == f"{svc.PHONE_CORRECTED_TEXT} from +91 {PHONE}"
+    assert note.data == {"source": "website", "old_phone": PHONE}
 
 
 def test_token_from_another_branch_starts_a_new_lead(db: Session) -> None:

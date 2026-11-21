@@ -391,6 +391,9 @@ def _correct_phone(db: Session, lead: Lead, phone: str, *, now: datetime) -> tup
     """
     if lead.phone == phone:
         return lead, True
+    # Kept on the timeline (staff-only, never logged) so staff can see what changed.
+    old_phone = lead.phone
+    corrected_from = f"{PHONE_CORRECTED_TEXT} from +91 {old_phone}"
     other = _select_open_lead(db, lead.location_id, phone, PREBOOKING_LEAD_STATUSES)
     if other is None:
         try:
@@ -406,7 +409,12 @@ def _correct_phone(db: Session, lead: Lead, phone: str, *, now: datetime) -> tup
                 ) from None
         else:
             _add_activity(
-                db, lead, "system", text=PHONE_CORRECTED_TEXT, data={"source": "website"}, now=now
+                db,
+                lead,
+                "system",
+                text=corrected_from,
+                data={"source": "website", "old_phone": old_phone},
+                now=now,
             )
             return lead, True
     _transition(
@@ -416,15 +424,16 @@ def _correct_phone(db: Session, lead: Lead, phone: str, *, now: datetime) -> tup
         now=now,
         reason="other",
         reason_text=PHONE_CORRECTED_TEXT,
-        note="Continued on the lead for the corrected number",
+        note=f"Continued on lead #{other.id} for the corrected number",
     )
     lead.lead_token_hash = None
     _add_activity(
         db,
         other,
         "system",
-        text=f"Repeat enquiry via {_SOURCE_LABELS['website']}",
-        data={"source": "website"},
+        text=f"Repeat enquiry via {_SOURCE_LABELS['website']} ({corrected_from[0].lower()}"
+        f"{corrected_from[1:]}, lead #{lead.id})",
+        data={"source": "website", "old_phone": old_phone, "replaced_lead_id": lead.id},
         now=now,
     )
     return other, False

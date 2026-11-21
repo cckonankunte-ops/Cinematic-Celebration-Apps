@@ -115,7 +115,7 @@ def test_step1_phone_change_corrects_the_same_lead(client: TestClient, db: Sessi
             select(LeadActivity).where(LeadActivity.lead_id == leads[0].id)
         ).scalars()
     ]
-    assert leads_service.PHONE_CORRECTED_TEXT in texts
+    assert f"{leads_service.PHONE_CORRECTED_TEXT} from +91 9487578375" in texts
 
 
 def test_step1_phone_change_to_number_with_open_lead_continues_there(
@@ -142,6 +142,21 @@ def test_step1_phone_change_to_number_with_open_lead_continues_there(
     assert (wrong.status, wrong.close_reason) == ("lost", "other")
     assert wrong.close_reason_text == leads_service.PHONE_CORRECTED_TEXT
     assert wrong.lead_token_hash is None
+    right = by_phone["9487576275"]
+    right_texts = [
+        a.text or ""
+        for a in db.execute(
+            select(LeadActivity).where(LeadActivity.lead_id == right.id)
+        ).scalars()
+    ]
+    assert any("from +91 9487578375" in t and f"lead #{wrong.id}" in t for t in right_texts)
+    wrong_texts = [
+        a.text or ""
+        for a in db.execute(
+            select(LeadActivity).where(LeadActivity.lead_id == wrong.id)
+        ).scalars()
+    ]
+    assert f"Continued on lead #{right.id} for the corrected number" in wrong_texts
 
     # The new token keeps working on the right lead; the old one no longer does.
     third = _post(
