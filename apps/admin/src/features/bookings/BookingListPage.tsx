@@ -4,7 +4,7 @@
  * The table rows embed the same card for actions to avoid duplicate action UI.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { formatDate, todayIsoInIST } from '@/lib/dates';
@@ -22,6 +22,7 @@ import {
   type BookingFilters,
   type BookingSearchField,
 } from './booking-queries';
+import { loadListFilters, saveListFilters } from './list-filter-state';
 import { LateBookingToggle } from './LateBookingToggle';
 import type { BookingListItem, BookingStatus } from './types';
 
@@ -104,13 +105,29 @@ export function BookingListPage(): JSX.Element {
   const { selectedLocationId } = useLocation();
   // Default view: today's bookings (From = today, others empty).
   const today = todayIsoInIST();
-  const [q, setQ] = useState('');
-  const [searchIn, setSearchIn] = useState<BookingSearchField>('any');
-  const [status, setStatus] = useState<'' | BookingStatus>('');
-  const [dateFrom, setDateFrom] = useState(today);
-  const [dateTo, setDateTo] = useState('');
-  const [limit, setLimit] = useState(50);
-  const [offset, setOffset] = useState(0);
+  // Restore the filters from this tab's last visit (e.g. after saving an edit).
+  const [initial] = useState(() =>
+    loadListFilters({
+      q: '',
+      searchIn: 'any',
+      status: '',
+      dateFrom: today,
+      dateTo: '',
+      limit: 50,
+      offset: 0,
+    }),
+  );
+  const [q, setQ] = useState(initial.q);
+  const [searchIn, setSearchIn] = useState<BookingSearchField>(initial.searchIn);
+  const [status, setStatus] = useState<'' | BookingStatus>(initial.status);
+  const [dateFrom, setDateFrom] = useState(initial.dateFrom);
+  const [dateTo, setDateTo] = useState(initial.dateTo);
+  const [limit, setLimit] = useState(initial.limit);
+  const [offset, setOffset] = useState(initial.offset);
+
+  useEffect(() => {
+    saveListFilters({ q, searchIn, status, dateFrom, dateTo, limit, offset });
+  }, [q, searchIn, status, dateFrom, dateTo, limit, offset]);
 
   // Reset all filters back to the default (today's bookings).
   const resetFilters = (): void => {
