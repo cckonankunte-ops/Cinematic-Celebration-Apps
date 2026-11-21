@@ -261,3 +261,82 @@ class LeadCreateResult(BaseModel):
     created: bool
     warning: str | None = None
     code_used_by_lead_id: int | None = None
+
+
+# --- admin list / counts / follow-ups / users (R5, R10, R11, R12.4) ----------
+
+
+class LeadListPage(BaseModel):
+    items: list[LeadRead]
+    total: int
+    limit: int
+    offset: int
+
+
+class LeadCounts(BaseModel):
+    """Header badge (R5.9, R10.1): shown as two pills in the Admin_Panel."""
+
+    uncontacted: int
+    overdue: int
+    due_today: int
+
+
+class FollowUpItem(BaseModel):
+    id: int
+    name: str | None
+    phone: str
+    status: str
+    follow_up_at: datetime
+    is_overdue: bool
+    last_note: str | None  # truncated to 60 characters (R11.2)
+
+
+class FollowUpDigest(BaseModel):
+    items: list[FollowUpItem]
+
+
+class AssignableUser(BaseModel):
+    id: int
+    username: str
+    role: str
+
+
+# --- dashboard (R13) ------------------------------------------------------------
+
+
+class DashboardDayRow(BaseModel):
+    day: date
+    key: str  # a source or a channel
+    count: int
+
+
+class DashboardGroupRow(BaseModel):
+    key: str
+    total: int
+    won: int
+
+
+class DashboardReasonRow(BaseModel):
+    reason: str
+    count: int
+
+
+class LeadDashboard(BaseModel):
+    """Aggregates only; the UI computes percentages from the integer counts."""
+
+    location_id: int | None
+    date_from: date
+    date_to: date
+    total: int
+    won: int
+    per_day_by_source: list[DashboardDayRow]
+    per_day_by_channel: list[DashboardDayRow]
+    by_source: list[DashboardGroupRow]
+    by_channel: list[DashboardGroupRow]
+    contacted: int
+    avg_first_response_minutes: int | None
+    median_first_response_minutes: int | None
+    close_reasons: list[DashboardReasonRow]
+    campaigns: list[DashboardGroupRow]
+    whatsapp_total: int
+    whatsapp_with_code: int

@@ -13,6 +13,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.phone import normalize_indian_mobile
+
 
 def _validate_half_hour(value: time) -> time:
     """Start times must be on the hour or half-hour with zero seconds."""
@@ -130,6 +132,18 @@ class LocationHoursUpdate(BaseModel):
     last_online_booking_start: time | None = None
     allow_late_booking: bool | None = None
     booking_mode: Literal["slot", "open"] | None = None
+    # Branch WhatsApp number (lead-crm R11.6). Optional; send null (or "") to clear.
+    whatsapp_phone: str | None = None
+
+    @field_validator("whatsapp_phone", mode="before")
+    @classmethod
+    def _check_whatsapp_phone(cls, value: object) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        normalised = normalize_indian_mobile(str(value))
+        if normalised is None:
+            raise ValueError("whatsapp_phone must be a valid Indian mobile number")
+        return normalised
 
 
 class LocationAdminRead(BaseModel):
@@ -142,6 +156,7 @@ class LocationAdminRead(BaseModel):
     allow_late_booking: bool
     booking_mode: str
     is_active: bool
+    whatsapp_phone: str | None = None
 
 
 # --- Plan pricing (per-duration base price + advance, R11) ---

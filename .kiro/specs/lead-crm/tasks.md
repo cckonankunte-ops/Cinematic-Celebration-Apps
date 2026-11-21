@@ -130,23 +130,23 @@ screens. Optional sub-tasks are marked with `*`.
     19.2, 19.3, 19.14, 19.16, 19.21_
 
 - [ ] 6. Admin API
-  - [ ] 6.1 `routers/admin/leads.py` with router-level
+  - [x] 6.1 `routers/admin/leads.py` with router-level
     `require_role("admin","staff")` + `check_origin`: list (filters incl. channel,
     search ≥ 3 chars, section ordering, pagination), counts (uncontacted, overdue,
     due today), follow-ups digest data, create, detail (timeline, same-phone leads
     limited to accessible branches), update, add activity, link enquiry code,
     assignable users; dashboard with route-level `require_role("admin")`; register
     in `main.py`; branch access via `assert_location_access` in the service
-  - [ ] 6.2 Dashboard aggregates: per day by source/channel, totals and won per
+  - [x] 6.2 Dashboard aggregates: per day by source/channel, totals and won per
     source/channel, average and median first response, close reasons, campaigns,
     WhatsApp code share
-  - [ ] 6.3 Add optional `whatsapp_phone` to `LocationHoursUpdate`,
+  - [x] 6.3 Add optional `whatsapp_phone` to `LocationHoursUpdate`,
     `LocationAdminRead` and `to_location_admin_read` (validated Indian mobile,
     `null` clears)
-  - [ ] 6.4 Access-control tests: 401 without session; staff 403 on another branch's
+  - [x] 6.4 Access-control tests: 401 without session; staff 403 on another branch's
     lead, 200 on own; staff 403 on dashboard; admin 200; assignment to a user
     without branch access 422
-  - [ ] 6.5 Tests for list ordering (uncontacted → overdue → due today → new →
+  - [x] 6.5 Tests for list ordering (uncontacted → overdue → due today → new →
     others), uncontacted rule with `LEAD_RESPONSE_ALERT_MINUTES`, counts, and
     dashboard figures on seeded data
   - [ ] 6.6 Regenerate `apps/api/openapi.json` and the admin `src/api/schema.ts`

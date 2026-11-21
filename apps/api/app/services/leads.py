@@ -12,19 +12,26 @@ message, IP or token (R15.2).
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, fields
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, Date, and_, case, cast, extract, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.errors import NotFoundError, ValidationFailedError
+from app.core.errors import (
+    ForbiddenError,
+    LocationAccessDeniedError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from app.core.logging import get_logger
 from app.core.phone import normalize_indian_mobile
 from app.core.security import CurrentUser, assert_location_access
@@ -45,12 +52,22 @@ from app.schemas.booking import ContactCreate
 from app.schemas.lead import (
     ActivityCreate,
     ActivityRead,
+    AssignableUser,
     AttributionIn,
     AttributionSummary,
+    DashboardDayRow,
+    DashboardGroupRow,
+    DashboardReasonRow,
     EnquiryCodeIn,
     EnquiryIn,
+    FollowUpDigest,
+    FollowUpItem,
     LeadBrief,
+    LeadCounts,
     LeadCreate,
+    LeadCreateResult,
+    LeadDashboard,
+    LeadListPage,
     LeadRead,
     LeadUpdate,
     WebsiteLeadIn,
@@ -844,6 +861,377 @@ def to_lead_read(
 def get_lead(db: Session, lead_id: int, actor: CurrentUser) -> LeadRead:
     lead = _load_lead(db, lead_id, actor)
     return to_lead_read(db, lead, actor, detail=True)
+
+
+# --- admin API wrappers (routers call exactly one of these) -------------------
+
+
+def _create_result(db: Session, result: ManualLeadResult, actor: CurrentUser) -> LeadCreateResult:
+    return LeadCreateResult(
+        lead=to_lead_read(db, result.lead, actor, detail=True),
+        created=result.created,
+        warning=result.warning,
+        code_used_by_lead_id=result.code_used_by_lead_id,
+    )
+
+
+def create_lead_read(db: Session, data: LeadCreate, actor: CurrentUser) -> LeadCreateResult:
+    return _create_result(db, create_manual_lead(db, data, actor), actor)
+
+
+def update_lead_read(
+    db: Session, lead_id: int, data: LeadUpdate, actor: CurrentUser
+) -> LeadRead:
+    return to_lead_read(db, update_lead(db, lead_id, data, actor), actor, detail=True)
+
+
+def add_activity_read(
+    db: Session, lead_id: int, data: ActivityCreate, actor: CurrentUser
+) -> LeadRead:
+    return to_lead_read(db, add_activity(db, lead_id, data, actor), actor, detail=True)
+
+
+def link_enquiry_code_read(
+    db: Session, lead_id: int, code: str, actor: CurrentUser
+) -> LeadCreateResult:
+    return _create_result(db, link_enquiry_code(db, lead_id, code, actor), actor)
+
+
+# --- list, counts, follow-ups (R5, R10, R11) -------------------------------------
+
+_IST = ZoneInfo("Asia/Kolkata")
+SEARCH_MIN_CHARS = 3
+LAST_NOTE_MAX = 60
+
+
+def _ist_day_start(day: date) -> datetime:
+    """UTC instant of 00:00 IST on ``day``."""
+    return datetime.combine(day, time.min, tzinfo=_IST).astimezone(UTC)
+
+
+def _tomorrow_start(now: datetime) -> datetime:
+    return _ist_day_start(now.astimezone(_IST).date() + timedelta(days=1))
+
+
+def _scope_location(actor: CurrentUser, location_id: int | None) -> int | None:
+    """The branch to read: the requested one (checked), else all for admins, else own."""
+    if location_id is not None:
+        assert_location_access(actor, location_id)
+        return location_id
+    if actor.role == "admin":
+        return None
+    if actor.location_id is None:
+        raise LocationAccessDeniedError()
+    return actor.location_id
+
+
+def _not_closed() -> ColumnElement[bool]:
+    return Lead.status.notin_(CLOSED_LEAD_STATUSES)
+
+
+def _uncontacted_cond(now: datetime) -> ColumnElement[bool]:
+    cutoff = now - timedelta(minutes=settings.LEAD_RESPONSE_ALERT_MINUTES)
+    return and_(
+        Lead.status == "new",
+        Lead.first_contacted_at.is_(None),
+        Lead.created_at < cutoff,
+    )
+
+
+def _overdue_cond(now: datetime) -> ColumnElement[bool]:
+    return and_(Lead.follow_up_at.is_not(None), Lead.follow_up_at < now, _not_closed())
+
+
+def _due_today_cond(now: datetime) -> ColumnElement[bool]:
+    return and_(
+        Lead.follow_up_at >= now,
+        Lead.follow_up_at < _tomorrow_start(now),
+        _not_closed(),
+    )
+
+
+@dataclass(frozen=True)
+class LeadListFilters:
+    location_id: int | None = None
+    statuses: tuple[str, ...] = ()
+    sources: tuple[str, ...] = ()
+    channels: tuple[str, ...] = ()
+    assigned_user_id: int | None = None
+    follow_from: date | None = None
+    follow_to: date | None = None
+    created_from: date | None = None
+    created_to: date | None = None
+    q: str | None = None
+    limit: int = 50
+    offset: int = 0
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _list_conditions(f: LeadListFilters, location_id: int | None) -> list[ColumnElement[bool]]:
+    conds: list[ColumnElement[bool]] = []
+    if location_id is not None:
+        conds.append(Lead.location_id == location_id)
+    if f.statuses:
+        conds.append(Lead.status.in_(f.statuses))
+    if f.sources:
+        conds.append(Lead.source.in_(f.sources))
+    if f.channels:
+        conds.append(Lead.channel.in_(f.channels))
+    if f.assigned_user_id is not None:
+        conds.append(Lead.assigned_user_id == f.assigned_user_id)
+    if f.follow_from is not None:
+        conds.append(Lead.follow_up_at >= _ist_day_start(f.follow_from))
+    if f.follow_to is not None:
+        conds.append(Lead.follow_up_at < _ist_day_start(f.follow_to + timedelta(days=1)))
+    if f.created_from is not None:
+        conds.append(Lead.created_at >= _ist_day_start(f.created_from))
+    if f.created_to is not None:
+        conds.append(Lead.created_at < _ist_day_start(f.created_to + timedelta(days=1)))
+    if f.q:
+        text_q = f.q.strip()
+        if len(text_q) < SEARCH_MIN_CHARS:
+            raise ValidationFailedError("Search needs at least 3 characters.")
+        name_match = Lead.name.ilike(f"%{_escape_like(text_q)}%", escape="\\")
+        digits = re.sub(r"\D", "", text_q)
+        if len(digits) >= SEARCH_MIN_CHARS:
+            conds.append(or_(name_match, Lead.phone.like(f"%{digits}%")))
+        else:
+            conds.append(name_match)
+    return conds
+
+
+def _section(now: datetime) -> ColumnElement[int]:
+    """R5.1/R5.8 sections: 1 uncontacted, 2 overdue, 3 due today, 4 new, 5 other."""
+    return case(
+        (_uncontacted_cond(now), 1),
+        (_overdue_cond(now), 2),
+        (_due_today_cond(now), 3),
+        (and_(Lead.status == "new", Lead.follow_up_at.is_(None)), 4),
+        else_=5,
+    )
+
+
+def _section_key(section: ColumnElement[int]) -> ColumnElement[Any]:
+    """Within a section: oldest uncontacted, earliest follow-up, newest new, latest activity."""
+    return case(
+        (section == 1, extract("epoch", Lead.created_at)),
+        (section.in_((2, 3)), extract("epoch", Lead.follow_up_at)),
+        (section == 4, -extract("epoch", Lead.created_at)),
+        else_=-extract("epoch", Lead.last_activity_at),
+    )
+
+
+def list_leads(
+    db: Session,
+    actor: CurrentUser,
+    filters: LeadListFilters,
+    *,
+    now: datetime | None = None,
+) -> LeadListPage:
+    """Leads page (R5.1-R5.4, R5.8): section ordering, then key time, then id."""
+    now = now or _utcnow()
+    location_id = _scope_location(actor, filters.location_id)
+    conds = _list_conditions(filters, location_id)
+    total = db.execute(select(func.count()).select_from(Lead).where(*conds)).scalar_one()
+    section = _section(now)
+    rows = db.execute(
+        select(Lead)
+        .where(*conds)
+        .order_by(section, _section_key(section), Lead.id.desc())
+        .limit(filters.limit)
+        .offset(filters.offset)
+    ).scalars()
+    return LeadListPage(
+        items=[to_lead_read(db, lead, actor, now=now) for lead in rows],
+        total=total,
+        limit=filters.limit,
+        offset=filters.offset,
+    )
+
+
+def lead_counts(
+    db: Session,
+    actor: CurrentUser,
+    location_id: int | None,
+    *,
+    now: datetime | None = None,
+) -> LeadCounts:
+    """Badge counts in one query (R5.9, R10.1, R10.2)."""
+    now = now or _utcnow()
+    scoped = _scope_location(actor, location_id)
+    stmt = select(
+        func.count().filter(_uncontacted_cond(now)),
+        func.count().filter(_overdue_cond(now)),
+        func.count().filter(_due_today_cond(now)),
+    ).select_from(Lead)
+    if scoped is not None:
+        stmt = stmt.where(Lead.location_id == scoped)
+    uncontacted, overdue, due_today = db.execute(stmt).one()
+    return LeadCounts(uncontacted=uncontacted, overdue=overdue, due_today=due_today)
+
+
+def follow_up_digest(
+    db: Session,
+    actor: CurrentUser,
+    location_id: int | None,
+    *,
+    now: datetime | None = None,
+) -> FollowUpDigest:
+    """Overdue + due-today leads for the branch WhatsApp message (R11.2)."""
+    now = now or _utcnow()
+    scoped = _scope_location(actor, location_id)
+    last_note = (
+        select(LeadActivity.text)
+        .where(
+            LeadActivity.lead_id == Lead.id,
+            LeadActivity.type == "note",
+            LeadActivity.text.is_not(None),
+        )
+        .order_by(LeadActivity.created_at.desc(), LeadActivity.id.desc())
+        .limit(1)
+        .correlate(Lead)
+        .scalar_subquery()
+    )
+    stmt = (
+        select(Lead, last_note)
+        .where(or_(_overdue_cond(now), _due_today_cond(now)))
+        .order_by(Lead.follow_up_at, Lead.id)
+    )
+    if scoped is not None:
+        stmt = stmt.where(Lead.location_id == scoped)
+    items = []
+    for lead, note in db.execute(stmt).all():
+        assert lead.follow_up_at is not None
+        items.append(
+            FollowUpItem(
+                id=lead.id,
+                name=lead.name,
+                phone=lead.phone,
+                status=lead.status,
+                follow_up_at=lead.follow_up_at,
+                is_overdue=lead.follow_up_at < now,
+                last_note=note[:LAST_NOTE_MAX] if note else None,
+            )
+        )
+    return FollowUpDigest(items=items)
+
+
+def assignable_users(
+    db: Session, actor: CurrentUser, location_id: int
+) -> list[AssignableUser]:
+    """Active users who may work this branch: its staff plus all admins (R12.4)."""
+    assert_location_access(actor, location_id)
+    rows = db.execute(
+        select(User.id, User.username, UserRole.name)
+        .join(UserRole, User.role_id == UserRole.id)
+        .where(
+            User.is_active.is_(True),
+            or_(UserRole.name == "admin", User.location_id == location_id),
+        )
+        .order_by(User.username)
+    ).all()
+    return [AssignableUser(id=r.id, username=r.username, role=r.name) for r in rows]
+
+
+# --- dashboard (R13, admin only) --------------------------------------------------
+
+DASHBOARD_MAX_DAYS = 366
+
+
+def dashboard(
+    db: Session,
+    actor: CurrentUser,
+    *,
+    location_id: int | None,
+    date_from: date,
+    date_to: date,
+) -> LeadDashboard:
+    """All figures in aggregate SQL over leads created in the IST date range."""
+    if actor.role != "admin":
+        raise ForbiddenError()
+    if date_to < date_from:
+        raise ValidationFailedError("date_to must be on or after date_from.")
+    if (date_to - date_from).days >= DASHBOARD_MAX_DAYS:
+        raise ValidationFailedError("Choose a range of at most one year.")
+    conds: list[ColumnElement[bool]] = [
+        Lead.created_at >= _ist_day_start(date_from),
+        Lead.created_at < _ist_day_start(date_to + timedelta(days=1)),
+    ]
+    if location_id is not None:
+        conds.append(Lead.location_id == location_id)
+    won = func.count().filter(Lead.status == "won")
+    day = cast(func.timezone("Asia/Kolkata", Lead.created_at), Date)
+
+    def per_day(column: Any) -> list[DashboardDayRow]:
+        rows = db.execute(
+            select(day, column, func.count())
+            .where(*conds)
+            .group_by(day, column)
+            .order_by(day, column)
+        ).all()
+        return [DashboardDayRow(day=d, key=k, count=c) for d, k, c in rows]
+
+    def grouped(column: Any, *extra: ColumnElement[bool]) -> list[DashboardGroupRow]:
+        rows = db.execute(
+            select(column, func.count(), won)
+            .where(*conds, *extra)
+            .group_by(column)
+            .order_by(func.count().desc(), column)
+        ).all()
+        return [DashboardGroupRow(key=k, total=t, won=w) for k, t, w in rows]
+
+    total, won_total = db.execute(select(func.count(), won).where(*conds)).one()
+
+    seconds = extract("epoch", Lead.first_contacted_at - Lead.created_at)
+    contacted, avg_s, median_s = db.execute(
+        select(
+            func.count(),
+            func.avg(seconds),
+            func.percentile_cont(0.5).within_group(seconds),
+        ).where(*conds, Lead.first_contacted_at.is_not(None))
+    ).one()
+
+    reasons = db.execute(
+        select(Lead.close_reason, func.count())
+        .where(
+            *conds,
+            Lead.status.in_(("lost", "not_interested")),
+            Lead.close_reason.is_not(None),
+        )
+        .group_by(Lead.close_reason)
+        .order_by(func.count().desc(), Lead.close_reason)
+    ).all()
+
+    wa_total, wa_coded = db.execute(
+        select(func.count(), func.count().filter(Lead.enquiry_code_id.is_not(None))).where(
+            *conds, Lead.source.in_(("whatsapp", "whatsapp_ad"))
+        )
+    ).one()
+
+    def _minutes(value: Any) -> int | None:
+        return None if value is None else int(round(float(value) / 60))
+
+    return LeadDashboard(
+        location_id=location_id,
+        date_from=date_from,
+        date_to=date_to,
+        total=total,
+        won=won_total,
+        per_day_by_source=per_day(Lead.source),
+        per_day_by_channel=per_day(Lead.channel),
+        by_source=grouped(Lead.source),
+        by_channel=grouped(Lead.channel),
+        contacted=contacted,
+        avg_first_response_minutes=_minutes(avg_s),
+        median_first_response_minutes=_minutes(median_s),
+        close_reasons=[DashboardReasonRow(reason=r, count=c) for r, c in reasons],
+        campaigns=grouped(Lead.utm_campaign, Lead.utm_campaign.is_not(None)),
+        whatsapp_total=wa_total,
+        whatsapp_with_code=wa_coded,
+    )
 
 
 # --- booking hooks (lead follows its booking, R2.9-R2.11, R8, R9.3) -----------
