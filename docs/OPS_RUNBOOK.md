@@ -219,22 +219,49 @@ adds `locations.whatsapp_phone`, and copies `contact_leads` rows into leads
 (`contact_leads` itself is left untouched). `0025_add_receptionist_role` adds
 the receptionist role. `alembic upgrade head` applies both.
 
+**Order matters: backend first, then merge.** Cloudflare Pages rebuilds the
+admin and website as soon as `main` changes, and the new pages call the new
+API. The new API works with the old pages, so deploy the API from the branch,
+then merge the PR.
+
 ```bash
-cd ~/Cinematic-Celebration-Apps/deploy
+cd ~/Cinematic-Celebration-Apps
+# 0. Note the current commit (for rollback) and check memory
+git rev-parse --short HEAD
+free -h
 # 1. Backup first
+cd deploy
 docker compose --env-file ../.env exec -T postgres pg_dump -U cinematic -d cinematic -Fc > ~/pre_0024_$(date +%F).dump
-# 2. Code + image, then migrate
-cd .. && git pull && cd deploy
-docker compose --env-file ../.env up -d --build api
-docker compose --env-file ../.env exec -T api alembic upgrade head
-# 3. Check
+ls -lh ~/pre_0024_*.dump
+# 2. Get the branch and build the new image (old API keeps serving meanwhile)
+cd .. && git fetch origin && git checkout feat/lead-crm && git pull --ff-only
+cd deploy && docker compose --env-file ../.env build api
+# 3. Migrate with the NEW image before it serves traffic (0024 + 0025)
+docker compose --env-file ../.env run --rm api alembic upgrade head
+docker compose --env-file ../.env run --rm api alembic current      # expect 0025 (head)
+# 4. Switch the API to the new image
+docker compose --env-file ../.env up -d api
+# 5. Check
 curl -fsS https://api.cinematiccelebration.in/healthz
+docker compose --env-file ../.env logs --tail=30 api
 docker compose --env-file ../.env exec -T postgres psql -U cinematic -d cinematic \
-  -c "SELECT source, count(*) FROM leads GROUP BY 1;"
+  -c "SELECT source, count(*) FROM leads GROUP BY 1;" \
+  -c "SELECT name FROM user_roles ORDER BY id;"
+# 6. Merge the PR on GitHub (Pages builds admin + web), then move the server to main
+cd .. && git checkout main && git pull --ff-only
 ```
 
-Roll back (if needed): `docker compose --env-file ../.env exec -T api alembic downgrade -1`
-drops the lead tables and the new column; or restore the dump.
+Roll back (if needed), before anyone is given the Receptionist role:
+
+```bash
+cd ~/Cinematic-Celebration-Apps/deploy
+docker compose --env-file ../.env run --rm api alembic downgrade 0023   # drops lead tables + column
+cd .. && git checkout <commit from step 0> && cd deploy
+docker compose --env-file ../.env build api && docker compose --env-file ../.env up -d api
+```
+
+`0025`'s downgrade refuses while any user has the receptionist role (move them
+back to staff first). Restoring the step-1 dump is the other way back.
 
 ### After deploy
 
