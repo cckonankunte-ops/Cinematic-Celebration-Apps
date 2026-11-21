@@ -129,7 +129,7 @@ screens. Optional sub-tasks are marked with `*`.
   - _Requirements: 2.1–2.3, 2.12–2.14, 3.2, 3.3, 3.7, 3.11, 12.6, 15.2, 15.3, 18.5–18.7,
     19.2, 19.3, 19.14, 19.16, 19.21_
 
-- [ ] 6. Admin API
+- [x] 6. Admin API
   - [x] 6.1 `routers/admin/leads.py` with router-level
     `require_role("admin","staff")` + `check_origin`: list (filters incl. channel,
     search ≥ 3 chars, section ordering, pagination), counts (uncontacted, overdue,
@@ -149,20 +149,20 @@ screens. Optional sub-tasks are marked with `*`.
   - [x] 6.5 Tests for list ordering (uncontacted → overdue → due today → new →
     others), uncontacted rule with `LEAD_RESPONSE_ALERT_MINUTES`, counts, and
     dashboard figures on seeded data
-  - [ ] 6.6 Regenerate `apps/api/openapi.json` and the admin `src/api/schema.ts`
+  - [x] 6.6 Regenerate `apps/api/openapi.json` and the admin `src/api/schema.ts`
     (`npm run gen:api`)
   - _Requirements: 5.1–5.4, 5.8, 5.9, 6.3, 7.1, 7.2, 7.5, 10.1, 10.2, 11.2, 11.6, 12.1–12.5,
     12.7, 13.1–13.8, 17.11, 18.13, 19.12, 19.22_
 
-- [ ] 7. Auto-close job
-  - [ ] 7.1 `close_stale_leads(db, now, days)`: return 0 when `days == 0`; otherwise
+- [x] 7. Auto-close job
+  - [x] 7.1 `close_stale_leads(db, now, days)`: return 0 when `days == 0`; otherwise
     lock and close stale `new`/`contacted`/`follow_up` leads with no future
     follow-up as `lost`/`no_response` with a system activity; one commit
-  - [ ] 7.2 `jobs/auto_close_leads.py` (mirrors `expire_pending.py`, logs the count
+  - [x] 7.2 `jobs/auto_close_leads.py` (mirrors `expire_pending.py`, logs the count
     only) and the daily 03:00 IST line in `deploy/cron/crontab`
-  - [ ] 7.3 Integration tests: with 14 days stale leads close; `booked` and future
+  - [x] 7.3 Integration tests: with 14 days stale leads close; `booked` and future
     follow-up stay open; second run changes nothing; with 0 nothing closes
-  - [ ]* 7.4 Hypothesis idempotence property (property 8)
+  - [x]* 7.4 Hypothesis idempotence property (property 8)
   - _Requirements: 14.1–14.8, 16.3, 19.13_
 
 - [ ] 8. Customer site: landing attribution and enquiry codes

@@ -1234,6 +1234,39 @@ def dashboard(
     )
 
 
+# --- auto-close job (R14) -----------------------------------------------------------
+
+
+def close_stale_leads(db: Session, *, now: datetime, days: int) -> int:
+    """Close untouched open leads as ``lost`` / ``no_response``. Returns the count.
+
+    ``days == 0`` (the default) means never: nothing is queried or changed (R14.7).
+    ``booked`` leads and leads with a future follow-up stay open (R14.2, R14.3).
+    Each close writes activities, which refresh ``last_activity_at``, so an
+    immediate second run finds nothing (R14.5). One commit for the batch.
+    """
+    if days <= 0:
+        return 0
+    stale = db.execute(
+        select(Lead)
+        .where(
+            Lead.status.in_(PREBOOKING_LEAD_STATUSES),
+            Lead.last_activity_at < now - timedelta(days=days),
+            or_(Lead.follow_up_at.is_(None), Lead.follow_up_at < now),
+        )
+        .order_by(Lead.id)
+        .with_for_update(skip_locked=True)
+    ).scalars().all()
+    note_text = f"Closed automatically after {days} days without activity"
+    for lead in stale:
+        _transition(db, lead, "lost", now=now, reason="no_response")
+        _add_activity(
+            db, lead, "system", text=note_text, data={"auto_close_days": days}, now=now
+        )
+    db.commit()
+    return len(stale)
+
+
 # --- booking hooks (lead follows its booking, R2.9-R2.11, R8, R9.3) -----------
 #
 # Called from services/booking.py inside the booking's own transaction, right
