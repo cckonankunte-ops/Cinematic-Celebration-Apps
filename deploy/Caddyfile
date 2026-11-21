@@ -7,5 +7,7 @@
 # API_HOST in .env and restart. Caddy substitutes {$API_HOST} at load time.
 {$API_HOST} {
 	encode gzip
+	# JSON access log to stdout (docker logs); includes per-request "duration".
+	log
 	reverse_proxy api:8000
 }

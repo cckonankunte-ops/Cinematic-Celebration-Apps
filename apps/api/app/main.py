@@ -86,6 +86,9 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Let browsers cache preflight (OPTIONS) results for 10 minutes instead
+        # of Chrome's 5 s default, saving a round trip on most POSTs.
+        max_age=600,
     )
 
     register_exception_handlers(app)
