@@ -17,12 +17,15 @@ import {
 import { api } from '@/api/client';
 import type { LeadFilterState } from './lead-filter-state';
 import type {
+  ActivityCreateBody,
   AssignableUser,
+  FollowUpDigest,
   LeadCounts,
   LeadCreateBody,
   LeadCreateResult,
   LeadListPage,
   LeadRead,
+  LeadUpdateBody,
 } from './types';
 
 const BASE = '/api/v1/admin/leads';
@@ -98,6 +101,7 @@ function useInvalidateLeads(): (leadId?: number) => void {
   return (leadId?: number) => {
     void qc.invalidateQueries({ queryKey: ['leads'] });
     void qc.invalidateQueries({ queryKey: ['lead-counts'] });
+    void qc.invalidateQueries({ queryKey: ['lead-follow-ups'] });
     if (leadId !== undefined) {
       void qc.invalidateQueries({ queryKey: ['lead', leadId] });
     }
@@ -109,5 +113,61 @@ export function useCreateLead(): UseMutationResult<LeadCreateResult, unknown, Le
   return useMutation({
     mutationFn: (body: LeadCreateBody) => api.post<LeadCreateResult>(BASE, body),
     onSuccess: (result) => invalidate(result.lead.id),
+  });
+}
+
+/** Overdue + due-today leads for the branch WhatsApp digest (R11.2). */
+export function useFollowUps(locationId: number | null): UseQueryResult<FollowUpDigest> {
+  return useQuery({
+    queryKey: ['lead-follow-ups', locationId],
+    queryFn: () => api.get<FollowUpDigest>(`${BASE}/follow-ups?location_id=${locationId}`),
+    enabled: locationId !== null,
+  });
+}
+
+export function useUpdateLead(
+  leadId: number,
+): UseMutationResult<LeadRead, unknown, LeadUpdateBody> {
+  const invalidate = useInvalidateLeads();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: LeadUpdateBody) => api.patch<LeadRead>(`${BASE}/${leadId}`, body),
+    onSuccess: (lead) => {
+      qc.setQueryData(['lead', leadId], lead);
+      invalidate();
+    },
+  });
+}
+
+/** Add a note / call / WhatsApp activity. The lead id is given per call so list rows can use it. */
+export function useAddActivity(): UseMutationResult<
+  LeadRead,
+  unknown,
+  { leadId: number; body: ActivityCreateBody }
+> {
+  const invalidate = useInvalidateLeads();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ leadId, body }) =>
+      api.post<LeadRead>(`${BASE}/${leadId}/activities`, body),
+    onSuccess: (lead) => {
+      qc.setQueryData(['lead', lead.id], lead);
+      invalidate();
+    },
+  });
+}
+
+export function useLinkEnquiryCode(
+  leadId: number,
+): UseMutationResult<LeadCreateResult, unknown, string> {
+  const invalidate = useInvalidateLeads();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (code: string) =>
+      api.post<LeadCreateResult>(`${BASE}/${leadId}/enquiry-code`, { code }),
+    onSuccess: (result) => {
+      qc.setQueryData(['lead', leadId], result.lead);
+      invalidate();
+    },
   });
 }

@@ -129,6 +129,21 @@ export interface LeadCounts {
   due_today: number;
 }
 
+/** One overdue / due-today lead for the branch WhatsApp digest (R11.2). */
+export interface FollowUpItem {
+  id: number;
+  name: string | null;
+  phone: string;
+  status: LeadStatus;
+  follow_up_at: string;
+  is_overdue: boolean;
+  last_note: string | null;
+}
+
+export interface FollowUpDigest {
+  items: FollowUpItem[];
+}
+
 export interface AssignableUser {
   id: number;
   username: string;
@@ -151,6 +166,35 @@ export interface LeadCreateResult {
   warning: string | null;
   code_used_by_lead_id: number | null;
 }
+
+/** PATCH body. Omitted fields are unchanged; `null` clears assignee / follow-up. */
+export interface LeadUpdateBody {
+  name?: string | null;
+  status?: LeadStatus;
+  close_reason?: CloseReason | null;
+  close_reason_text?: string | null;
+  assigned_user_id?: number | null;
+  follow_up_at?: string | null;
+}
+
+export type ManualActivityType = 'note' | 'call' | 'whatsapp';
+
+export interface ActivityCreateBody {
+  type: ManualActivityType;
+  text?: string;
+}
+
+/** Statuses a user may pick by hand (booked / won follow the booking, R7.7). */
+export const MANUAL_STATUSES: LeadStatus[] = [
+  'new',
+  'contacted',
+  'follow_up',
+  'not_interested',
+  'lost',
+];
+
+/** Open leads without a booking can be converted (R9.1). */
+export const CONVERTIBLE_STATUSES: LeadStatus[] = ['new', 'contacted', 'follow_up'];
 
 export const STATUS_LABELS: Record<LeadStatus, string> = {
   new: 'New',

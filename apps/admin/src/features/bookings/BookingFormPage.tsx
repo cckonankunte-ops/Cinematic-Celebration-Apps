@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation as useRouterLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
 import { formatRupees, paiseToRupees, rupeesToPaise } from '@/lib/money';
@@ -21,6 +21,7 @@ import {
   type CreateBookingBody,
 } from './booking-queries';
 import type { BookingCreateInput, BookingCreateValues } from './booking-schema';
+import { readLeadPrefill } from './lead-prefill';
 import type { BookingRead } from './types';
 
 /** Map a loaded `BookingRead` into form pre-fill values. */
@@ -109,6 +110,10 @@ export function BookingFormPage(): JSX.Element {
 
 function CreateBooking({ locationId }: { locationId: number }): JSX.Element {
   const createBooking = useCreateBooking();
+  const routerLocation = useRouterLocation();
+  // Set when arriving from a lead's "Create booking" (lead-crm R9.2); a direct
+  // visit has no state and behaves exactly as before.
+  const [prefill] = useState(() => readLeadPrefill(routerLocation.state, locationId));
   const [created, setCreated] = useState<BookingRead | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -123,9 +128,16 @@ function CreateBooking({ locationId }: { locationId: number }): JSX.Element {
         <p className="text-sm text-gray-700">
           Required advance: {formatRupees(created.advance_paise)}
         </p>
-        <Link to="/bookings" className="text-sm text-blue-600 underline">
-          Back to bookings
-        </Link>
+        <div className="flex flex-wrap gap-4">
+          {prefill && (
+            <Link to={`/leads/${prefill.leadId}`} className="text-sm text-blue-600 underline">
+              Back to lead
+            </Link>
+          )}
+          <Link to="/bookings" className="text-sm text-blue-600 underline">
+            Back to bookings
+          </Link>
+        </div>
       </section>
     );
   }
@@ -144,6 +156,7 @@ function CreateBooking({ locationId }: { locationId: number }): JSX.Element {
               advance_amount_paise: rupeesToPaise(values.advance_rupees),
             }
           : {}),
+        ...(prefill ? { lead_id: prefill.leadId } : {}),
       };
       const booking = await createBooking.mutateAsync(body);
       setCreated(booking);
@@ -155,8 +168,18 @@ function CreateBooking({ locationId }: { locationId: number }): JSX.Element {
   return (
     <section className="space-y-4">
       <h1 className="text-xl font-semibold text-gray-900">New booking</h1>
+      {prefill && (
+        <p className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          Creating a booking for lead <span className="font-medium">{prefill.label}</span>. Saving
+          links the booking to the lead.{' '}
+          <Link to={`/leads/${prefill.leadId}`} className="underline">
+            View lead
+          </Link>
+        </p>
+      )}
       <BookingForm
         locationId={locationId}
+        initial={prefill?.initial}
         submitLabel="Create booking"
         onSubmit={onSubmit}
         isSubmitting={createBooking.isPending}

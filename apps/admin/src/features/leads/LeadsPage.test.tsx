@@ -19,6 +19,8 @@ vi.mock('./lead-queries', async (importOriginal) => {
     useAssignableUsers: () => ({ data: [], isLoading: false, isError: false }),
     useLeadCounts: () => ({ data: counts }),
     useCreateLead: () => ({ mutateAsync: createLead, isPending: false }),
+    useFollowUps: () => ({ data: { items: [] }, isLoading: false }),
+    useAddActivity: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
   };
 });
 

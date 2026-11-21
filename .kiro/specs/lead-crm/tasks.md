@@ -232,23 +232,23 @@ screens. Optional sub-tasks are marked with `*`.
     are built here because quick-add needs them.
   - _Requirements: 4.1, 4.4–4.6, 4.8, 5.1, 5.2, 5.5–5.10, 10.1, 11.6, 16.6, 19.18_
 
-- [ ] 11. Admin panel: lead detail, follow-ups and WhatsApp actions
-  - [ ] 11.1 `LeadDetailPage.tsx`: contact details, source, Channel and attribution
+- [x] 11. Admin panel: lead detail, follow-ups and WhatsApp actions
+  - [x] 11.1 `LeadDetailPage.tsx`: contact details, source, Channel and attribution
     summary, linked booking, same-phone leads, enquiry-code link, status /
     close reason / assignee / follow-up editors, `ActivityTimeline`,
     `AddActivityForm`, `CloseLeadDialog` (reason required)
   - [x] 11.2 `follow-up-presets.ts` and `FollowUpPicker.tsx` (1 h, 7 pm, tomorrow
     11 am, +3 days, custom; IST)
-  - [ ] 11.3 `lead-whatsapp.ts`: `telHref`, `customerWhatsappUrl`,
+  - [x] 11.3 `lead-whatsapp.ts`: `telHref`, `customerWhatsappUrl`,
     `buildFollowUpDigest` (3,500-char cap, "+N more in admin"); `LogContactPrompt`
     after tapping Call or WhatsApp
-  - [ ] 11.4 "Send today's follow-ups to WhatsApp" on the Leads page, disabled with
+  - [x] 11.4 "Send today's follow-ups to WhatsApp" on the Leads page, disabled with
     hints when the branch has no number or nothing is due
-  - [ ] 11.5 Convert to booking: "Create booking" navigates to `/bookings/new` with
+  - [x] 11.5 Convert to booking: "Create booking" navigates to `/bookings/new` with
     router state; `BookingFormPage` `CreateBooking` passes `initial`, shows the
     lead banner, sends `lead_id`, and links back to the lead; direct visits
     unchanged
-  - [ ] 11.6 Vitest: digest format, cap and disabled states (property 9 table
+  - [x] 11.6 Vitest: digest format, cap and disabled states (property 9 table
     cases); close requires a reason; log-contact prompt; convert pre-fills and
     sends `lead_id`
   - _Requirements: 6.3, 7.1–7.8, 9.1–9.5, 10.3–10.6, 11.1–11.5, 11.7, 18.12, 19.18_
