@@ -55,6 +55,7 @@ def _rebuild_schemas() -> None:
         "app.schemas.coupon",
         "app.schemas.sheets",
         "app.schemas.analytics",
+        "app.schemas.lead",
     ]
     for module_name in schema_modules:
         module = importlib.import_module(module_name)

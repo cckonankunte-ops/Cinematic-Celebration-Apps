@@ -8,8 +8,8 @@ screens. Optional sub-tasks are marked with `*`.
 > **0024**, chaining off 0023. Bookings, pricing, availability and payment rules
 > are not changed.
 
-- [ ] 1. Schema: leads, lead activities, enquiry codes, branch WhatsApp number
-  - [ ] 1.1 Add `models/lead.py` with `Lead`, `LeadActivity`, `EnquiryCode` and the
+- [x] 1. Schema: leads, lead activities, enquiry codes, branch WhatsApp number
+  - [x] 1.1 Add `models/lead.py` with `Lead`, `LeadActivity`, `EnquiryCode` and the
     value tuples (`LEAD_STATUSES`, `LEAD_SOURCES` incl. reserved `instant_form`,
     `LEAD_CHANNELS`, `CLOSE_REASONS`, `ACTIVITY_TYPES`); declare every CHECK, FK
     (explicit `ON DELETE`), unique constraint and index from the design in the
@@ -17,59 +17,59 @@ screens. Optional sub-tasks are marked with `*`.
     `uq_leads_prebooking_phone` on `(location_id, phone)` where status in
     (`new`,`contacted`,`follow_up`) and the CHECKs `ck_leads_closed_has_reason` /
     `ck_leads_closed_no_follow_up`; register in `models/__init__.py`
-  - [ ] 1.2 Add `Location.whatsapp_phone` (TEXT NULL)
-  - [ ] 1.3 Migration `0024_create_leads_crm`: create the three tables with explicit
+  - [x] 1.2 Add `Location.whatsapp_phone` (TEXT NULL)
+  - [x] 1.3 Migration `0024_create_leads_crm`: create the three tables with explicit
     constraint/index names, add `locations.whatsapp_phone`; downgrade drops them
     (leaves `contact_leads` untouched)
-  - [ ] 1.4 Add `services/lead_migration.py` `copy_contact_leads(connection)`:
+  - [x] 1.4 Add `services/lead_migration.py` `copy_contact_leads(connection)`:
     normalise phones to 10 digits, skip invalid ones (count logged), assign the
     first active branch, create `contact_form` leads with the original
     `created_at`, add the message (+ email, "Branch unknown (migrated)") as the
     first `note`, and attach repeat phones to the first lead; call it from 0024
     `upgrade()`
-  - [ ] 1.5 Add `LEAD_AUTO_CLOSE_DAYS` (default 0, 0–365) and
+  - [x] 1.5 Add `LEAD_AUTO_CLOSE_DAYS` (default 0, 0–365) and
     `LEAD_RESPONSE_ALERT_MINUTES` (default 10, 1–1440) to `core/config.py`; list
     both in `.env.example` with one-line explanations
   - [ ] 1.6 Verify 0024 upgrade + downgrade on a seeded DB copy (with some
     `contact_leads` rows)
-  - [ ] 1.7 Integration test for `copy_contact_leads`: rows become `contact_form`
+  - [x] 1.7 Integration test for `copy_contact_leads`: rows become `contact_form`
     leads with the original time and a first note; invalid phones are skipped;
     repeat phones attach to one lead
   - _Requirements: 1.1–1.10, 3.9–3.11, 11.6, 14.7, 16.5, 19.15, A6, A13_
 
-- [ ] 2. Pure helpers: phone normalisation and Channel rules
-  - [ ] 2.1 Add `normalise_to_10_digits(raw) -> str | None` to `core/phone.py`
+- [x] 2. Pure helpers: phone normalisation and Channel rules
+  - [x] 2.1 Add `normalise_to_10_digits(raw) -> str | None` to `core/phone.py`
     (spaces, dashes, leading `0`, `+91`/`91`)
-  - [ ] 2.2 Add `services/lead_channel.py`: `Attribution` dataclass,
+  - [x] 2.2 Add `services/lead_channel.py`: `Attribution` dataclass,
     `clean_attribution()` (trim, strip query/fragment from landing path and
     referrer, drop own-site referrer, never raises), `derive_channel()` (R17.9
     rules, first match wins), `manual_channel(source)`
-  - [ ] 2.3 Unit tests: one case per Channel (fbclid, gclid, `google`/`gbp`, Google
+  - [x] 2.3 Unit tests: one case per Channel (fbclid, gclid, `google`/`gbp`, Google
     referrer, Instagram referrer, Facebook referrer, unknown referrer, empty,
     `whatsapp_ad` → `meta_ads`, `phone` → `manual`)
-  - [ ]* 2.4 Hypothesis properties: Channel determinism and priority (property 1),
+  - [x]* 2.4 Hypothesis properties: Channel determinism and priority (property 1),
     sanitised paths contain no `?`/`#` and respect length limits (property 2),
     phone formatting variants normalise to the same 10 digits (property 3)
   - _Requirements: A2, 4.4, 4.7, 17.7–17.9, 19.19_
 
-- [ ] 3. Lead service core rules (`services/leads.py`, `schemas/lead.py`)
-  - [ ] 3.1 Schemas: `AttributionIn` (max lengths), `WebsiteLeadIn`, `EnquiryIn`
+- [x] 3. Lead service core rules (`services/leads.py`, `schemas/lead.py`)
+  - [x] 3.1 Schemas: `AttributionIn` (max lengths), `WebsiteLeadIn`, `EnquiryIn`
     (with honeypot `website`), `EnquiryCodeIn`, `LeadTokenOut`, `OkOut`,
     `LeadCreate`, `LeadUpdate`, `ActivityCreate`, `LinkCodeIn`, `LeadListItem`,
     `LeadRead`, `ActivityRead`, `LeadCounts`, `LeadDashboard`, `LeadCreateResult`;
     `extra="ignore"` on public inputs; wrap validator that turns malformed
     `attribution` into `None`; add `app.schemas.lead` to `_rebuild_schemas()`
-  - [ ] 3.2 `_add_activity` (sets `last_activity_at`) and `_transition` (single place
+  - [x] 3.2 `_add_activity` (sets `last_activity_at`) and `_transition` (single place
     that changes status: writes `status_change`, clears `follow_up_at` on close,
     requires a close reason, sets `first_contacted_at`, rejects manual
     `booked`/`won` with 422)
-  - [ ] 3.3 `_find_or_create_lead`: lock and attach to a pre-booking open lead
+  - [x] 3.3 `_find_or_create_lead`: lock and attach to a pre-booking open lead
     (system activity, fill empty fields only); else attach a new enquiry to a
     `booked` lead; else `INSERT ... ON CONFLICT DO NOTHING` on the partial index
     and re-select on conflict
-  - [ ] 3.4 Lead_Token: `secrets.token_urlsafe(24)`, store SHA-256 hash; accept only
+  - [x] 3.4 Lead_Token: `secrets.token_urlsafe(24)`, store SHA-256 hash; accept only
     for an open, unlinked lead created within 7 days
-  - [ ] 3.5 `capture_website_lead` (create or update by token, attribution and
+  - [x] 3.5 `capture_website_lead` (create or update by token, attribution and
     Channel kept from creation), `create_enquiry_lead`, `register_enquiry_code`
     (upsert: first insert keeps attribution, later ones update branch and
     `last_seen_at`), `create_manual_lead` (manual Channel or code Channel, optional
@@ -77,7 +77,7 @@ screens. Optional sub-tasks are marked with `*`.
     `contacted`), `update_lead` (status/reason/assignment/follow-up/name; follow-up
     on `new`/`contacted` → `follow_up`), `link_enquiry_code` (case-insensitive,
     warning when unknown/expired, notice when used by another lead)
-  - [ ] 3.6 Integration tests: duplicate rule incl. concurrent creates from two
+  - [x] 3.6 Integration tests: duplicate rule incl. concurrent creates from two
     sessions; close rules; manual `booked`/`won` rejected; call/WhatsApp →
     `contacted` + `first_contacted_at`; enquiry-code linking (copy attribution,
     unknown/expired warning, reused-code notice)

@@ -1,0 +1,783 @@
+"""Lead CRM business rules (lead-crm).
+
+All lead status changes go through ``_transition``; every timeline entry goes
+through ``_add_activity`` (which keeps ``last_activity_at`` current). Duplicate
+handling is ``_find_or_create_lead``, made race-safe by the partial unique index
+``uq_leads_prebooking_phone``.
+
+Privacy: logs carry only codes, ids and counts, never phone, name, note text,
+message, IP or token (R15.2).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import secrets
+from dataclasses import dataclass, fields
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.errors import NotFoundError, ValidationFailedError
+from app.core.logging import get_logger
+from app.core.security import CurrentUser, assert_location_access
+from app.models.booking import Booking
+from app.models.lead import (
+    CLOSED_LEAD_STATUSES,
+    PREBOOKING_LEAD_STATUSES,
+    EnquiryCode,
+    Lead,
+    LeadActivity,
+)
+from app.models.location import Location
+from app.models.plan import Plan
+from app.models.user import User
+from app.models.user_role import UserRole
+from app.schemas.lead import (
+    ActivityCreate,
+    ActivityRead,
+    AttributionSummary,
+    EnquiryCodeIn,
+    EnquiryIn,
+    LeadBrief,
+    LeadCreate,
+    LeadRead,
+    LeadUpdate,
+    WebsiteLeadIn,
+)
+from app.services.lead_channel import (
+    Attribution,
+    clean_attribution,
+    derive_channel,
+    host_of,
+    manual_channel,
+)
+
+log = get_logger("app.services.leads")
+
+LEAD_TOKEN_MAX_AGE = timedelta(days=7)
+ENQUIRY_CODE_MAX_AGE = timedelta(days=30)
+# Manual status targets (R7.5). `booked` / `won` only come from bookings (R7.7).
+MANUAL_STATUS_TARGETS = ("new", "contacted", "follow_up", "not_interested", "lost")
+# Statuses that follow a linked booking and cannot be changed by hand.
+BOOKING_DRIVEN_STATUSES = ("booked", "won")
+_ATTRIBUTION_FIELDS = tuple(f.name for f in fields(Attribution))
+_ENQUIRY_FIELDS = (
+    "name",
+    "preferred_date",
+    "plan_id",
+    "start_time",
+    "duration_minutes",
+    "guests",
+    "message",
+)
+_SOURCE_LABELS = {
+    "website": "website booking form",
+    "homepage_form": "homepage enquiry form",
+    "contact_form": "contact page form",
+    "whatsapp": "WhatsApp",
+    "whatsapp_ad": "WhatsApp (from ad)",
+    "phone": "phone call",
+    "walk_in": "walk-in",
+    "instagram_dm": "Instagram DM",
+    "other": "other",
+}
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def _own_hosts() -> frozenset[str]:
+    hosts = {host_of(origin) for origin in settings.cors_origins}
+    return frozenset(h for h in hosts if h)
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def new_lead_token() -> str:
+    """Opaque URL-safe token, 192 bits (A3). Only its hash is stored."""
+    return secrets.token_urlsafe(24)
+
+
+# --- low-level helpers ------------------------------------------------------
+
+
+def _add_activity(
+    db: Session,
+    lead: Lead,
+    type_: str,
+    *,
+    text: str | None = None,
+    data: dict[str, Any] | None = None,
+    author_id: int | None = None,
+    now: datetime,
+) -> LeadActivity:
+    activity = LeadActivity(
+        lead_id=lead.id,
+        type=type_,
+        text=text,
+        data=data,
+        author_user_id=author_id,
+        created_at=now,
+    )
+    db.add(activity)
+    if lead.last_activity_at is None or now >= lead.last_activity_at:
+        lead.last_activity_at = now
+    db.flush()
+    return activity
+
+
+def _transition(
+    db: Session,
+    lead: Lead,
+    to_status: str,
+    *,
+    now: datetime,
+    author_id: int | None = None,
+    reason: str | None = None,
+    reason_text: str | None = None,
+    note: str | None = None,
+) -> None:
+    """The only place that changes ``lead.status`` (R1.6, R1.8, R1.9, R7.4)."""
+    from_status = lead.status
+    if to_status == from_status:
+        return
+    if to_status in ("lost", "not_interested"):
+        if reason is None:
+            raise ValidationFailedError("A close reason is required.")
+        lead.close_reason = reason
+        lead.close_reason_text = reason_text
+    else:
+        lead.close_reason = None
+        lead.close_reason_text = None
+    if to_status in CLOSED_LEAD_STATUSES:
+        lead.follow_up_at = None
+    if (
+        author_id is not None
+        and from_status == "new"
+        and lead.first_contacted_at is None
+    ):
+        lead.first_contacted_at = now
+    lead.status = to_status
+    db.flush()
+    _add_activity(
+        db,
+        lead,
+        "status_change",
+        text=note,
+        data={"from": from_status, "to": to_status},
+        author_id=author_id,
+        now=now,
+    )
+
+
+def _has_attribution(lead: Lead) -> bool:
+    return any(getattr(lead, name) is not None for name in _ATTRIBUTION_FIELDS)
+
+
+def _apply_attribution(target: Lead | EnquiryCode, a: Attribution) -> None:
+    for name in _ATTRIBUTION_FIELDS:
+        setattr(target, name, getattr(a, name))
+
+
+def _location_or_422(db: Session, location_id: int) -> Location:
+    location = db.get(Location, location_id)
+    if location is None or not location.is_active:
+        raise ValidationFailedError("Unknown branch.")
+    return location
+
+
+def _valid_plan_id(db: Session, plan_id: int | None, location_id: int) -> int | None:
+    if plan_id is None:
+        return None
+    plan = db.get(Plan, plan_id)
+    return plan.id if plan is not None and plan.location_id == location_id else None
+
+
+def _select_open_lead(
+    db: Session, location_id: int, phone: str, statuses: tuple[str, ...]
+) -> Lead | None:
+    return db.execute(
+        select(Lead)
+        .where(
+            Lead.location_id == location_id,
+            Lead.phone == phone,
+            Lead.status.in_(statuses),
+        )
+        .order_by(Lead.created_at.desc(), Lead.id.desc())
+        .limit(1)
+        .with_for_update()
+    ).scalar_one_or_none()
+
+
+@dataclass(frozen=True)
+class _NewLead:
+    location_id: int
+    phone: str
+    source: str
+    channel: str
+    fields: dict[str, Any]
+    attribution: Attribution | None
+    author_id: int | None
+
+
+def _attach(db: Session, lead: Lead, new: _NewLead, now: datetime) -> None:
+    """R6.1: repeat enquiry on an existing open lead — note it, fill only gaps."""
+    for name, value in new.fields.items():
+        if value is not None and getattr(lead, name) is None:
+            setattr(lead, name, value)
+    if new.attribution is not None and not _has_attribution(lead):
+        _apply_attribution(lead, new.attribution)
+        if lead.channel in ("direct", "manual"):
+            lead.channel = new.channel
+    label = _SOURCE_LABELS.get(new.source, new.source)
+    _add_activity(
+        db,
+        lead,
+        "system",
+        text=f"Repeat enquiry via {label}",
+        data={"source": new.source},
+        author_id=new.author_id,
+        now=now,
+    )
+
+
+def _insert_prebooking_lead(db: Session, new: _NewLead, now: datetime) -> int | None:
+    values: dict[str, Any] = {
+        "location_id": new.location_id,
+        "phone": new.phone,
+        "source": new.source,
+        "status": "new",
+        "channel": new.channel,
+        "last_activity_at": now,
+        "created_at": now,
+        "updated_at": now,
+        **{k: v for k, v in new.fields.items() if v is not None},
+    }
+    if new.attribution is not None:
+        values.update(
+            {name: getattr(new.attribution, name) for name in _ATTRIBUTION_FIELDS}
+        )
+    stmt = (
+        pg_insert(Lead)
+        .values(**values)
+        .on_conflict_do_nothing(
+            index_elements=["location_id", "phone"],
+            index_where=Lead.status.in_(PREBOOKING_LEAD_STATUSES),
+        )
+        .returning(Lead.id)
+    )
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def _find_or_create_lead(
+    db: Session,
+    new: _NewLead,
+    *,
+    now: datetime,
+    attach_to_booked: bool,
+) -> tuple[Lead, bool]:
+    """Duplicate rule (R6). Returns (lead, created).
+
+    1. a pre-booking open lead for (branch, phone) -> attach;
+    2. else, when allowed, a ``booked`` lead -> attach (enquiries, not bookings);
+    3. else insert; a concurrent insert that won the unique index makes ours a
+       no-op, so re-select and attach to that one (R6.4).
+    """
+    for _ in range(3):
+        existing = _select_open_lead(db, new.location_id, new.phone, PREBOOKING_LEAD_STATUSES)
+        if existing is None and attach_to_booked:
+            existing = _select_open_lead(db, new.location_id, new.phone, ("booked",))
+        if existing is not None:
+            _attach(db, existing, new, now)
+            return existing, False
+        lead_id = _insert_prebooking_lead(db, new, now)
+        if lead_id is not None:
+            lead = db.get(Lead, lead_id)
+            assert lead is not None
+            label = _SOURCE_LABELS.get(new.source, new.source)
+            _add_activity(
+                db,
+                lead,
+                "system",
+                text=f"Lead created via {label}",
+                data={"source": new.source},
+                author_id=new.author_id,
+                now=now,
+            )
+            log.info(
+                "lead_created",
+                lead_id=lead.id,
+                source=new.source,
+                channel=new.channel,
+                location_id=new.location_id,
+            )
+            return lead, True
+    raise ValidationFailedError("Could not save the enquiry. Please try again.")
+
+
+def resolve_lead_token(
+    db: Session, token: str | None, *, location_id: int, now: datetime
+) -> Lead | None:
+    """A token is valid for an open, unlinked lead at the branch, created < 7 days ago."""
+    if not token:
+        return None
+    lead = db.execute(
+        select(Lead).where(Lead.lead_token_hash == hash_token(token)).with_for_update()
+    ).scalar_one_or_none()
+    if (
+        lead is None
+        or lead.location_id != location_id
+        or lead.status not in PREBOOKING_LEAD_STATUSES
+        or lead.booking_id is not None
+        or lead.created_at < now - LEAD_TOKEN_MAX_AGE
+    ):
+        return None
+    return lead
+
+
+def _set_token(db: Session, lead: Lead) -> str:
+    token = new_lead_token()
+    lead.lead_token_hash = hash_token(token)
+    db.flush()
+    return token
+
+
+# --- public capture ---------------------------------------------------------
+
+
+def capture_website_lead(
+    db: Session, data: WebsiteLeadIn, *, now: datetime | None = None
+) -> str:
+    """Booking wizard Step 1 (R2.2, R2.3, R2.7). Returns the raw Lead_Token."""
+    now = now or _utcnow()
+    _location_or_422(db, data.location_id)
+    enquiry = {
+        "name": data.name,
+        "preferred_date": data.preferred_date,
+        "plan_id": _valid_plan_id(db, data.plan_id, data.location_id),
+        "start_time": data.start_time,
+        "duration_minutes": data.duration_minutes,
+        "guests": data.guests,
+    }
+    lead = resolve_lead_token(db, data.lead_token, location_id=data.location_id, now=now)
+    if lead is not None and lead.phone == data.phone:
+        # Same browser editing Step 1 again: update details, keep attribution (R17.10).
+        for name, value in enquiry.items():
+            if value is not None:
+                setattr(lead, name, value)
+        db.commit()
+        assert data.lead_token is not None
+        return data.lead_token
+
+    attribution = clean_attribution(data.attribution, own_hosts=_own_hosts())
+    new = _NewLead(
+        location_id=data.location_id,
+        phone=data.phone,
+        source="website",
+        channel=derive_channel(attribution),
+        fields=enquiry,
+        attribution=attribution,
+        author_id=None,
+    )
+    lead, _ = _find_or_create_lead(db, new, now=now, attach_to_booked=False)
+    token = _set_token(db, lead)
+    db.commit()
+    return token
+
+
+def create_enquiry_lead(db: Session, data: EnquiryIn, *, now: datetime | None = None) -> None:
+    """Homepage / contact page enquiry (R3.2, R3.3, R3.7)."""
+    if data.website:  # honeypot filled -> pretend success, store nothing
+        return
+    now = now or _utcnow()
+    _location_or_422(db, data.location_id)
+    attribution = clean_attribution(data.attribution, own_hosts=_own_hosts())
+    new = _NewLead(
+        location_id=data.location_id,
+        phone=data.phone,
+        source=data.source,
+        channel=derive_channel(attribution),
+        fields={
+            "name": data.name,
+            "preferred_date": data.preferred_date,
+            "message": data.message,
+        },
+        attribution=attribution,
+        author_id=None,
+    )
+    lead, _ = _find_or_create_lead(db, new, now=now, attach_to_booked=True)
+    parts = [p for p in (data.message, f"Email: {data.email}" if data.email else None) if p]
+    if parts:
+        _add_activity(db, lead, "note", text="\n".join(parts)[:2000], now=now)
+    db.commit()
+
+
+def register_enquiry_code(
+    db: Session, data: EnquiryCodeIn, *, now: datetime | None = None
+) -> None:
+    """Store a WhatsApp enquiry code once; later taps only update branch/last seen (R18.5)."""
+    now = now or _utcnow()
+    location_id = data.location_id
+    if location_id is not None:
+        location = db.get(Location, location_id)
+        if location is None or not location.is_active:
+            location_id = None
+    attribution = clean_attribution(data.attribution, own_hosts=_own_hosts())
+    values: dict[str, Any] = {
+        "code": data.code,
+        "location_id": location_id,
+        "channel": derive_channel(attribution),
+        "created_at": now,
+        "last_seen_at": now,
+    }
+    if attribution is not None:
+        values.update({name: getattr(attribution, name) for name in _ATTRIBUTION_FIELDS})
+    stmt = pg_insert(EnquiryCode).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["code"],
+        set_={
+            "location_id": stmt.excluded.location_id
+            if location_id is not None
+            else EnquiryCode.location_id,
+            "last_seen_at": now,
+        },
+    )
+    db.execute(stmt)
+    db.commit()
+
+
+# --- admin: create / activities / update ------------------------------------
+
+
+def _load_lead(db: Session, lead_id: int, actor: CurrentUser, *, lock: bool = False) -> Lead:
+    stmt = select(Lead).where(Lead.id == lead_id)
+    if lock:
+        stmt = stmt.with_for_update()
+    lead = db.execute(stmt).scalar_one_or_none()
+    if lead is None:
+        raise NotFoundError("Lead not found.")
+    assert_location_access(actor, lead.location_id)
+    return lead
+
+
+def _apply_enquiry_code(
+    db: Session, lead: Lead, code: str, *, author_id: int | None, now: datetime
+) -> tuple[str | None, int | None]:
+    """Link an enquiry code to a lead (R18.8-R18.11). Returns (warning, other_lead_id)."""
+    normalised = code.strip().upper()
+    found = db.execute(
+        select(EnquiryCode).where(EnquiryCode.code == normalised)
+    ).scalar_one_or_none()
+    if found is None or found.created_at < now - ENQUIRY_CODE_MAX_AGE:
+        return "Unknown or expired enquiry code. The lead was saved without it.", None
+    other_id = db.execute(
+        select(Lead.id)
+        .where(Lead.enquiry_code_id == found.id, Lead.id != lead.id)
+        .order_by(Lead.id)
+        .limit(1)
+    ).scalar_one_or_none()
+    lead.enquiry_code_id = found.id
+    for name in _ATTRIBUTION_FIELDS:
+        setattr(lead, name, getattr(found, name))
+    lead.channel = found.channel
+    _add_activity(
+        db,
+        lead,
+        "system",
+        text=f"Linked enquiry code {normalised}",
+        data={"enquiry_code": normalised},
+        author_id=author_id,
+        now=now,
+    )
+    return None, other_id
+
+
+def _set_follow_up(
+    db: Session, lead: Lead, when: datetime, *, author_id: int | None, now: datetime
+) -> None:
+    if lead.status in CLOSED_LEAD_STATUSES:
+        raise ValidationFailedError("Reopen the lead before setting a follow-up.")
+    lead.follow_up_at = when
+    if lead.status in ("new", "contacted"):
+        _transition(db, lead, "follow_up", now=now, author_id=author_id)
+    _add_activity(
+        db,
+        lead,
+        "follow_up_set",
+        data={"follow_up_at": when.isoformat()},
+        author_id=author_id,
+        now=now,
+    )
+
+
+@dataclass(frozen=True)
+class ManualLeadResult:
+    lead: Lead
+    created: bool
+    warning: str | None
+    code_used_by_lead_id: int | None
+
+
+def create_manual_lead(
+    db: Session, data: LeadCreate, actor: CurrentUser, *, now: datetime | None = None
+) -> ManualLeadResult:
+    """Receptionist quick-add (R4.2, R4.3, R4.7, R4.8)."""
+    now = now or _utcnow()
+    assert_location_access(actor, data.location_id)
+    _location_or_422(db, data.location_id)
+    new = _NewLead(
+        location_id=data.location_id,
+        phone=data.phone,
+        source=data.source,
+        channel=manual_channel(data.source),
+        fields={"name": data.name},
+        attribution=None,
+        author_id=actor.id,
+    )
+    lead, created = _find_or_create_lead(db, new, now=now, attach_to_booked=True)
+    if data.note:
+        _add_activity(db, lead, "note", text=data.note, author_id=actor.id, now=now)
+    if data.follow_up_at is not None:
+        _set_follow_up(db, lead, data.follow_up_at, author_id=actor.id, now=now)
+    warning = other = None
+    if data.enquiry_code:
+        warning, other = _apply_enquiry_code(
+            db, lead, data.enquiry_code, author_id=actor.id, now=now
+        )
+    db.commit()
+    db.refresh(lead)
+    return ManualLeadResult(lead, created, warning, other)
+
+
+def add_activity(
+    db: Session,
+    lead_id: int,
+    data: ActivityCreate,
+    actor: CurrentUser,
+    *,
+    now: datetime | None = None,
+) -> Lead:
+    """Note / call / WhatsApp (R7.2-R7.4). A contact on a `new` lead marks it contacted."""
+    now = now or _utcnow()
+    lead = _load_lead(db, lead_id, actor, lock=True)
+    if data.type in ("call", "whatsapp"):
+        if lead.first_contacted_at is None:
+            lead.first_contacted_at = now
+        if lead.status == "new":
+            _transition(db, lead, "contacted", now=now, author_id=actor.id)
+    _add_activity(db, lead, data.type, text=data.text, author_id=actor.id, now=now)
+    db.commit()
+    db.refresh(lead)
+    return lead
+
+
+def _assignable(db: Session, user_id: int, location_id: int) -> bool:
+    row = db.execute(
+        select(User.is_active, User.location_id, UserRole.name)
+        .join(UserRole, User.role_id == UserRole.id)
+        .where(User.id == user_id)
+    ).one_or_none()
+    if row is None or not row.is_active:
+        return False
+    return row.name == "admin" or row.location_id == location_id
+
+
+def update_lead(
+    db: Session,
+    lead_id: int,
+    data: LeadUpdate,
+    actor: CurrentUser,
+    *,
+    now: datetime | None = None,
+) -> Lead:
+    """Name / assignment / status / follow-up from the detail page (R7.5-R7.7, R12.4)."""
+    now = now or _utcnow()
+    lead = _load_lead(db, lead_id, actor, lock=True)
+    changes = data.model_fields_set
+
+    if "name" in changes:
+        lead.name = data.name.strip() if data.name and data.name.strip() else None
+    if "assigned_user_id" in changes:
+        if data.assigned_user_id is not None and not _assignable(
+            db, data.assigned_user_id, lead.location_id
+        ):
+            raise ValidationFailedError("That user cannot be assigned to this branch.")
+        lead.assigned_user_id = data.assigned_user_id
+
+    if "status" in changes and data.status is not None and data.status != lead.status:
+        if data.status in BOOKING_DRIVEN_STATUSES:
+            raise ValidationFailedError("Booked and Won follow the linked booking.")
+        if data.status not in MANUAL_STATUS_TARGETS:
+            raise ValidationFailedError("Unknown status.")
+        if lead.status in BOOKING_DRIVEN_STATUSES:
+            raise ValidationFailedError("This lead follows its booking; change the booking.")
+        if (
+            data.status in CLOSED_LEAD_STATUSES
+            and "follow_up_at" in changes
+            and data.follow_up_at is not None
+        ):
+            raise ValidationFailedError("A closed lead cannot have a follow-up.")
+        _transition(
+            db,
+            lead,
+            data.status,
+            now=now,
+            author_id=actor.id,
+            reason=data.close_reason,
+            reason_text=data.close_reason_text,
+        )
+
+    if "follow_up_at" in changes:
+        if data.follow_up_at is None:
+            lead.follow_up_at = None
+        else:
+            _set_follow_up(db, lead, data.follow_up_at, author_id=actor.id, now=now)
+
+    db.commit()
+    db.refresh(lead)
+    return lead
+
+
+def link_enquiry_code(
+    db: Session,
+    lead_id: int,
+    code: str,
+    actor: CurrentUser,
+    *,
+    now: datetime | None = None,
+) -> ManualLeadResult:
+    now = now or _utcnow()
+    lead = _load_lead(db, lead_id, actor, lock=True)
+    warning, other = _apply_enquiry_code(db, lead, code, author_id=actor.id, now=now)
+    db.commit()
+    db.refresh(lead)
+    return ManualLeadResult(lead, False, warning, other)
+
+
+# --- read model ---------------------------------------------------------------
+
+
+def is_uncontacted(lead: Lead, now: datetime) -> bool:
+    """Uncontacted_New_Lead (R5.8): new, never contacted, older than the alert minutes."""
+    return (
+        lead.status == "new"
+        and lead.first_contacted_at is None
+        and lead.created_at
+        < now - timedelta(minutes=settings.LEAD_RESPONSE_ALERT_MINUTES)
+    )
+
+
+def to_lead_read(
+    db: Session,
+    lead: Lead,
+    actor: CurrentUser,
+    *,
+    now: datetime | None = None,
+    detail: bool = False,
+) -> LeadRead:
+    now = now or _utcnow()
+    booking_reference = None
+    if lead.booking_id is not None:
+        booking = db.get(Booking, lead.booking_id)
+        booking_reference = booking.booking_reference if booking else None
+    plan_title = None
+    if lead.plan_id is not None:
+        plan = db.get(Plan, lead.plan_id)
+        plan_title = plan.title if plan else None
+    assigned_name = None
+    if lead.assigned_user_id is not None:
+        user = db.get(User, lead.assigned_user_id)
+        assigned_name = user.username if user else None
+    code = db.get(EnquiryCode, lead.enquiry_code_id) if lead.enquiry_code_id else None
+
+    activities: list[ActivityRead] = []
+    same_phone: list[LeadBrief] = []
+    if detail:
+        rows = db.execute(
+            select(LeadActivity, User.username)
+            .outerjoin(User, LeadActivity.author_user_id == User.id)
+            .where(LeadActivity.lead_id == lead.id)
+            .order_by(LeadActivity.created_at.desc(), LeadActivity.id.desc())
+        ).all()
+        activities = [
+            ActivityRead(
+                id=a.id,
+                type=a.type,
+                text=a.text,
+                data=a.data,
+                author_user_id=a.author_user_id,
+                author_name=username,
+                created_at=a.created_at,
+            )
+            for a, username in rows
+        ]
+        others = select(Lead, Location.name).join(
+            Location, Lead.location_id == Location.id
+        ).where(Lead.phone == lead.phone, Lead.id != lead.id)
+        if actor.role != "admin":
+            others = others.where(Lead.location_id == actor.location_id)
+        same_phone = [
+            LeadBrief(
+                id=o.id,
+                location_id=o.location_id,
+                location_name=loc_name,
+                status=o.status,
+                source=o.source,
+                created_at=o.created_at,
+            )
+            for o, loc_name in db.execute(others.order_by(Lead.created_at.desc())).all()
+        ]
+
+    return LeadRead(
+        id=lead.id,
+        location_id=lead.location_id,
+        phone=lead.phone,
+        name=lead.name,
+        source=lead.source,
+        status=lead.status,
+        channel=lead.channel,
+        close_reason=lead.close_reason,
+        close_reason_text=lead.close_reason_text,
+        assigned_user_id=lead.assigned_user_id,
+        assigned_user_name=assigned_name,
+        follow_up_at=lead.follow_up_at,
+        last_activity_at=lead.last_activity_at,
+        first_contacted_at=lead.first_contacted_at,
+        is_uncontacted=is_uncontacted(lead, now),
+        minutes_since_created=max(0, int((now - lead.created_at).total_seconds() // 60)),
+        booking_id=lead.booking_id,
+        booking_reference=booking_reference,
+        preferred_date=lead.preferred_date,
+        plan_id=lead.plan_id,
+        plan_title=plan_title,
+        start_time=lead.start_time,
+        duration_minutes=lead.duration_minutes,
+        guests=lead.guests,
+        message=lead.message,
+        attribution=AttributionSummary(
+            utm_source=lead.utm_source,
+            utm_medium=lead.utm_medium,
+            utm_campaign=lead.utm_campaign,
+            landing_path=lead.landing_path,
+            referrer_domain=host_of(lead.referrer),
+            has_fbclid=lead.fbclid is not None,
+            has_gclid=lead.gclid is not None,
+        ),
+        enquiry_code=code.code if code else None,
+        created_at=lead.created_at,
+        activities=activities,
+        same_phone_leads=same_phone,
+    )
+
+
+def get_lead(db: Session, lead_id: int, actor: CurrentUser) -> LeadRead:
+    lead = _load_lead(db, lead_id, actor)
+    return to_lead_read(db, lead, actor, detail=True)
