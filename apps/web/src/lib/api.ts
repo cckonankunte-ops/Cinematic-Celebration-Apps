@@ -7,6 +7,8 @@
  * so it can differ per environment without a code change.
  */
 
+import type { Landing } from './landing';
+
 const BASE_URL: string =
   import.meta.env.PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -265,6 +267,47 @@ export interface BookingCreate {
   coupon_code?: string;
   special_decor: DecorSelection[];
   combos: ComboSelection[];
+  /** Step 1 lead token (lead-crm R2.8); links the booking to its lead. */
+  lead_token?: string;
+}
+
+/** Landing attribution sent with leads (see `lib/landing.ts`). */
+export type AttributionIn = Landing | null;
+
+/** POST /public/leads: booking wizard Step 1 (lead-crm R2). */
+export interface WebsiteLeadIn {
+  lead_token?: string;
+  location_id: number;
+  phone: string;
+  name?: string;
+  preferred_date?: string;
+  plan_id?: number;
+  start_time?: string;
+  duration_minutes?: number;
+  guests?: number;
+  attribution?: AttributionIn;
+}
+
+export interface LeadTokenOut {
+  lead_token: string;
+}
+
+/** POST /public/enquiries: homepage and contact page forms (lead-crm R3). */
+export interface EnquiryIn {
+  source: 'homepage_form' | 'contact_form';
+  location_id: number;
+  phone: string;
+  name: string;
+  preferred_date?: string;
+  message?: string;
+  email?: string;
+  /** Honeypot: hidden from people, so only bots fill it. */
+  website?: string;
+  attribution?: AttributionIn;
+}
+
+export interface OkOut {
+  message: string;
 }
 
 /**
@@ -431,6 +474,12 @@ export const publicApi = {
   },
   submitContact(body: ContactCreate): Promise<ContactResult> {
     return api.post<ContactResult>(`${PUBLIC}/contact`, body);
+  },
+  createLead(body: WebsiteLeadIn): Promise<LeadTokenOut> {
+    return api.post<LeadTokenOut>(`${PUBLIC}/leads`, body);
+  },
+  submitEnquiry(body: EnquiryIn): Promise<OkOut> {
+    return api.post<OkOut>(`${PUBLIC}/enquiries`, body);
   },
   listOffers(): Promise<PublicOffer[]> {
     return api.get<PublicOffer[]>(`${PUBLIC}/offers`);

@@ -185,21 +185,21 @@ screens. Optional sub-tasks are marked with `*`.
   - _Requirements: 17.1–17.7, 18.1–18.4, 18.14, 19.20, 19.23_
 
 - [ ] 9. Customer site: booking wizard lead capture and enquiry forms
-  - [ ] 9.1 `lib/lead-capture.ts` (`sendStep1Lead` fire-and-forget, `cc.leadToken`
+  - [x] 9.1 `lib/lead-capture.ts` (`sendStep1Lead` fire-and-forget, `cc.leadToken`
     in sessionStorage, never throws; `getLeadToken`); `publicApi.createLead`,
     `publicApi.submitEnquiry`, `publicApi.registerEnquiryCode`; `lead_token` on the
     web `BookingCreate` type
-  - [ ] 9.2 `BookingWizard.tsx`: call `sendStep1Lead` in the Next handler when
+  - [x] 9.2 `BookingWizard.tsx`: call `sendStep1Lead` in the Next handler when
     `step === 1` before `setStep`; add `lead_token` to the `createBooking` body;
     helper line under the phone field
-  - [ ] 9.3 `QuickEnquiry.tsx` on the homepage (`client:visible`): name, phone,
+  - [x] 9.3 `QuickEnquiry.tsx` on the homepage (`client:visible`): name, phone,
     branch, optional date and message, honeypot, field errors kept on failure,
     success message with branch tap-to-call
-  - [ ] 9.4 `ContactForm.tsx`: add branch, make email optional, honeypot, field
+  - [x] 9.4 `ContactForm.tsx`: add branch, make email optional, honeypot, field
     errors; post to `/public/enquiries`; helper line under phone
-  - [ ] 9.5 Privacy policy paragraph (contact details stored to contact the
+  - [x] 9.5 Privacy policy paragraph (contact details stored to contact the
     customer; enquiry code in WhatsApp links; no message content collected)
-  - [ ] 9.6 Vitest: Next sends the lead without blocking; failed lead request does
+  - [x] 9.6 Vitest: Next sends the lead without blocking; failed lead request does
     not block; token reused; booking body includes the token; QuickEnquiry and
     ContactForm submit, field errors, honeypot not visible
   - [ ] 9.7 `npm run build` and confirm the booking page stays at or below 150 KB

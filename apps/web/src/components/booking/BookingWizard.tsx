@@ -10,6 +10,7 @@ import {
   type Slot,
 } from '../../lib/api';
 import { formatDate, formatRupees, todayIsoInIST } from '../../lib/formatters';
+import { getLeadToken, sendStep1Lead } from '../../lib/lead-capture';
 import { isValidIndianMobile } from '../../lib/phone';
 import BookingSummary from './BookingSummary';
 import CakePicker from './CakePicker';
@@ -142,7 +143,11 @@ export default function BookingWizard() {
   const selectPlan = (plan: Plan) =>
     patch({ plan, slotId: null, startTime: null, durationMinutes: null });
 
+  // The chosen slot (slot mode), so Step 1 lead capture can send its time.
+  const selectedSlotRef = useRef<Slot | null>(null);
+
   const selectSlot = (slot: Slot) => {
+    selectedSlotRef.current = slot;
     setSlotLabel(slot.description);
     setPickerExpanded(false);
     patch({
@@ -332,6 +337,25 @@ export default function BookingWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pricedInputs]);
 
+  /** Send the Step 1 details as a lead (no await; failures are ignored). */
+  function captureStep1Lead() {
+    if (!location) return;
+    const slot =
+      !isOpenMode && selectedSlotRef.current?.id === draft.slotId
+        ? selectedSlotRef.current
+        : null;
+    void sendStep1Lead({
+      locationId: location.id,
+      phone: draft.phone,
+      name: draft.bookingName,
+      preferredDate: draft.bookingDate,
+      planId: draft.plan?.id,
+      startTime: isOpenMode ? draft.startTime : slot?.start_time ?? null,
+      durationMinutes: isOpenMode ? draft.durationMinutes : slot?.duration_minutes ?? null,
+      guests: draft.adults + draft.kids,
+    });
+  }
+
   async function submit() {
     if (!location || !draft.plan || !hasWindow || !agreedTerms) {
       return;
@@ -365,6 +389,7 @@ export default function BookingWizard() {
         coupon_code: draft.couponCode || undefined,
         special_decor: draft.specialDecor,
         combos: draft.comboIds.map((id) => ({ id })),
+        lead_token: getLeadToken() ?? undefined,
       });
       setResult(res);
     } catch (err) {
@@ -665,6 +690,9 @@ export default function BookingWizard() {
                   }
                   className="rounded border border-gray-300 px-3 py-2"
                 />
+                <span className="text-xs text-gray-500">
+                  We&apos;ll use this number to help with your booking.
+                </span>
                 {draft.phone.trim() !== '' &&
                   !isValidIndianMobile(draft.phone) && (
                     <span className="text-xs text-red-600">
@@ -991,7 +1019,12 @@ export default function BookingWizard() {
               {step < 5 ? (
                 <button
                   type="button"
-                  onClick={() => setStep((s) => (s + 1) as Step)}
+                  onClick={() => {
+                    // Lead capture is fire-and-forget: never awaited, never
+                    // blocks the step change (lead-crm R2.5, R2.6).
+                    if (step === 1) captureStep1Lead();
+                    setStep((s) => (s + 1) as Step);
+                  }}
                   disabled={!canNext}
                   className="flex-1 rounded-full bg-festive-hero px-7 py-2.5 sm:flex-none font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
                 >
