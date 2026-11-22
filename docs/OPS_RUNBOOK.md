@@ -206,7 +206,7 @@ and log folder; only the job name, schedule and log file change. 21:30 UTC is
 03:00 IST:
 
 ```cron
-30 21 * * * cd ~/Cinematic-Celebration-Apps/deploy && docker compose --env-file ../.env exec -T api python -m app.jobs.auto_close_leads >> <same log folder as expire_pending>/leads.log 2>&1
+30 21 * * * cd /home/deploy/Cinematic-Celebration-Apps/deploy && /usr/bin/docker compose --env-file ../.env exec -T api python -m app.jobs.auto_close_leads >> /var/log/cc/leads.log 2>&1
 ```
 
 (`deploy/cron/crontab` holds the same schedule with a placeholder path.) It is
@@ -241,7 +241,8 @@ docker compose --env-file ../.env run --rm api alembic upgrade head
 docker compose --env-file ../.env run --rm api alembic current      # expect 0025 (head)
 # 4. Switch the API to the new image
 docker compose --env-file ../.env up -d api
-# 5. Check
+# 5. Check (give the workers a few seconds; a 502 right after restart is normal)
+sleep 10
 curl -fsS https://api.cinematiccelebration.in/healthz
 docker compose --env-file ../.env logs --tail=30 api
 docker compose --env-file ../.env exec -T postgres psql -U cinematic -d cinematic \
