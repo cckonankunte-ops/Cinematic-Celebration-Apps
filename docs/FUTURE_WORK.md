@@ -315,3 +315,60 @@ keep personal data only as long as needed for the purpose it was collected for.
 - Update the privacy policy to state the period.
 
 **Status:** deferred (recorded with lead-crm, Nov 2026). Decide later.
+
+## Super admin and multi-branch access for every role (deferred)
+
+**Context.** Today `admin` means "all branches", and staff and receptionists
+have exactly one branch (`users.location_id`). The owner wants admins limited to
+their branches too, a super admin above them, and any user able to cover one or
+several branches.
+
+**Decisions made (Nov 2026).**
+- New role `super_admin`: can do anything in every branch (including branches
+  added later). Create the account `vasishta_kunchur` as the first super admin.
+  The system must always keep at least one active super admin.
+- Every role (admin, receptionist, staff) can have one or several branches.
+- **Admin** sees all tabs (Analytics, Lead dashboard, Catalog, Coupons, Staff)
+  but only for their branches.
+- **Staff page:** super admins manage everyone, including who is admin and
+  each user's branches. Admins may also manage the **staff and receptionists of
+  their own branches**: create them, reset passwords, activate or deactivate,
+  and assign branches, but only branches the admin has. Admins cannot create
+  admins or super admins, cannot edit an admin or super admin, and cannot give
+  anyone a branch they don't have themselves.
+- **Leads for multi-branch users:** one branch at a time through the branch
+  switcher (same as Bookings, Timesheet, Analytics). The red and amber Leads
+  counters count all of the user's branches, and the switcher shows counts per
+  branch (for example "Ecity (2)") so a new lead at another branch is not missed.
+
+**Proposed design.**
+- Data: new `user_locations` table (user_id, location_id, unique pair, real FKs,
+  `ON DELETE CASCADE` on the user). Migration fills it from `users.location_id`.
+  Existing admins other than super admins get all current branches, so nothing
+  changes on day one. Keep `users.location_id` unused for one release, then drop.
+- Auth: `get_current_user` loads the user's branches from the database on every
+  request, so branch and role changes apply immediately (no re-login).
+  `CurrentUser` gets `location_ids`; `assert_location_access` checks the list,
+  and only `super_admin` skips it.
+- Admin-only endpoints (~50: catalog plans/slots/pricing/gallery, cakes, decor,
+  combos, branch hours, disallowed times, advance rules, coupons, users) have no
+  branch checks today. Each gets one; id-based endpoints resolve the branch first
+  (slot → plan → branch). Admin `/locations` lists only the user's branches.
+- ~15 `role == "admin"` checks (nav, Cancel/Review, advance override, past-date
+  edits, late-booking gate, booking-time rules) become "admin or super admin".
+- Lead dashboard and Analytics "All branches" mean all of the user's branches.
+- Admin app: role types and guards; switcher shown when the user has more than
+  one branch; Staff page with branch checkboxes and role choices limited by who
+  is editing.
+
+**Tests (must have).** A test that calls every admin endpoint as an admin of
+another branch and expects `403`, so a missed check fails the suite. Admin
+manages staff/receptionists of own branches only; cannot create or edit admins;
+cannot grant a branch they lack; the last super admin cannot be removed or
+demoted; multi-branch staff see both branches and get `403` on a third. Existing
+tests that assume an admin sees everything switch to `super_admin`.
+
+**Size.** Medium to large: about 25–30 files plus test updates across ~20 test
+files, one migration. Build as its own spec on `feat/branch-access`.
+
+**Status:** deferred (recorded Nov 2026). Decide when to schedule.
