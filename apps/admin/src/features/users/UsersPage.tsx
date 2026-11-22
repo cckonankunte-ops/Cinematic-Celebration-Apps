@@ -19,6 +19,10 @@ import {
   type UserAdminRead,
   type UserRole,
 } from './user-queries';
+import { ROLE_LABELS } from '@/features/auth/roles';
+
+/** Order shown in the role pickers. */
+const ROLE_OPTIONS: UserRole[] = ['staff', 'receptionist', 'admin'];
 
 const inputCls = 'rounded border border-gray-300 px-2 py-1 text-sm';
 
@@ -45,8 +49,8 @@ function CreateUserForm(): JSX.Element {
         username: username.trim(),
         password,
         role,
-        // Staff are pinned to a branch; admins see all (no branch).
-        location_id: role === 'staff' ? locationId : null,
+        // Staff and receptionists are pinned to a branch; admins see all (no branch).
+        location_id: role === 'admin' ? null : locationId,
       },
       {
         onSuccess: () => {
@@ -89,11 +93,14 @@ function CreateUserForm(): JSX.Element {
           value={role}
           onChange={(e) => setRole(e.target.value as UserRole)}
         >
-          <option value="staff">Staff</option>
-          <option value="admin">Admin</option>
+          {ROLE_OPTIONS.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
         </select>
       </label>
-      {role === 'staff' && (
+      {role !== 'admin' && (
         <label className="text-sm">
           <span className="mr-1 text-gray-600">Branch</span>
           <select
@@ -121,12 +128,16 @@ function CreateUserForm(): JSX.Element {
   );
 }
 
+function isUserRole(value: string): value is UserRole {
+  return (ROLE_OPTIONS as string[]).includes(value);
+}
+
 function UserRow({ user }: { user: UserAdminRead }): JSX.Element {
   const { locations } = useLocation();
   const update = useUpdateUser(user.id);
   const deactivate = useDeactivateUser();
   const [newPw, setNewPw] = useState('');
-  const branch = locations.find((l) => l.id === user.location_id)?.name;
+  const [roleNote, setRoleNote] = useState<string | null>(null);
 
   const resetPassword = (): void => {
     if (newPw.length < 8) {
@@ -135,11 +146,60 @@ function UserRow({ user }: { user: UserAdminRead }): JSX.Element {
     update.mutate({ password: newPw }, { onSuccess: () => setNewPw('') });
   };
 
+  const changeRole = (next: UserRole): void => {
+    if (next === user.role) return;
+    // Admins have no branch; staff and receptionists need one.
+    const locationId =
+      next === 'admin' ? null : (user.location_id ?? locations[0]?.id ?? null);
+    update.mutate(
+      { role: next, location_id: locationId },
+      {
+        onSuccess: () =>
+          setRoleNote(`Now ${ROLE_LABELS[next]}. Takes effect when ${user.username} logs in again.`),
+      },
+    );
+  };
+
   return (
     <tr className="border-b border-gray-100 align-top">
       <td className="py-2 pr-4">{user.username}</td>
-      <td className="py-2 pr-4 capitalize">{user.role}</td>
-      <td className="py-2 pr-4">{user.role === 'admin' ? 'All' : (branch ?? '—')}</td>
+      <td className="py-2 pr-4">
+        <select
+          aria-label={`Role for ${user.username}`}
+          className={inputCls}
+          value={isUserRole(user.role) ? user.role : ''}
+          disabled={update.isPending}
+          onChange={(e) => changeRole(e.target.value as UserRole)}
+        >
+          {!isUserRole(user.role) && <option value="">{user.role}</option>}
+          {ROLE_OPTIONS.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
+        </select>
+        {roleNote && <p className="mt-1 text-xs text-gray-500">{roleNote}</p>}
+      </td>
+      <td className="py-2 pr-4">
+        {user.role === 'admin' ? (
+          'All'
+        ) : (
+          <select
+            aria-label={`Branch for ${user.username}`}
+            className={inputCls}
+            value={user.location_id ?? ''}
+            disabled={update.isPending}
+            onChange={(e) => update.mutate({ location_id: Number(e.target.value) })}
+          >
+            {user.location_id === null && <option value="">—</option>}
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </td>
       <td className="py-2 pr-4">
         {user.is_active ? (
           <span className="text-green-700">Active</span>

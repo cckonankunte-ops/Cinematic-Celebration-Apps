@@ -12,6 +12,10 @@ export interface LocationOption {
   id: number;
   name: string;
   slug: string;
+  /** Branch phone; WhatsApp links fall back to it when `whatsapp_phone` is unset. */
+  phone?: string | null;
+  /** Branch WhatsApp number (lead-crm R11.3). */
+  whatsapp_phone?: string | null;
 }
 
 interface LocationContextValue {

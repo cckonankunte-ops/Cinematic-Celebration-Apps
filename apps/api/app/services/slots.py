@@ -40,10 +40,13 @@ class ActorKind(str, Enum):
 
 
 def actor_kind_from_role(role: str | None) -> ActorKind:
-    """Map a CurrentUser.role (or None for public) to an ActorKind."""
+    """Map a CurrentUser.role (or None for public) to an ActorKind.
+
+    Receptionists book under the same rules as staff.
+    """
     if role == "admin":
         return ActorKind.ADMIN
-    if role == "staff":
+    if role in ("staff", "receptionist"):
         return ActorKind.STAFF
     return ActorKind.PUBLIC
 

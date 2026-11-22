@@ -21,11 +21,13 @@ from app.routers.admin import analytics as admin_analytics
 from app.routers.admin import bookings as admin_bookings
 from app.routers.admin import catalog as admin_catalog
 from app.routers.admin import coupons as admin_coupons
+from app.routers.admin import leads as admin_leads
 from app.routers.admin import payments as admin_payments
 from app.routers.admin import sheets as admin_sheets
 from app.routers.admin import users as admin_users
 from app.routers.public import bookings as public_bookings
 from app.routers.public import contact as public_contact
+from app.routers.public import leads as public_leads
 from app.routers.public import locations as public_locations
 from app.routers.public import plans as public_plans
 
@@ -55,6 +57,7 @@ def _rebuild_schemas() -> None:
         "app.schemas.coupon",
         "app.schemas.sheets",
         "app.schemas.analytics",
+        "app.schemas.lead",
     ]
     for module_name in schema_modules:
         module = importlib.import_module(module_name)
@@ -103,10 +106,12 @@ def create_app() -> FastAPI:
     app.include_router(public_plans.router)
     app.include_router(public_bookings.router)
     app.include_router(public_contact.router)
+    app.include_router(public_leads.router)
     app.include_router(admin_catalog.router)
     app.include_router(admin_users.router)
     app.include_router(admin_bookings.router)
     app.include_router(admin_coupons.router)
+    app.include_router(admin_leads.router)
     app.include_router(admin_payments.router)
     app.include_router(admin_sheets.router)
     app.include_router(admin_analytics.router)

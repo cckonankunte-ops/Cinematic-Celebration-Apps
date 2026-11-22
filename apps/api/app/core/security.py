@@ -28,6 +28,19 @@ from app.core.errors import (
 )
 
 ACCESS_COOKIE_NAME = "access_token"
+
+# --- Roles -------------------------------------------------------------------
+# admin: everything, all branches. staff: bookings, payments, sheets for their
+# branch. receptionist: everything staff can do, plus the lead CRM for their
+# branch. Use the groups below with ``require_role`` so a new role is one change.
+ROLE_ADMIN = "admin"
+ROLE_STAFF = "staff"
+ROLE_RECEPTIONIST = "receptionist"
+ALL_ROLES = (ROLE_ADMIN, ROLE_STAFF, ROLE_RECEPTIONIST)
+#: Bookings, payments, time/cake sheets: every signed-in role.
+STAFF_ACCESS = ALL_ROLES
+#: Lead CRM (customer numbers and sales notes): admins and receptionists only.
+LEAD_ACCESS = (ROLE_ADMIN, ROLE_RECEPTIONIST)
 _WRITE_METHODS = {"POST", "PATCH", "PUT", "DELETE"}
 
 # Tuned for a 1-2 GB VPS.
@@ -122,7 +135,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Current
 def require_role(*roles: str) -> Callable[..., CurrentUser]:
     """FastAPI dependency factory enforcing that the current user has a role.
 
-    Usage: Depends(require_role("admin")) or Depends(require_role("admin", "staff")).
+    Usage: Depends(require_role("admin")) or Depends(require_role(*STAFF_ACCESS)).
     """
 
     def _dependency(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:

@@ -156,6 +156,8 @@ type ApiBookingBody = Omit<
 export type CreateBookingBody = ApiBookingBody & {
   advance_amount_paise?: number;
   advance_method?: 'cash' | 'upi' | 'card' | 'other';
+  /** Created from a lead (lead-crm R9.3): the server links the lead to the booking. */
+  lead_id?: number;
 };
 
 /** Edit body: a partial of the API booking body (money already in paise). */

@@ -69,7 +69,7 @@ and an Astro customer site. Money is integer paise; pricing is server-authoritat
 | Email | SMTP via env (optional) | **Disabled in Phase 1** (blank SMTP = no-op) |
 | Payments | Manual advance (Phase 1) | PhonePe gateway deferred to its own spec |
 | Backups | nightly `pg_dump` → gzip → R2 | 14 daily + 8 weekly; tested restore |
-| Scheduling | host cron | `expire_pending` every minute; nightly backup. No in-process scheduler |
+| Scheduling | host cron | `expire_pending` every minute; `auto_close_leads` daily (03:00 IST, off while `LEAD_AUTO_CLOSE_DAYS=0`); nightly backup. No in-process scheduler |
 | Source control | GitHub | Repo `cckonankunte-ops/Cinematic-Celebration-Apps`; manual deploy for Phase 1 |
 
 ---

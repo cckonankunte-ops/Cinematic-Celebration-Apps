@@ -51,7 +51,7 @@ class BookingEvent(Base):
     __table_args__ = (
         CheckConstraint(
             "event_type IN ('created','accepted','rejected','edited',"
-            "'payment_recorded','payment_voided','expired')",
+            "'payment_recorded','payment_voided','expired','cancelled')",
             name="ck_booking_events_type",
         ),
     )

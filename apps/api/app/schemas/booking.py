@@ -168,6 +168,8 @@ class BookingCreate(BaseModel):
     combos: list[ComboSelectionIn] = Field(default_factory=list)
     led_name: str | None = None
     coupon_code: str | None = None
+    # Lead CRM: token from wizard Step 1, links this request to its lead.
+    lead_token: str | None = Field(default=None, max_length=64)
 
     @field_validator("phone")
     @classmethod
@@ -216,12 +218,37 @@ class PublicBookingStatus(BaseModel):
 
 
 class ContactCreate(BaseModel):
-    """Public contact form submission."""
+    """Public contact form submission (legacy ``/public/contact``).
 
-    name: str
+    Stored as a ``contact_form`` lead (lead-crm R3.8): email and branch are
+    optional; the phone must be a valid Indian mobile (422 otherwise).
+    """
+
+    name: str = Field(min_length=1, max_length=120)
     phone: str
-    email: str
-    message: str
+    email: str | None = Field(default=None, max_length=254)
+    message: str = Field(min_length=1, max_length=2000)
+    location_id: int | None = None
+
+    @field_validator("phone")
+    @classmethod
+    def _check_phone(cls, value: str) -> str:
+        normalised = normalize_indian_mobile(value or "")
+        if normalised is None:
+            raise ValueError("phone must be a valid Indian mobile number")
+        return normalised
+
+    @field_validator("name", "message", mode="before")
+    @classmethod
+    def _strip(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _blank_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
 
 
 class ContactResult(BaseModel):
@@ -242,6 +269,8 @@ class AdminBookingCreate(BookingCreate):
     # total); when None, no payment is recorded.
     advance_amount_paise: int | None = Field(default=None, gt=0)
     advance_method: Literal["cash", "upi", "card", "other"] | None = None
+    # Lead CRM: set when the booking is created from a lead (R9.3).
+    lead_id: int | None = None
 
 
 class BookingUpdate(BaseModel):

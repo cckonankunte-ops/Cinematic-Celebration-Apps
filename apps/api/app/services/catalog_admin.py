@@ -122,6 +122,7 @@ def to_location_admin_read(location: Location) -> LocationAdminRead:
         allow_late_booking=location.allow_late_booking,
         booking_mode=location.booking_mode,
         is_active=location.is_active,
+        whatsapp_phone=location.whatsapp_phone,
     )
 
 

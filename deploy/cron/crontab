@@ -5,5 +5,9 @@
 # Expire unpaid pending bookings every minute (idempotent).
 * * * * * cd /opt/cinematic/New_Application/deploy && docker compose exec -T api python -m app.jobs.expire_pending >> /var/log/cc/expire.log 2>&1
 
+# Auto-close stale leads daily at 03:00 IST (21:30 UTC). Does nothing while
+# LEAD_AUTO_CLOSE_DAYS=0 (the default); safe to keep installed.
+30 21 * * * cd /opt/cinematic/New_Application/deploy && docker compose exec -T api python -m app.jobs.auto_close_leads >> /var/log/cc/leads.log 2>&1
+
 # Nightly database backup at 02:00 IST (20:30 UTC).
 30 20 * * * cd /opt/cinematic/New_Application/deploy && ./backup/backup.sh >> /var/log/cc/backup.log 2>&1

@@ -166,6 +166,8 @@ export interface LocationAdminRead {
   /** 'slot' (pick a configured slot) | 'open' (pick start + duration directly). */
   booking_mode: 'slot' | 'open';
   is_active: boolean;
+  /** Branch WhatsApp number (10 digits) for lead follow-ups; null when unset. */
+  whatsapp_phone?: string | null;
 }
 
 export interface LocationHoursUpdateBody {
@@ -174,6 +176,8 @@ export interface LocationHoursUpdateBody {
   last_online_booking_start?: string;
   allow_late_booking?: boolean;
   booking_mode?: 'slot' | 'open';
+  /** Send null to clear. */
+  whatsapp_phone?: string | null;
 }
 
 /** Shared shape for location add-ons (cakes/decor/combos) with an image URL. */

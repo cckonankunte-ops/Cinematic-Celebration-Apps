@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import BranchPreview from '../components/booking/BranchPreview.tsx';
 import HomeBookingWidget from '../components/booking/HomeBookingWidget.tsx';
 import OffersShowcase from '../components/booking/OffersShowcase.tsx';
+import QuickEnquiry from '../components/booking/QuickEnquiry.tsx';
 
 const title = 'Cinematic Celebration — Private Theatre Celebrations in Bangalore';
 const description =
@@ -124,6 +125,19 @@ const why = [
         ))
       }
     </ol>
+  </section>
+
+  <!-- Quick enquiry (lead-crm R3.1): becomes a lead the branch team calls back. -->
+  <section id="enquire" class="py-12">
+    <div class="mx-auto max-w-xl rounded-2xl bg-white p-6 shadow-sm">
+      <h2 class="text-2xl font-bold text-gray-900">Not ready to book yet?</h2>
+      <p class="mt-2 text-gray-600">
+        Leave your number and we'll call or WhatsApp you with options and prices.
+      </p>
+      <div class="relative mt-5">
+        <QuickEnquiry client:visible />
+      </div>
+    </div>
   </section>
 
   <!-- Branches preview -->

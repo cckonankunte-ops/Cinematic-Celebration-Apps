@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 
 import { ApiError } from '@/api/client';
 import { formatRupees, rupeesToPaise } from '@/lib/money';
+import { normaliseIndianMobile } from '@/lib/phone';
 import {
   useAdvanceRules,
   useCreateAdvanceRule,
@@ -31,6 +32,8 @@ function LocationRow({ loc }: { loc: LocationAdminRead }): JSX.Element {
   const [cutoff, setCutoff] = useState(loc.last_online_booking_start.slice(0, 5));
   const [allowLate, setAllowLate] = useState(loc.allow_late_booking);
   const [bookingMode, setBookingMode] = useState<'slot' | 'open'>(loc.booking_mode);
+  const [whatsapp, setWhatsapp] = useState(loc.whatsapp_phone ?? '');
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
 
   // Re-sync local fields if the server value changes after a refetch.
   useEffect(() => {
@@ -39,10 +42,20 @@ function LocationRow({ loc }: { loc: LocationAdminRead }): JSX.Element {
     setCutoff(loc.last_online_booking_start.slice(0, 5));
     setAllowLate(loc.allow_late_booking);
     setBookingMode(loc.booking_mode);
+    setWhatsapp(loc.whatsapp_phone ?? '');
   }, [loc]);
 
   const onSave = (e: React.FormEvent): void => {
     e.preventDefault();
+    // Branch WhatsApp number (lead-crm R11.6): empty clears it; otherwise it
+    // must be a valid Indian mobile (same rule as the server).
+    const trimmed = whatsapp.trim();
+    const whatsappPhone = trimmed ? normaliseIndianMobile(trimmed) : null;
+    if (trimmed && whatsappPhone === null) {
+      setWhatsappError('Enter a valid Indian mobile number, or leave it empty.');
+      return;
+    }
+    setWhatsappError(null);
     update.mutate({
       locationId: loc.id,
       body: {
@@ -51,6 +64,7 @@ function LocationRow({ loc }: { loc: LocationAdminRead }): JSX.Element {
         last_online_booking_start: cutoff,
         allow_late_booking: allowLate,
         booking_mode: bookingMode,
+        whatsapp_phone: whatsappPhone,
       },
     });
   };
@@ -111,6 +125,20 @@ function LocationRow({ loc }: { loc: LocationAdminRead }): JSX.Element {
           <option value="open">Open (start + duration)</option>
         </select>
       </label>
+      <label className="text-xs text-gray-600">
+        Branch WhatsApp number
+        <input
+          type="tel"
+          inputMode="tel"
+          aria-label={`Branch WhatsApp number for ${loc.name}`}
+          aria-invalid={whatsappError !== null}
+          placeholder="Uses the branch phone if empty"
+          className={`${field} ml-1 w-44`}
+          value={whatsapp}
+          onChange={(e) => setWhatsapp(e.target.value)}
+        />
+      </label>
+      {whatsappError && <span className="text-xs text-red-600">{whatsappError}</span>}
       <button
         type="submit"
         disabled={update.isPending}

@@ -79,6 +79,7 @@ def list_active_locations(db: Session) -> list[LocationRead]:
             slug=r.slug,
             address=r.address,
             phone=r.phone,
+            whatsapp_phone=r.whatsapp_phone,
             map_url=r.map_url,
             opens_at=r.opens_at,
             closes_at=r.closes_at,

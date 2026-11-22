@@ -16,6 +16,7 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
+from hypothesis import settings as hypothesis_settings
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -30,6 +31,13 @@ try:  # pragma: no cover - models land in task 2
     import app.models  # noqa: F401
 except Exception:  # pragma: no cover
     pass
+
+# Property tests here talk to a real PostgreSQL, so one example's duration
+# depends on the machine (a shared Codespace is slow), not on the code. Turn
+# Hypothesis's per-example 200 ms deadline off; every example and assertion
+# still runs. Per-test @settings (max_examples, health checks) keep applying.
+hypothesis_settings.register_profile("db", deadline=None)
+hypothesis_settings.load_profile("db")
 
 
 @pytest.fixture(scope="session")

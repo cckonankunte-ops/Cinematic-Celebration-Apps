@@ -266,3 +266,52 @@ ledger, so those filters need to run on the grouped query (HAVING), not on
 stored columns. Skipped OR groups and free-form group-by on purpose: too much
 UI and risk for tens of bookings a day. Fixed breakdowns (by plan, by day) may
 answer most performance questions faster.
+
+## Lead capture: "offer for a number" (deferred)
+
+**Idea.** On the homepage quick enquiry, offer a small discount ("Get ₹200 off —
+enter your number to unlock"). Submitting creates a Lead (source
+`homepage_form`) and reveals or WhatsApps a coupon code. Reuses the existing
+location-scoped coupons (server-authoritative; the client never computes the
+discount). Needs decisions on: which coupon, one-per-phone limit, abuse
+controls, and whether the code is shown on screen or sent via WhatsApp.
+
+**Status:** deferred (recorded with the lead-crm spec). Explore later.
+
+## Lead capture: exit-intent popup / timed enquiry bar (deferred)
+
+**Idea.** Desktop: a popup when the visitor moves to leave the page. Mobile
+(~95% of traffic): a gentle bottom bar after ~30 seconds ("Planning a
+celebration? Leave your number, we'll call you"), dismissible and shown at most
+once per visit. Must not cover the booking wizard's action bar.
+
+**Status:** deferred. Decide later whether it is needed at all, based on lead
+volume after lead-crm goes live.
+
+## Lead data retention: clear contact details on old closed leads (deferred)
+
+**Context.** Leads store a phone (required) and an optional name, used only so
+staff can call or WhatsApp the customer about their enquiry. Once a lead is
+closed (`won`, `lost`, `not_interested`), those details are no longer needed
+for that purpose, but today they are kept indefinitely.
+
+**Idea.** A daily cron CLI job (like `app.jobs.auto_close_leads`) that, for
+leads closed more than N months ago (for example 12), clears `name` and
+replaces `phone` with a non-identifying placeholder, and clears free-text notes
+on their timeline. Keep `source`, `channel`, `status`, `close_reason`,
+attribution fields and timestamps so the lead dashboard and conversion figures
+stay correct. `won` leads keep their link to the booking, which holds the
+customer's details under the booking rules.
+
+**Why.** Data minimisation and storage limitation under India's DPDP Act 2023:
+keep personal data only as long as needed for the purpose it was collected for.
+
+**Decisions needed.**
+- The retention period, and whether `won` leads are included.
+- How to replace the phone given the `ck_leads_phone_digits` check (for example
+  a migration that allows NULL for anonymised leads, plus an `anonymised_at`
+  column).
+- Whether notes are cleared or kept.
+- Update the privacy policy to state the period.
+
+**Status:** deferred (recorded with lead-crm, Nov 2026). Decide later.

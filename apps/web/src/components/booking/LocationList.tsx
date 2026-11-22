@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { publicApi, type Location } from '../../lib/api';
+import { getOrCreateEnquiryCode } from '../../lib/enquiry-code';
+import { buildWhatsappLink, registerEnquiryCode } from '../../lib/whatsapp';
 import BranchThemes from './BranchThemes';
 
 /**
@@ -13,6 +15,13 @@ export default function LocationList() {
   const [loading, setLoading] = useState(true);
   // Which branch's themes are expanded (one at a time keeps it tidy).
   const [openThemes, setOpenThemes] = useState<number | null>(null);
+  // WhatsApp enquiry code: created in the browser after mount (this island is
+  // also rendered at build time, where there is no visitor or storage).
+  const [enquiryCode, setEnquiryCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEnquiryCode(getOrCreateEnquiryCode());
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -48,10 +57,9 @@ export default function LocationList() {
   return (
     <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {locations.map((loc) => {
-        // WhatsApp link from the branch phone (digits only; 10-digit numbers
-        // get the 91 country code).
         const digits = (loc.phone ?? '').replace(/\D/g, '');
-        const waNumber = digits.length === 10 ? `91${digits}` : digits;
+        // Branch WhatsApp number (falls back to the phone) + enquiry code.
+        const waHref = buildWhatsappLink(loc, enquiryCode);
         return (
           <li
             key={loc.id}
@@ -72,11 +80,15 @@ export default function LocationList() {
                   📞 {loc.phone}
                 </a>
               )}
-              {waNumber && (
+              {waHref && (
                 <a
-                  href={`https://wa.me/${waNumber}`}
+                  href={waHref}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={() => {
+                    // Not awaited: WhatsApp opens even if this fails (R18.4).
+                    if (enquiryCode) registerEnquiryCode(enquiryCode, loc.id);
+                  }}
                   className="block text-festive-mint hover:underline"
                 >
                   💬 WhatsApp
