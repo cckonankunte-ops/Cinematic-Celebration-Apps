@@ -2071,6 +2071,17 @@
             ],
             "title": "Phone"
           },
+          "plan_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Id"
+          },
           "slot_id": {
             "anyOf": [
               {
