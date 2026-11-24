@@ -1036,6 +1036,14 @@ def update_booking(
     #   - For an open-mode booking, start_time/duration_minutes set the window.
     # Availability (time rules + overlap, excluding this booking) is re-checked
     # against the effective date; a conflict raises SlotUnavailableError (409).
+    #   - Changing the plan (same branch) moves the booking to another room, so the
+    #     window is re-resolved against the NEW plan: a slot must be re-picked in
+    #     slot mode (slots belong to one plan), and in open mode the duration must
+    #     be offered by the new plan. Overlap is checked on the new plan's
+    #     calendar, since each plan holds its own bookings.
+    old_plan_id = booking.plan_id
+    plan_id = data.plan_id if data.plan_id is not None else old_plan_id
+    plan_changed = plan_id != old_plan_id
     date_changed = (
         data.booking_date is not None and data.booking_date != booking.booking_date
     )
@@ -1044,13 +1052,16 @@ def update_booking(
         or data.start_time is not None
         or data.duration_minutes is not None
     )
-    if date_changed or window_changed:
+    if date_changed or window_changed or plan_changed:
         location = db.get(Location, booking.location_id)
         if location is None:
             raise ItemInvalidError("The booking's location is no longer valid.")
         effective_date = (
             data.booking_date if data.booking_date is not None else booking.booking_date
         )
+        if plan_changed:
+            # Same branch, active, and valid on the booking date (else 422).
+            _load_valid_plan(db, booking.location_id, plan_id, effective_date)
         # Admins may edit bookings on a past date (e.g. correcting a completed
         # booking); staff and the future-start grace keep them on current/future
         # dates. Mirrors the `override_disallowed=actor.role == "admin"` pattern.
@@ -1062,6 +1073,11 @@ def update_booking(
             # On a date change the prior slot_id no longer implies availability;
             # the caller must re-pick a slot for the new date.
             new_slot_id = data.slot_id if data.slot_id is not None else booking.slot_id
+            if plan_changed and data.slot_id is None:
+                # The old slot belongs to the old plan, so it can't be carried over.
+                raise ValidationFailedError(
+                    "Changing the plan requires selecting a slot for the new plan."
+                )
             if date_changed and data.slot_id is None:
                 raise ValidationFailedError(
                     "Changing the date requires re-selecting a slot for the new date."
@@ -1071,7 +1087,7 @@ def update_booking(
             resolved = resolve_booking_window(
                 db,
                 location,
-                booking.plan_id,
+                plan_id,
                 slot_id=new_slot_id,
                 start_time=None,
                 duration_minutes=None,
@@ -1089,7 +1105,7 @@ def update_booking(
             resolved = resolve_booking_window(
                 db,
                 location,
-                booking.plan_id,
+                plan_id,
                 slot_id=None,
                 start_time=new_start,
                 duration_minutes=new_duration,
@@ -1115,12 +1131,13 @@ def update_booking(
         _assert_no_overlap(
             db,
             location_id=booking.location_id,
-            plan_id=booking.plan_id,
+            plan_id=plan_id,
             booking_date=effective_date,
             start=resolved.start_time,
             duration_minutes=resolved.duration_minutes,
             exclude_booking_id=booking.id,
         )
+        booking.plan_id = plan_id
         booking.booking_date = effective_date
         booking.slot_id = resolved.slot_id
         booking.start_time = resolved.start_time
@@ -1129,6 +1146,7 @@ def update_booking(
     reprice = (
         window_changed
         or date_changed
+        or plan_changed
         or data.people is not None
         or data.kids is not None
         or data.cake_id is not None
@@ -1181,7 +1199,7 @@ def update_booking(
         req = validate_booking_request(
             db,
             location_id=booking.location_id,
-            plan_id=booking.plan_id,
+            plan_id=plan_id,
             booking_date=booking.booking_date,
             people=people,
             kids=kids,
@@ -1285,15 +1303,28 @@ def update_booking(
     if data.message is not None:
         booking.message = data.message
 
+    new_snapshot = _money_snapshot(booking)
+    if plan_changed:
+        # The money snapshot has no plan; record the move in the audit trail.
+        old_snapshot = {**old_snapshot, "plan_id": old_plan_id}
+        new_snapshot = {**new_snapshot, "plan_id": booking.plan_id}
     write_booking_event(
         db,
         booking.id,
         "edited",
         actor_user_id=actor.id,
         old_value=old_snapshot,
-        new_value=_money_snapshot(booking),
+        new_value=new_snapshot,
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # The DB exclusion constraint is the backstop if another booking took the
+        # new plan's window between the pre-check and this commit.
+        db.rollback()
+        if _classify_integrity_error(exc).is_slot_conflict:
+            raise SlotUnavailableError() from exc
+        raise
     db.refresh(booking)
     return booking
 

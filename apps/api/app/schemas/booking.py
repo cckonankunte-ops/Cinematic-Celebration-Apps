@@ -283,6 +283,11 @@ class BookingUpdate(BaseModel):
 
     people: int | None = Field(default=None, ge=1)  # adults; None = unchanged
     kids: int | None = Field(default=None, ge=0)  # kids (3-10 yrs); None = unchanged
+    # Moving the booking to a different plan (same branch). When it differs from
+    # the booking's plan the client MUST also send the window for the NEW plan
+    # (slot_id in slot mode; start_time + duration_minutes in open mode, whose
+    # duration must be offered by the new plan). None / same plan = unchanged.
+    plan_id: int | None = None
     # Moving the booking to a different date. When set, the client MUST also send
     # the re-selected window (slot_id for slot mode, or start_time +
     # duration_minutes for open mode) for the new date; the service re-checks
