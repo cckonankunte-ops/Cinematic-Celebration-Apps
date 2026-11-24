@@ -2200,6 +2200,8 @@ export interface components {
             people?: number | null;
             /** Phone */
             phone?: string | null;
+            /** Plan Id */
+            plan_id?: number | null;
             /** Slot Id */
             slot_id?: number | null;
             /** Special Decor */
