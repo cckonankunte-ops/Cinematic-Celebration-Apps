@@ -206,6 +206,12 @@ export function BookingForm({
     if (hadPlan) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RHF reset to empty
       setValue('slot_id', undefined as any);
+      // Open mode: the new plan may not offer the old duration, so clear the
+      // duration and start time too. The admin re-picks them for the new plan.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RHF reset to empty
+      setValue('duration_minutes', undefined as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RHF reset to empty
+      setValue('start_time', undefined as any);
     }
   }, [planId, setValue]);
 
