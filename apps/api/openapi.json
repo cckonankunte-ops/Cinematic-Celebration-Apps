@@ -323,6 +323,19 @@
             ],
             "title": "Email"
           },
+          "extra_minutes": {
+            "default": 0,
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Extra Minutes",
+            "type": "integer"
+          },
+          "extra_time_price_paise": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Extra Time Price Paise",
+            "type": "integer"
+          },
           "food_paise": {
             "default": 0,
             "minimum": 0.0,
@@ -596,6 +609,19 @@
               }
             ],
             "title": "Duration Minutes"
+          },
+          "extra_minutes": {
+            "default": 0,
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Extra Minutes",
+            "type": "integer"
+          },
+          "extra_time_price_paise": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Extra Time Price Paise",
+            "type": "integer"
           },
           "food_paise": {
             "default": 0,
@@ -1649,6 +1675,16 @@
             "title": "Extra Guest Paise",
             "type": "integer"
           },
+          "extra_minutes": {
+            "default": 0,
+            "title": "Extra Minutes",
+            "type": "integer"
+          },
+          "extra_time_price_paise": {
+            "default": 0,
+            "title": "Extra Time Price Paise",
+            "type": "integer"
+          },
           "food_paise": {
             "title": "Food Paise",
             "type": "integer"
@@ -1967,6 +2003,31 @@
               }
             ],
             "title": "Email"
+          },
+          "extra_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Minutes"
+          },
+          "extra_time_price_paise": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Time Price Paise"
           },
           "food_paise": {
             "anyOf": [
@@ -3891,6 +3952,73 @@
           "name"
         ],
         "title": "EnquiryIn",
+        "type": "object"
+      },
+      "ExtraTimeAvailabilityRead": {
+        "description": "Most extra minutes that fit; null means nothing limits it.",
+        "properties": {
+          "max_extra_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Extra Minutes"
+          }
+        },
+        "required": [
+          "max_extra_minutes"
+        ],
+        "title": "ExtraTimeAvailabilityRead",
+        "type": "object"
+      },
+      "ExtraTimeAvailabilityRequest": {
+        "properties": {
+          "booking_date": {
+            "format": "date",
+            "title": "Booking Date",
+            "type": "string"
+          },
+          "booking_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Booking Id"
+          },
+          "duration_minutes": {
+            "title": "Duration Minutes",
+            "type": "integer"
+          },
+          "location_id": {
+            "title": "Location Id",
+            "type": "integer"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "start_time": {
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "location_id",
+          "booking_date",
+          "start_time",
+          "duration_minutes"
+        ],
+        "title": "ExtraTimeAvailabilityRequest",
         "type": "object"
       },
       "FollowUpDigest": {
@@ -6071,6 +6199,11 @@
             "title": "Extra Guest Paise",
             "type": "integer"
           },
+          "extra_time_price_paise": {
+            "default": 0,
+            "title": "Extra Time Price Paise",
+            "type": "integer"
+          },
           "food_paise": {
             "title": "Food Paise",
             "type": "integer"
@@ -7160,6 +7293,17 @@
               }
             ],
             "title": "Combos"
+          },
+          "led_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Led Name"
           },
           "name_on_cake": {
             "anyOf": [
@@ -8605,6 +8749,48 @@
           }
         },
         "summary": "Create Booking",
+        "tags": [
+          "admin-bookings"
+        ]
+      }
+    },
+    "/api/v1/admin/bookings/extra-time-availability": {
+      "post": {
+        "description": "How many extra minutes fit after a window (admin/receptionist, OPEN mode).\n\nDrives the hint on the booking form; the save path re-checks authoritatively.",
+        "operationId": "extra_time_availability_api_v1_admin_bookings_extra_time_availability_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtraTimeAvailabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtraTimeAvailabilityRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Extra Time Availability",
         "tags": [
           "admin-bookings"
         ]

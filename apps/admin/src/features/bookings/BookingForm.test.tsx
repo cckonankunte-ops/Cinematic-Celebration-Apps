@@ -40,6 +40,14 @@ vi.mock('./catalog-queries', () => ({
       { start_time: '15:30:00', is_available: false },
     ],
   }),
+  // No later booking: the extra-time hint has nothing to limit.
+  useExtraTimeAvailability: () => ({ data: undefined }),
+}));
+
+// The signed-in role; extra time is only offered to admins.
+let mockRole: 'admin' | 'receptionist' | 'staff' = 'admin';
+vi.mock('@/features/auth/useAuth', () => ({
+  useAuth: () => ({ user: { role: mockRole } }),
 }));
 
 // Mock the preview mutation so the live-summary effect doesn't need a
@@ -95,6 +103,7 @@ describe('BookingForm', () => {
     // original tests that don't drive the live summary.
     previewResult = {};
     mockBookingMode = 'slot';
+    mockRole = 'admin';
     mockPlans = [{ id: 3, title: 'Starlight Package' }];
     mockSlots = [{ id: 7, description: '9 AM - 12 PM', is_available: true }];
     mockDurations = [
@@ -391,6 +400,79 @@ describe('BookingForm', () => {
     expect(values.start_time).toBe('15:00');
     expect(values.duration_minutes).toBe(60);
     expect(values.slot_id).toBeUndefined();
+  });
+
+  const renderForm = (onSubmit: () => void = () => {}): void => {
+    render(
+      <BookingForm
+        locationId={1}
+        submitLabel="Create booking"
+        onSubmit={onSubmit}
+        isSubmitting={false}
+        serverError={null}
+      />,
+    );
+  };
+
+  it('offers extra time to an admin in open mode', () => {
+    mockBookingMode = 'open';
+    mockRole = 'admin';
+    renderForm();
+    expect(screen.getByLabelText(/Extra minutes/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Extra time price/)).toBeInTheDocument();
+  });
+
+  it('offers extra time to a receptionist in open mode', () => {
+    mockBookingMode = 'open';
+    mockRole = 'receptionist';
+    renderForm();
+    expect(screen.getByLabelText(/Extra minutes/)).toBeInTheDocument();
+  });
+
+  it('hides extra time from staff in open mode', () => {
+    mockBookingMode = 'open';
+    mockRole = 'staff';
+    renderForm();
+    expect(screen.queryByLabelText(/Extra minutes/)).not.toBeInTheDocument();
+  });
+
+  it('hides extra time in slot mode, even for an admin', () => {
+    mockBookingMode = 'slot';
+    mockRole = 'admin';
+    renderForm();
+    expect(screen.queryByLabelText(/Extra minutes/)).not.toBeInTheDocument();
+  });
+
+  it('submits the extra minutes and price for an open-mode booking', async () => {
+    mockBookingMode = 'open';
+    mockRole = 'admin';
+    const onSubmit = vi.fn();
+    renderForm(onSubmit);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Plan' }), {
+      target: { value: '3' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Duration' }), {
+      target: { value: '120' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Start time' }), {
+      target: { value: '15:00' },
+    });
+    fireEvent.change(screen.getByLabelText(/Extra minutes/), { target: { value: '45' } });
+    fireEvent.change(screen.getByLabelText(/Extra time price/), {
+      target: { value: '500' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Booking name' }), {
+      target: { value: 'Priya S' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Phone' }), {
+      target: { value: '9876543210' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create booking' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const values = onSubmit.mock.calls[0][0];
+    expect(values.extra_minutes).toBe(45);
+    expect(values.extra_time_rupees).toBe(500);
   });
 
   it('shows a field-level error when the coupon is rejected', async () => {

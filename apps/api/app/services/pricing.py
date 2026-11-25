@@ -170,6 +170,8 @@ class PriceBreakdown:
     # plan's advance_paise fallback). Returned by preview + create so the UI's
     # Advance/Balance are server-authoritative.
     advance_paise: int = 0
+    # Flat admin-entered charge for extra time (already inside total_paise).
+    extra_time_price_paise: int = 0
 
 
 def _round_to_whole_rupee(paise: int) -> int:
@@ -302,6 +304,7 @@ def compute_booking_price(
     coupon: ValidatedCoupon | None = None,
     base_price_paise: int | None = None,
     advance_rules: list[AdvanceRuleLike] | None = None,
+    extra_time_price_paise: int = 0,
 ) -> PriceBreakdown:
     """Compute the authoritative price breakdown.
 
@@ -430,9 +433,11 @@ def compute_booking_price(
     food = max(0, food_paise)
     other = max(0, other_paise)
     cleaning = max(0, cleaning_paise)
+    # Flat admin-entered charge for extra time. Never applies to customers.
+    extra_time = 0 if is_customer else max(0, extra_time_price_paise)
 
     # 8. Pre-coupon total.
-    total_before_coupon = subtotal + food + other + cleaning - discount
+    total_before_coupon = subtotal + food + other + cleaning + extra_time - discount
 
     # 9. Coupon discount (coupon already validated by the service layer).
     coupon_discount = 0
@@ -473,4 +478,5 @@ def compute_booking_price(
         coupon_discount_paise=coupon_discount,
         total_paise=total,
         advance_paise=advance,
+        extra_time_price_paise=extra_time,
     )

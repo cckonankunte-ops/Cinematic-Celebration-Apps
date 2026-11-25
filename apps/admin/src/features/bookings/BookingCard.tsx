@@ -57,6 +57,10 @@ export function BookingCard({ booking }: { booking: BookingListItem }): JSX.Elem
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
         <dt className="text-gray-500">Date</dt>
         <dd className="text-right text-gray-900">{formatDate(booking.booking_date)}</dd>
+        <dt className="text-gray-500">Plan</dt>
+        <dd className="text-right text-gray-900">{booking.plan_title}</dd>
+        <dt className="text-gray-500">Time</dt>
+        <dd className="text-right text-gray-900">{booking.slot_description}</dd>
         <dt className="text-gray-500">People</dt>
         <dd className="text-right text-gray-900">
           {booking.people}

@@ -59,6 +59,8 @@ function toInitialValues(booking: BookingRead): Partial<BookingCreateInput> {
     food_rupees: paiseToRupees(booking.food_paise),
     other_rupees: paiseToRupees(booking.other_paise),
     cleaning_rupees: paiseToRupees(booking.cleaning_paise),
+    extra_minutes: booking.extra_minutes ?? 0,
+    extra_time_rupees: paiseToRupees(booking.extra_time_price_paise ?? 0),
   };
 }
 
@@ -75,6 +77,7 @@ function toApiMoney(
     food_rupees,
     other_rupees,
     cleaning_rupees,
+    extra_time_rupees,
     advance_rupees: _ar,
     advance_method: _am,
     ...rest
@@ -87,6 +90,7 @@ function toApiMoney(
     food_paise: rupeesToPaise(food_rupees),
     other_paise: rupeesToPaise(other_rupees),
     cleaning_paise: rupeesToPaise(cleaning_rupees),
+    extra_time_price_paise: rupeesToPaise(extra_time_rupees),
   };
   return mapped;
 }

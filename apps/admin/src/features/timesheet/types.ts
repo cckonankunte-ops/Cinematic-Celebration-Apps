@@ -14,6 +14,7 @@ export interface TimesheetRow {
   phone: string | null;
   people: number;
   name_on_cake: string | null;
+  led_name?: string | null;
   cake: string | null;
   special_decor: string | null;
   combos: string | null;

@@ -41,6 +41,9 @@ ALL_ROLES = (ROLE_ADMIN, ROLE_STAFF, ROLE_RECEPTIONIST)
 STAFF_ACCESS = ALL_ROLES
 #: Lead CRM (customer numbers and sales notes): admins and receptionists only.
 LEAD_ACCESS = (ROLE_ADMIN, ROLE_RECEPTIONIST)
+
+#: Adding extra time (and its price) to an open-mode booking: not plain staff.
+EXTRA_TIME_ACCESS = (ROLE_ADMIN, ROLE_RECEPTIONIST)
 _WRITE_METHODS = {"POST", "PATCH", "PUT", "DELETE"}
 
 # Tuned for a 1-2 GB VPS.

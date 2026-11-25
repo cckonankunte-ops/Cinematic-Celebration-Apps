@@ -144,6 +144,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/bookings/extra-time-availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extra Time Availability
+         * @description How many extra minutes fit after a window (admin/receptionist, OPEN mode).
+         *
+         *     Drives the hint on the booking form; the save path re-checks authoritatively.
+         */
+        post: operations["extra_time_availability_api_v1_admin_bookings_extra_time_availability_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/bookings/open-availability": {
         parameters: {
             query?: never;
@@ -1635,6 +1657,16 @@ export interface components {
             /** Email */
             email?: string | null;
             /**
+             * Extra Minutes
+             * @default 0
+             */
+            extra_minutes: number;
+            /**
+             * Extra Time Price Paise
+             * @default 0
+             */
+            extra_time_price_paise: number;
+            /**
              * Food Paise
              * @default 0
              */
@@ -1729,6 +1761,16 @@ export interface components {
             discount_paise: number;
             /** Duration Minutes */
             duration_minutes?: number | null;
+            /**
+             * Extra Minutes
+             * @default 0
+             */
+            extra_minutes: number;
+            /**
+             * Extra Time Price Paise
+             * @default 0
+             */
+            extra_time_price_paise: number;
             /**
              * Food Paise
              * @default 0
@@ -2103,6 +2145,16 @@ export interface components {
             email: string | null;
             /** Extra Guest Paise */
             extra_guest_paise: number;
+            /**
+             * Extra Minutes
+             * @default 0
+             */
+            extra_minutes: number;
+            /**
+             * Extra Time Price Paise
+             * @default 0
+             */
+            extra_time_price_paise: number;
             /** Food Paise */
             food_paise: number;
             /** Id */
@@ -2182,6 +2234,10 @@ export interface components {
             duration_minutes?: number | null;
             /** Email */
             email?: string | null;
+            /** Extra Minutes */
+            extra_minutes?: number | null;
+            /** Extra Time Price Paise */
+            extra_time_price_paise?: number | null;
             /** Food Paise */
             food_paise?: number | null;
             /** Kids */
@@ -2846,6 +2902,35 @@ export interface components {
             source: "homepage_form" | "contact_form";
             /** Website */
             website?: string | null;
+        };
+        /**
+         * ExtraTimeAvailabilityRead
+         * @description Most extra minutes that fit; null means nothing limits it.
+         */
+        ExtraTimeAvailabilityRead: {
+            /** Max Extra Minutes */
+            max_extra_minutes: number | null;
+        };
+        /** ExtraTimeAvailabilityRequest */
+        ExtraTimeAvailabilityRequest: {
+            /**
+             * Booking Date
+             * Format: date
+             */
+            booking_date: string;
+            /** Booking Id */
+            booking_id?: number | null;
+            /** Duration Minutes */
+            duration_minutes: number;
+            /** Location Id */
+            location_id: number;
+            /** Plan Id */
+            plan_id: number;
+            /**
+             * Start Time
+             * Format: time
+             */
+            start_time: string;
         };
         /** FollowUpDigest */
         FollowUpDigest: {
@@ -3571,6 +3656,11 @@ export interface components {
             discount_paise: number;
             /** Extra Guest Paise */
             extra_guest_paise: number;
+            /**
+             * Extra Time Price Paise
+             * @default 0
+             */
+            extra_time_price_paise: number;
             /** Food Paise */
             food_paise: number;
             /**
@@ -3972,6 +4062,8 @@ export interface components {
             cake: string | null;
             /** Combos */
             combos: string | null;
+            /** Led Name */
+            led_name?: string | null;
             /** Name On Cake */
             name_on_cake: string | null;
             /** Occasion */
@@ -4420,6 +4512,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extra_time_availability_api_v1_admin_bookings_extra_time_availability_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtraTimeAvailabilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtraTimeAvailabilityRead"];
                 };
             };
             /** @description Validation Error */

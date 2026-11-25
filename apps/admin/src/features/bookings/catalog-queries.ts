@@ -232,3 +232,52 @@ export function useOpenAvailability(
       durationMinutes !== null,
   });
 }
+
+/** How much extra time fits after a window; null means nothing limits it. */
+export interface ExtraTimeAvailability {
+  max_extra_minutes: number | null;
+}
+
+/**
+ * Admin-only: the most extra minutes that fit after `start + duration` before
+ * the next booking (cleaning buffer included). Pass `enabled=false` for
+ * non-admins or slot-mode branches. When editing, `bookingId` excludes the
+ * booking's own window. The save path re-checks this authoritatively.
+ */
+export function useExtraTimeAvailability(
+  enabled: boolean,
+  planId: number | null,
+  locationId: number | null,
+  bookingDate: string | null,
+  startTime: string | null,
+  durationMinutes: number | null,
+  bookingId?: number | null,
+): UseQueryResult<ExtraTimeAvailability> {
+  return useQuery<ExtraTimeAvailability>({
+    queryKey: [
+      'extra-time-availability',
+      planId,
+      locationId,
+      bookingDate,
+      startTime,
+      durationMinutes,
+      bookingId ?? null,
+    ],
+    queryFn: () =>
+      api.post<ExtraTimeAvailability>('/api/v1/admin/bookings/extra-time-availability', {
+        plan_id: planId,
+        location_id: locationId,
+        booking_date: bookingDate,
+        start_time: startTime,
+        duration_minutes: durationMinutes,
+        booking_id: bookingId ?? null,
+      }),
+    enabled:
+      enabled &&
+      planId !== null &&
+      locationId !== null &&
+      !!bookingDate &&
+      !!startTime &&
+      durationMinutes !== null,
+  });
+}

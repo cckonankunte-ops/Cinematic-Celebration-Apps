@@ -57,6 +57,9 @@ export interface AdminPreviewBody {
   food_paise: number;
   other_paise: number;
   cleaning_paise: number;
+  // Admin-only extra time (open mode). Staff previews are ignored server-side.
+  extra_minutes?: number;
+  extra_time_price_paise?: number;
 }
 
 /** A page of booking rows plus total count (server-paginated). */
@@ -146,11 +149,13 @@ type ApiBookingBody = Omit<
   | 'food_rupees'
   | 'other_rupees'
   | 'cleaning_rupees'
+  | 'extra_time_rupees'
 > & {
   discount_paise: number;
   food_paise: number;
   other_paise: number;
   cleaning_paise: number;
+  extra_time_price_paise: number;
 };
 
 export type CreateBookingBody = ApiBookingBody & {

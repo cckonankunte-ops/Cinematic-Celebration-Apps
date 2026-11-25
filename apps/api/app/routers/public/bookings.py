@@ -67,6 +67,7 @@ def get_booking_status(
         booking.slot_id,
         start_time=booking.start_time,
         duration_minutes=booking.duration_minutes,
+        extra_minutes=booking.extra_minutes,
     )
     return PublicBookingStatus(
         status=booking.status,

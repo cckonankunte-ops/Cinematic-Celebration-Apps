@@ -30,10 +30,17 @@ from app.services.catalog import time_range_label
 
 
 def _grouped_item_names(items: list[BookingItem]) -> dict[str, list[str]]:
-    """Group add-on name snapshots by kind (cake | decor | combo)."""
+    """Group add-on name snapshots by kind (cake | decor | combo).
+
+    A decor item booked more than once is prefixed with its quantity
+    ("2 Party Popper"); a single item shows just its name.
+    """
     grouped: dict[str, list[str]] = {"cake": [], "decor": [], "combo": []}
     for item in items:
-        grouped.setdefault(item.kind, []).append(item.name_snapshot)
+        name = item.name_snapshot
+        if item.kind == "decor" and item.quantity > 1:
+            name = f"{item.quantity} {name}"
+        grouped.setdefault(item.kind, []).append(name)
     return grouped
 
 
@@ -97,7 +104,9 @@ def timesheet(
         slot_label = (
             slot.description
             if slot is not None
-            else time_range_label(booking.start_time, booking.duration_minutes)
+            else time_range_label(
+                booking.start_time, booking.duration_minutes, booking.extra_minutes
+            )
         )
         rows.append(
             TimesheetRow(
@@ -109,6 +118,7 @@ def timesheet(
                 phone=booking.phone,
                 people=booking.people,
                 name_on_cake=booking.name_on_cake,
+                led_name=booking.led_name or None,
                 cake=", ".join(grouped["cake"]) or None,
                 special_decor=", ".join(grouped["decor"]) or None,
                 combos=", ".join(grouped["combo"]) or None,
@@ -139,7 +149,9 @@ def cakesheet(
         slot_label = (
             slot.description
             if slot is not None
-            else time_range_label(booking.start_time, booking.duration_minutes)
+            else time_range_label(
+                booking.start_time, booking.duration_minutes, booking.extra_minutes
+            )
         )
         for cake in cakes:
             rows.append(
