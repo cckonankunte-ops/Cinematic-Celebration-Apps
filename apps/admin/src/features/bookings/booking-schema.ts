@@ -137,7 +137,7 @@ export const bookingCreateSchema = z.object({
       .positive('Advance must be greater than zero')
       .optional(),
   ),
-  advance_method: z.enum(['cash', 'upi', 'card', 'other']).default('cash'),
+  advance_method: z.enum(['cash', 'upi', 'card', 'other']).default('upi'),
 });
 
 /** Input type before Zod applies defaults (what react-hook-form holds). */

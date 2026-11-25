@@ -115,6 +115,7 @@ export function BookingForm({
       cleaning_rupees: 0,
       extra_minutes: 0,
       extra_time_rupees: 0,
+      advance_method: 'upi',
       // Edit pre-fill wins over the create defaults above.
       ...initial,
     },
@@ -485,6 +486,14 @@ export function BookingForm({
         </label>
 
         <label className="space-y-1 text-sm">
+          <span className="font-medium text-gray-700">Date</span>
+          <input type="date" className={inputClass} {...register('booking_date')} />
+          {errors.booking_date && (
+            <p className="text-xs text-red-600">{errors.booking_date.message}</p>
+          )}
+        </label>
+
+        <label className="space-y-1 text-sm">
           <span className="font-medium text-gray-700">
             {isOpenMode ? 'Duration' : 'Slot'}
           </span>
@@ -661,14 +670,6 @@ export function BookingForm({
             })()}
           </fieldset>
         )}
-
-        <label className="space-y-1 text-sm">
-          <span className="font-medium text-gray-700">Date</span>
-          <input type="date" className={inputClass} {...register('booking_date')} />
-          {errors.booking_date && (
-            <p className="text-xs text-red-600">{errors.booking_date.message}</p>
-          )}
-        </label>
 
         <label className="space-y-1 text-sm">
           <span className="font-medium text-gray-700">People (above 10 yrs)</span>
