@@ -372,3 +372,72 @@ tests that assume an admin sees everything switch to `super_admin`.
 files, one migration. Build as its own spec on `feat/branch-access`.
 
 **Status:** deferred (recorded Nov 2026). Decide when to schedule.
+
+## Block a plan and time on a given day without a booking (deferred)
+
+**What the owner wants.** Sometimes a particular plan (room) must not be booked
+for a particular time on a particular day, with no customer involved. Examples:
+maintenance, a private or family use, a staff event, an equipment fault. Today
+nothing does this cleanly. The goal is "block 3 PM to 6 PM on Saturday for the
+Starlight plan at Hulimavu, so nobody can book it", while it stays out of
+everything that counts real bookings.
+
+**Why the existing tools don't cover it.**
+- **Disallowed times** (branch hours, lead-time rules in the admin) block a time
+  range for the whole branch. They are not per plan or per date, and they only
+  stop customers. Admins can still book through them.
+- **A real booking** blocks the calendar correctly, but it also appears in the
+  timesheet and cakesheet, the bookings list, analytics and revenue, and booking
+  counts, and it needs a fake customer.
+
+**Current workaround (what we do now).** Create one dummy booking for the
+window: a customer named something like "BLOCKED - maintenance", a placeholder
+phone number, no payment, no add-ons. When the block is no longer needed, cancel
+that booking so the time frees up. Because it is a real booking it will show in
+the timesheet and may skew counts and analytics, so staff should know to ignore
+the "BLOCKED" rows. The price is likely not zero (plan price), so cancel rather
+than leave it accepted, or it will inflate totals.
+
+**Proposed feature (when it is worth building).** A "Blocked time" record that
+holds the calendar like a booking but is not a booking.
+- **Fields:** branch, plan, date, start time, end time (or start plus duration),
+  optional reason, who created it, and when.
+- **Behaviour:** while a block exists, the same time cannot be booked on that
+  plan. Customers see it as unavailable in the slot or start-time pickers. The
+  overlap check includes the cleaning buffer, the same as a booking.
+- **Admin screen:** a small list of upcoming blocks with add and remove.
+  Removing a block frees the time immediately. No payment, price, add-ons or
+  customer.
+- **Not counted anywhere as a booking:** excluded from the bookings list,
+  timesheet, cakesheet, analytics and exports.
+- **Audit:** record who created or removed each block.
+
+**Design notes.**
+- Data: one new table (for example `plan_blocks`) with real foreign keys to
+  `locations` and `plans`, `ON DELETE` behaviour, and a check that end is after
+  start. A migration is needed.
+- Overlap: the booking overlap check (`_assert_no_overlap`) and the open-mode
+  and slot availability code (`generate_open_availability`,
+  `list_slots_with_availability`) must also read the blocks. The database
+  exclusion constraint covers bookings only, so the service check is the guard
+  for blocks (a block cannot be created over an existing active booking either;
+  the admin should be told to move or cancel it first).
+- Slot-mode and open-mode branches both need handling. A block is a time range,
+  so a slot is unavailable when its window overlaps a block.
+
+**Decisions to make when picked up.**
+1. Should it work for slot-mode branches as well as open-mode ones?
+2. Should an admin be able to book over a block (override), or should it
+   refuse everyone?
+3. Should a block cover one plan, several plans, or the whole branch? (The
+   request was per plan.)
+4. Should it support a repeating block (for example every Monday morning)? Not
+   needed now.
+
+**Size.** Small to medium: one table and migration, updates to the overlap and
+availability code, one admin page, and tests (overlap with a block, a block over
+an existing booking is refused, a removed block frees the time, blocks are not
+counted in the sheets or analytics).
+
+**Status:** deferred (recorded Nov 2026). The owner decided it is a rare case
+and the dummy-booking workaround is good enough for now.
