@@ -57,7 +57,9 @@ def send_confirmation(booking_id: int) -> None:
             slot = db.get(Slot, booking.slot_id)
             check_in = slot.description if slot is not None else ""
         else:
-            check_in = time_range_label(booking.start_time, booking.duration_minutes)
+            check_in = time_range_label(
+                booking.start_time, booking.duration_minutes, booking.extra_minutes
+            )
         html = _render_confirmation_html(booking, check_in)
         send_email(
             to=booking.email,

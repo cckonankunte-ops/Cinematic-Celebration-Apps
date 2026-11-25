@@ -74,6 +74,8 @@ class PriceBreakdownRead(BaseModel):
     food_paise: int
     other_paise: int
     cleaning_paise: int
+    # Flat admin-entered charge for extra time (0 when none).
+    extra_time_price_paise: int = 0
     coupon_code: str | None
     coupon_discount_paise: int
     total_paise: int
@@ -131,6 +133,10 @@ class AdminPreviewRequest(PreviewBase):
     food_paise: int = Field(default=0, ge=0)
     other_paise: int = Field(default=0, ge=0)
     cleaning_paise: int = Field(default=0, ge=0)
+    # Open mode only, admin only: minutes past the priced duration and the flat
+    # price for them.
+    extra_minutes: int = Field(default=0, ge=0, le=1440)
+    extra_time_price_paise: int = Field(default=0, ge=0)
 
 
 class PublicPreviewRequest(PreviewBase):
@@ -264,6 +270,11 @@ class AdminBookingCreate(BookingCreate):
     food_paise: int = Field(default=0, ge=0)
     other_paise: int = Field(default=0, ge=0)
     cleaning_paise: int = Field(default=0, ge=0)
+    # Open mode only, admin only (enforced in the service): extra minutes past
+    # the priced duration, and the flat price for them. Never on the public
+    # BookingCreate.
+    extra_minutes: int = Field(default=0, ge=0, le=1440)
+    extra_time_price_paise: int = Field(default=0, ge=0)
     # Optional advance recorded as the first ledger payment in the SAME
     # transaction as the booking insert. Overpayment is allowed (may exceed the
     # total); when None, no payment is recorded.
@@ -307,6 +318,9 @@ class BookingUpdate(BaseModel):
     food_paise: int | None = Field(default=None, ge=0)
     other_paise: int | None = Field(default=None, ge=0)
     cleaning_paise: int | None = Field(default=None, ge=0)
+    # Open mode, admin only (enforced in the service). None = unchanged; 0 clears.
+    extra_minutes: int | None = Field(default=None, ge=0, le=1440)
+    extra_time_price_paise: int | None = Field(default=None, ge=0)
     booking_name: str | None = None
     phone: str | None = None  # None = unchanged; if present, must be valid Indian mobile
     email: str | None = None  # None = unchanged; email remains optional
@@ -349,6 +363,8 @@ class BookingRead(BaseModel):
     # Window snapshot (both modes); open-mode edit pre-fills from these.
     start_time: time | None
     duration_minutes: int | None
+    extra_minutes: int = 0
+    extra_time_price_paise: int = 0
     booking_date: date
     status: str
     booking_name: str

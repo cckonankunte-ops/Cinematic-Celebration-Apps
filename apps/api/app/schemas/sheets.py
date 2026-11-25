@@ -19,6 +19,7 @@ class TimesheetRow(BaseModel):
     phone: str | None
     people: int
     name_on_cake: str | None
+    led_name: str | None = None
     cake: str | None
     special_decor: str | None
     combos: str | None

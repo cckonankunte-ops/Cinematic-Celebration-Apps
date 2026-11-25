@@ -108,6 +108,20 @@ export const bookingCreateSchema = z.object({
   food_rupees: nonNegativeRupees,
   other_rupees: nonNegativeRupees,
   cleaning_rupees: nonNegativeRupees,
+  // Admin-only extra time on open-mode bookings: minutes past the priced
+  // duration (any whole number) and a flat price in rupees for them. An empty
+  // input yields NaN via valueAsNumber, which is treated as 0.
+  extra_minutes: z.preprocess(
+    (v) =>
+      v === '' || v === null || (typeof v === 'number' && Number.isNaN(v)) ? 0 : v,
+    z
+      .number()
+      .int('Must be a whole number')
+      .min(0, 'Cannot be negative')
+      .max(1440, 'At most 24 hours')
+      .default(0),
+  ),
+  extra_time_rupees: nonNegativeRupees,
   // Optional advance recorded at creation (create flow only). Entered in rupees
   // in the UI (like PaymentDialog); mapped to `advance_amount_paise` before the
   // request is sent. Method defaults to cash.

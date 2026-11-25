@@ -55,6 +55,9 @@ export interface BookingRead {
   food_paise: number;
   other_paise: number;
   cleaning_paise: number;
+  /** Admin-added extra time (open mode); 0 when none. */
+  extra_minutes?: number;
+  extra_time_price_paise?: number;
   led_name: string | null;
   coupon_code: string | null;
   coupon_discount_paise: number;
@@ -151,6 +154,8 @@ export interface PriceBreakdownRead {
   food_paise: number;
   other_paise: number;
   cleaning_paise: number;
+  /** Flat admin-entered charge for extra time (0 when none). */
+  extra_time_price_paise?: number;
   coupon_code: string | null;
   coupon_discount_paise: number;
   total_paise: number;

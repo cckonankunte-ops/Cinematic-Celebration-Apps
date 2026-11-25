@@ -23,13 +23,14 @@ from app.core.config import settings
 from app.core.errors import (
     AcceptRequiresAdvanceError,
     BookingDateInPastError,
+    ForbiddenError,
     ItemInvalidError,
     NotFoundError,
     SlotUnavailableError,
     ValidationFailedError,
 )
 from app.core.phone import normalize_indian_mobile
-from app.core.security import CurrentUser, assert_location_access
+from app.core.security import ROLE_ADMIN, CurrentUser, assert_location_access
 from app.integrations.payments import get_payment_provider
 from app.models.advance_rule import AdvanceRule
 from app.models.booking import Booking
@@ -458,6 +459,26 @@ def _enforce_booking_time(
     )
 
 
+def _check_extra_time_allowed(
+    location: Location, actor: CurrentUser, extra_minutes: int, extra_price_paise: int
+) -> None:
+    """Extra time is admin-only and only for open-booking branches.
+
+    No-op when neither extra minutes nor an extra price is set. A price without
+    minutes is rejected, since it would charge for time that is not held.
+    """
+    if extra_minutes == 0 and extra_price_paise == 0:
+        return
+    if actor.role != ROLE_ADMIN:
+        raise ForbiddenError("Only an admin can add extra time to a booking.")
+    if location.booking_mode != "open":
+        raise ValidationFailedError(
+            "Extra time is only available for open-booking branches."
+        )
+    if extra_minutes == 0:
+        raise ValidationFailedError("An extra time price needs extra minutes.")
+
+
 def _assert_no_overlap(
     db: Session,
     *,
@@ -479,7 +500,12 @@ def _assert_no_overlap(
     buffer = settings.CLEANING_BUFFER_MINUTES
     window = occupied_window(booking_date, start, duration_minutes, buffer)
     rows = db.execute(
-        select(Booking.id, Booking.start_time, Booking.duration_minutes).where(
+        select(
+            Booking.id,
+            Booking.start_time,
+            Booking.duration_minutes,
+            Booking.extra_minutes,
+        ).where(
             Booking.location_id == location_id,
             Booking.plan_id == plan_id,
             Booking.booking_date == booking_date,
@@ -488,10 +514,11 @@ def _assert_no_overlap(
             Booking.duration_minutes.is_not(None),
         )
     ).all()
-    for bid, b_start, b_dur in rows:
+    for bid, b_start, b_dur, b_extra in rows:
         if exclude_booking_id is not None and bid == exclude_booking_id:
             continue
-        other = occupied_window(booking_date, b_start, b_dur, buffer)
+        # The other booking holds its priced duration plus any extra time.
+        other = occupied_window(booking_date, b_start, b_dur + b_extra, buffer)
         if window.overlaps(other):
             raise SlotUnavailableError()
 
@@ -771,6 +798,8 @@ def _money_snapshot(booking: Booking) -> dict:
         "food_paise": booking.food_paise,
         "other_paise": booking.other_paise,
         "cleaning_paise": booking.cleaning_paise,
+        "extra_minutes": booking.extra_minutes,
+        "extra_time_price_paise": booking.extra_time_price_paise,
         "total_paise": booking.total_paise,
     }
 
@@ -827,6 +856,12 @@ def create_admin_booking(
     duration_pricing = resolve_duration_pricing(
         db, req.plan, duration_minutes, data.booking_date
     )
+    # Admin-only extra time on open-mode bookings. It lengthens the held window
+    # (time rules + overlap) but not the priced duration.
+    _check_extra_time_allowed(
+        location, actor, data.extra_minutes, data.extra_time_price_paise
+    )
+    held_minutes = duration_minutes + data.extra_minutes
 
     # Admin is exempt from future-start / late-cutoff / end-before-close, but
     # working-hours still apply. Admin create also overrides disallowed-time
@@ -837,7 +872,7 @@ def create_admin_booking(
         location=location,
         booking_date=data.booking_date,
         start=start_time,
-        duration_minutes=duration_minutes,
+        duration_minutes=held_minutes,
         actor=ActorKind.ADMIN,
         override_disallowed=True,
     )
@@ -847,7 +882,7 @@ def create_admin_booking(
         plan_id=data.plan_id,
         booking_date=data.booking_date,
         start=start_time,
-        duration_minutes=duration_minutes,
+        duration_minutes=held_minutes,
     )
 
     # Two-pass coupon (see create_customer_booking) with admin money fields.
@@ -857,6 +892,7 @@ def create_admin_booking(
         food_paise=data.food_paise,
         other_paise=data.other_paise,
         cleaning_paise=data.cleaning_paise,
+        extra_time_price_paise=data.extra_time_price_paise,
         is_customer=False,
         coupon=None,
         base_price_paise=duration_pricing.price_paise,
@@ -876,6 +912,7 @@ def create_admin_booking(
         food_paise=data.food_paise,
         other_paise=data.other_paise,
         cleaning_paise=data.cleaning_paise,
+        extra_time_price_paise=data.extra_time_price_paise,
         is_customer=False,
         coupon=validated,
         base_price_paise=duration_pricing.price_paise,
@@ -894,6 +931,8 @@ def create_admin_booking(
             booking_date=data.booking_date,
             start_time=start_time,
             duration_minutes=duration_minutes,
+            extra_minutes=data.extra_minutes,
+            extra_time_price_paise=price.extra_time_price_paise,
             booking_name=data.booking_name,
             email=data.email,
             phone=data.phone,
@@ -939,6 +978,15 @@ def create_admin_booking(
                     "status": "accepted",
                     "total_paise": price.total_paise,
                     "people": data.people,
+                    # Audit extra time only when used, keeping other events lean.
+                    **(
+                        {
+                            "extra_minutes": data.extra_minutes,
+                            "extra_time_price_paise": price.extra_time_price_paise,
+                        }
+                        if data.extra_minutes
+                        else {}
+                    ),
                 },
             )
             # Optional advance recorded at creation. Insert the ledger row +
@@ -1019,6 +1067,27 @@ def update_booking(
     other = data.other_paise if data.other_paise is not None else booking.other_paise
     cleaning = data.cleaning_paise if data.cleaning_paise is not None else booking.cleaning_paise
 
+    # Extra time (open mode, admin only). None = unchanged; 0 clears it.
+    extra_minutes = (
+        data.extra_minutes if data.extra_minutes is not None else booking.extra_minutes
+    )
+    extra_price = (
+        data.extra_time_price_paise
+        if data.extra_time_price_paise is not None
+        else booking.extra_time_price_paise
+    )
+    extra_changed = (
+        extra_minutes != booking.extra_minutes
+        or extra_price != booking.extra_time_price_paise
+    )
+    if extra_changed:
+        if actor.role != ROLE_ADMIN:
+            raise ForbiddenError("Only an admin can change a booking's extra time.")
+        extra_location = db.get(Location, booking.location_id)
+        if extra_location is None:
+            raise ItemInvalidError("The booking's location is no longer valid.")
+        _check_extra_time_allowed(extra_location, actor, extra_minutes, extra_price)
+
     # PATCH None=unchanged conventions.
     #   led_name: None -> reuse booking.led_name; "" -> clear.
     led_name = booking.led_name if data.led_name is None else data.led_name
@@ -1051,6 +1120,7 @@ def update_booking(
         data.slot_id is not None
         or data.start_time is not None
         or data.duration_minutes is not None
+        or extra_changed
     )
     if date_changed or window_changed or plan_changed:
         location = db.get(Location, booking.location_id)
@@ -1123,7 +1193,7 @@ def update_booking(
             location=location,
             booking_date=effective_date,
             start=resolved.start_time,
-            duration_minutes=resolved.duration_minutes,
+            duration_minutes=resolved.duration_minutes + extra_minutes,
             actor=actor_kind,
             staff_edit_grace_minutes=STAFF_EDIT_GRACE_MINUTES,
             override_disallowed=actor.role == "admin",
@@ -1134,7 +1204,7 @@ def update_booking(
             plan_id=plan_id,
             booking_date=effective_date,
             start=resolved.start_time,
-            duration_minutes=resolved.duration_minutes,
+            duration_minutes=resolved.duration_minutes + extra_minutes,
             exclude_booking_id=booking.id,
         )
         booking.plan_id = plan_id
@@ -1142,6 +1212,7 @@ def update_booking(
         booking.slot_id = resolved.slot_id
         booking.start_time = resolved.start_time
         booking.duration_minutes = resolved.duration_minutes
+        booking.extra_minutes = extra_minutes
 
     reprice = (
         window_changed
@@ -1159,6 +1230,7 @@ def update_booking(
         or data.food_paise is not None
         or data.other_paise is not None
         or data.cleaning_paise is not None
+        or extra_changed
     )
 
     if reprice:
@@ -1226,6 +1298,7 @@ def update_booking(
             food_paise=food,
             other_paise=other,
             cleaning_paise=cleaning,
+            extra_time_price_paise=extra_price,
             is_customer=False,
             coupon=None,
             base_price_paise=duration_pricing.price_paise,
@@ -1245,6 +1318,7 @@ def update_booking(
             food_paise=food,
             other_paise=other,
             cleaning_paise=cleaning,
+            extra_time_price_paise=extra_price,
             is_customer=False,
             coupon=validated,
             base_price_paise=duration_pricing.price_paise,
@@ -1265,6 +1339,7 @@ def update_booking(
         booking.food_paise = price.food_paise
         booking.other_paise = price.other_paise
         booking.cleaning_paise = price.cleaning_paise
+        booking.extra_time_price_paise = price.extra_time_price_paise
         booking.coupon_code = price.coupon_code
         booking.coupon_discount_paise = price.coupon_discount_paise
         booking.total_paise = price.total_paise
@@ -1358,6 +1433,7 @@ def _breakdown_to_read(
         food_paise=breakdown.food_paise,
         other_paise=breakdown.other_paise,
         cleaning_paise=breakdown.cleaning_paise,
+        extra_time_price_paise=breakdown.extra_time_price_paise,
         coupon_code=breakdown.coupon_code,
         coupon_discount_paise=breakdown.coupon_discount_paise,
         total_paise=breakdown.total_paise,
@@ -1408,8 +1484,16 @@ def preview_booking(
         food_paise = data.food_paise
         other_paise = data.other_paise
         cleaning_paise = data.cleaning_paise
+        # Extra time only prices for admins; staff previews ignore it, matching
+        # what a staff save would reject.
+        extra_time_price_paise = (
+            data.extra_time_price_paise
+            if actor is not None and actor.role == ROLE_ADMIN
+            else 0
+        )
     else:
         discount_paise = food_paise = other_paise = cleaning_paise = 0
+        extra_time_price_paise = 0
 
     # Resolve the window by booking mode, then the duration-specific base price
     # (R11). This also validates the mode/window for an open-mode preview.
@@ -1436,6 +1520,7 @@ def preview_booking(
         food_paise=food_paise,
         other_paise=other_paise,
         cleaning_paise=cleaning_paise,
+        extra_time_price_paise=extra_time_price_paise,
         is_customer=is_customer,
         coupon=None,
         base_price_paise=duration_pricing.price_paise,
@@ -1456,6 +1541,7 @@ def preview_booking(
         food_paise=food_paise,
         other_paise=other_paise,
         cleaning_paise=cleaning_paise,
+        extra_time_price_paise=extra_time_price_paise,
         is_customer=is_customer,
         coupon=validated,
         base_price_paise=duration_pricing.price_paise,
@@ -1548,7 +1634,7 @@ def review_booking(db: Session, booking_id: int, *, actor: CurrentUser) -> Booki
         plan_id=booking.plan_id,
         booking_date=booking.booking_date,
         start=booking.start_time,
-        duration_minutes=booking.duration_minutes,
+        duration_minutes=(booking.duration_minutes or 0) + booking.extra_minutes,
         exclude_booking_id=booking.id,
     )
 

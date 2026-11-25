@@ -17,6 +17,7 @@ import { ApiError } from '@/api/client';
 import { todayIsoInIST } from '@/lib/dates';
 import { formatRupees, rupeesToPaise } from '@/lib/money';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useAuth } from '@/features/auth/useAuth';
 import {
   bookingCreateSchema,
   type BookingCreateInput,
@@ -26,6 +27,7 @@ import { usePreviewBooking, type AdminPreviewBody } from './booking-queries';
 import {
   useCakes,
   useCombos,
+  useExtraTimeAvailability,
   useLocationBookingMode,
   useOccasions,
   useOpenAvailability,
@@ -111,6 +113,8 @@ export function BookingForm({
       food_rupees: 0,
       other_rupees: 0,
       cleaning_rupees: 0,
+      extra_minutes: 0,
+      extra_time_rupees: 0,
       // Edit pre-fill wins over the create defaults above.
       ...initial,
     },
@@ -131,6 +135,9 @@ export function BookingForm({
   const bookingMode: 'slot' | 'open' =
     locationsQuery.data?.find((l) => l.id === locationId)?.booking_mode ?? 'slot';
   const isOpenMode = bookingMode === 'open';
+  // Extra time is admin-only and only offered on open-mode branches.
+  const { user } = useAuth();
+  const canAddExtraTime = isOpenMode && user?.role === 'admin';
 
   // Slot mode: availability is scoped to plan + location + date so held slots
   // are flagged and rendered greyed-out / non-selectable.
@@ -155,6 +162,17 @@ export function BookingForm({
     bookingDate ?? null,
     isOpenMode ? normalizedDuration : null,
     // In edit mode, exclude this booking's own window so a shrink/move frees it.
+    isEdit ? bookingId : null,
+  );
+  // How many extra minutes fit after the chosen window (hint + client check).
+  const watchedStart = watch('start_time');
+  const extraAvailability = useExtraTimeAvailability(
+    canAddExtraTime,
+    planId,
+    locationId,
+    bookingDate ?? null,
+    typeof watchedStart === 'string' && watchedStart.length > 0 ? watchedStart : null,
+    normalizedDuration,
     isEdit ? bookingId : null,
   );
   const cakes = useCakes(locationId);
@@ -273,6 +291,8 @@ export function BookingForm({
       food_rupees: watched.food_rupees,
       other_rupees: watched.other_rupees,
       cleaning_rupees: watched.cleaning_rupees,
+      extra_minutes: watched.extra_minutes,
+      extra_time_rupees: watched.extra_time_rupees,
       special_decor: watched.special_decor,
       combos: watched.combos,
       // Not a priced input, but re-fires the preview after a payment so the
@@ -336,6 +356,13 @@ export function BookingForm({
       food_paise: rupeesToPaise(num(parsed.food_rupees)),
       other_paise: rupeesToPaise(num(parsed.other_rupees)),
       cleaning_paise: rupeesToPaise(num(parsed.cleaning_rupees)),
+      // Extra time only applies to an open-mode window (start + duration).
+      ...(slotIdNum === null && num(parsed.extra_minutes) > 0
+        ? {
+            extra_minutes: num(parsed.extra_minutes),
+            extra_time_price_paise: rupeesToPaise(num(parsed.extra_time_rupees)),
+          }
+        : {}),
     };
 
     previewMutate(body, {
@@ -410,9 +437,14 @@ export function BookingForm({
     const windowFields = isOpenMode
       ? { slot_id: undefined, start_time: values.start_time, duration_minutes: values.duration_minutes }
       : { slot_id: values.slot_id, start_time: undefined, duration_minutes: undefined };
+    // Extra time exists only for an open-mode window; slot mode always sends 0.
+    const extraFields = isOpenMode
+      ? {}
+      : { extra_minutes: 0, extra_time_rupees: 0 };
     const finalValues = {
       ...values,
       ...windowFields,
+      ...extraFields,
       coupon_code: appliedCoupon ?? undefined,
     } as BookingCreateValues;
     onSubmit(finalValues);
@@ -565,6 +597,69 @@ export function BookingForm({
               })()}
             </select>
           </label>
+        )}
+
+        {canAddExtraTime && (
+          <fieldset className="space-y-2 rounded border border-gray-200 p-3 md:col-span-2">
+            <legend className="px-1 text-sm font-medium text-gray-700">
+              Extra time (admin only, optional)
+            </legend>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="font-medium text-gray-700">Extra minutes</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="e.g. 30, 60, 90"
+                  className={inputClass}
+                  {...register('extra_minutes', { valueAsNumber: true })}
+                />
+                {errors.extra_minutes && (
+                  <p className="text-xs text-red-600">{errors.extra_minutes.message}</p>
+                )}
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium text-gray-700">Extra time price (₹)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="Flat price for the extra time"
+                  className={inputClass}
+                  {...register('extra_time_rupees', { valueAsNumber: true })}
+                />
+              </label>
+            </div>
+            {(() => {
+              const max = extraAvailability.data?.max_extra_minutes;
+              if (max === undefined) {
+                return null;
+              }
+              const entered = Number.isFinite(watched.extra_minutes)
+                ? Number(watched.extra_minutes)
+                : 0;
+              if (max === null) {
+                return (
+                  <p className="text-xs text-gray-500">
+                    No later booking on this plan, so any extra time fits.
+                  </p>
+                );
+              }
+              return (
+                <p
+                  className={
+                    entered > max ? 'text-xs text-red-600' : 'text-xs text-gray-500'
+                  }
+                  role={entered > max ? 'alert' : undefined}
+                >
+                  {entered > max
+                    ? `Only ${max} min of extra time is free before the next booking.`
+                    : `Up to ${max} min of extra time is free before the next booking.`}
+                </p>
+              );
+            })()}
+          </fieldset>
         )}
 
         <label className="space-y-1 text-sm">
@@ -1088,6 +1183,13 @@ function PreviewSummary({
         <div className="flex justify-between">
           <span>Cleaning</span>
           <span>{formatRupees(breakdown.cleaning_paise)}</span>
+        </div>
+      )}
+
+      {(breakdown.extra_time_price_paise ?? 0) > 0 && (
+        <div className="flex justify-between">
+          <span>Extra time</span>
+          <span>{formatRupees(breakdown.extra_time_price_paise ?? 0)}</span>
         </div>
       )}
 

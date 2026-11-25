@@ -6,7 +6,7 @@ to their assigned location. The confirmation email on accept is scheduled via
 BackgroundTasks (which opens its own session after the response).
 """
 
-from datetime import date
+from datetime import date, time
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import (
+    ROLE_ADMIN,
     STAFF_ACCESS,
     CurrentUser,
     assert_location_access,
@@ -56,6 +57,22 @@ class AdminOpenAvailabilityRequest(BaseModel):
     # When editing an existing booking, exclude its own window so a shrink/move
     # doesn't block its new selection.
     booking_id: int | None = None
+
+
+class ExtraTimeAvailabilityRequest(BaseModel):
+    plan_id: int
+    location_id: int
+    booking_date: date
+    start_time: time
+    duration_minutes: int
+    # When editing, exclude the booking's own window.
+    booking_id: int | None = None
+
+
+class ExtraTimeAvailabilityRead(BaseModel):
+    """Most extra minutes that fit; null means nothing limits it."""
+
+    max_extra_minutes: int | None
 
 
 class AdminSlotAvailabilityRequest(BaseModel):
@@ -104,6 +121,8 @@ def to_booking_read(db: Session, booking: Booking) -> BookingRead:
         slot_id=booking.slot_id,
         start_time=booking.start_time,
         duration_minutes=booking.duration_minutes,
+        extra_minutes=booking.extra_minutes,
+        extra_time_price_paise=booking.extra_time_price_paise,
         booking_date=booking.booking_date,
         status=booking.status,
         booking_name=booking.booking_name,
@@ -144,6 +163,7 @@ def _to_list_item(db: Session, booking: Booking) -> BookingListItem:
         booking.slot_id,
         start_time=booking.start_time,
         duration_minutes=booking.duration_minutes,
+        extra_minutes=booking.extra_minutes,
     )
     occasion_name = catalog_service.booking_occasion_name(db, booking.occasion_id)
     items = booking_service.list_booking_items(db, booking.id)
@@ -269,6 +289,32 @@ def open_availability(
         body.duration_minutes,
         actor=actor_kind_from_role(actor.role),
         exclude_booking_id=body.booking_id,
+    )
+
+
+@router.post(
+    "/bookings/extra-time-availability", response_model=ExtraTimeAvailabilityRead
+)
+def extra_time_availability(
+    body: ExtraTimeAvailabilityRequest,
+    db: Session = Depends(get_db),
+    actor: CurrentUser = Depends(require_role(ROLE_ADMIN)),
+) -> ExtraTimeAvailabilityRead:
+    """How many extra minutes fit after a window (admin only, OPEN mode).
+
+    Drives the hint on the booking form; the save path re-checks authoritatively.
+    """
+    assert_location_access(actor, body.location_id)
+    return ExtraTimeAvailabilityRead(
+        max_extra_minutes=catalog_service.max_extra_minutes(
+            db,
+            body.plan_id,
+            body.location_id,
+            body.booking_date,
+            body.start_time,
+            body.duration_minutes,
+            exclude_booking_id=body.booking_id,
+        )
     )
 
 

@@ -69,6 +69,15 @@ class Booking(Base, TimestampMixin):
     # [booking_date+start_time, +duration_minutes+CLEANING_BUFFER_MINUTES).
     start_time: Mapped[time | None] = mapped_column(Time, nullable=True)
     duration_minutes: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    # Admin-only extra time on an OPEN-mode booking: minutes added after the
+    # priced duration (it holds the calendar) and a flat charge for them. The
+    # DB's occupied_range covers duration_minutes + extra_minutes.
+    extra_minutes: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=0, server_default=text("0")
+    )
+    extra_time_price_paise: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
 
     # customer info
     booking_name: Mapped[str] = mapped_column(String, nullable=False)
@@ -135,4 +144,8 @@ class Booking(Base, TimestampMixin):
         ),
         Index("ix_bookings_created_at", "created_at"),
         CheckConstraint("kids >= 0", name="ck_bookings_kids_nonneg"),
+        CheckConstraint("extra_minutes >= 0", name="ck_bookings_extra_minutes_nonneg"),
+        CheckConstraint(
+            "extra_time_price_paise >= 0", name="ck_bookings_extra_time_price_nonneg"
+        ),
     )

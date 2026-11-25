@@ -342,12 +342,53 @@ def _active_occupied_windows(
         conds.append(Booking.id != exclude_booking_id)
 
     rows = db.execute(
-        select(Booking.start_time, Booking.duration_minutes).where(*conds)
+        select(
+            Booking.start_time, Booking.duration_minutes, Booking.extra_minutes
+        ).where(*conds)
     ).all()
+    # A booking's held time includes any admin-added extra minutes.
     return [
-        occupied_window(on, start, duration, buffer_minutes)
-        for start, duration in rows
+        occupied_window(on, start, duration + extra, buffer_minutes)
+        for start, duration, extra in rows
     ]
+
+
+def max_extra_minutes(
+    db: Session,
+    plan_id: int,
+    location_id: int,
+    on: date,
+    start: time,
+    duration_minutes: int,
+    *,
+    exclude_booking_id: int | None = None,
+) -> int | None:
+    """Most extra minutes that fit after ``start + duration`` before the next booking.
+
+    Returns None when no later active booking exists for (location, plan, date),
+    i.e. nothing limits the extra time. Otherwise the gap up to the next
+    booking's start, less the cleaning buffer, never below 0. Mirrors the overlap
+    check in ``_assert_no_overlap`` so the hint matches what a save will accept.
+    """
+    from app.models.booking import Booking
+
+    anchor = datetime.combine(on, start)
+    usable_end_dt = anchor + timedelta(minutes=duration_minutes)
+    conds = [
+        Booking.location_id == location_id,
+        Booking.plan_id == plan_id,
+        Booking.booking_date == on,
+        Booking.status.in_(("pending", "accepted")),
+        Booking.start_time.is_not(None),
+    ]
+    if exclude_booking_id is not None:
+        conds.append(Booking.id != exclude_booking_id)
+    starts = db.execute(select(Booking.start_time).where(*conds)).scalars().all()
+    later = [datetime.combine(on, s) for s in starts if datetime.combine(on, s) > anchor]
+    if not later:
+        return None
+    gap = min(later) - usable_end_dt - timedelta(minutes=settings.CLEANING_BUFFER_MINUTES)
+    return max(0, int(gap.total_seconds() // 60))
 
 
 def list_slots_with_availability(
@@ -419,12 +460,18 @@ def list_slots_with_availability(
     return out
 
 
-def time_range_label(start: time | None, duration_minutes: int | None) -> str:
-    """Format a window as a '3:00 PM - 4:00 PM' range, or '' when unknown."""
+def time_range_label(
+    start: time | None, duration_minutes: int | None, extra_minutes: int = 0
+) -> str:
+    """Format a window as a '3:00 PM - 4:00 PM' range, or '' when unknown.
+
+    ``extra_minutes`` (admin-added extra time) extends the end of the range.
+    """
     if start is None or duration_minutes is None:
         return ""
     end = (
-        datetime.combine(today_ist(), start) + timedelta(minutes=duration_minutes)
+        datetime.combine(today_ist(), start)
+        + timedelta(minutes=duration_minutes + extra_minutes)
     ).time()
     return f"{_fmt_12h(start)} - {_fmt_12h(end)}"
 
@@ -507,6 +554,7 @@ def booking_plan_and_slot_labels(
     *,
     start_time: time | None = None,
     duration_minutes: int | None = None,
+    extra_minutes: int = 0,
 ) -> tuple[str, str]:
     """Return (plan.title, slot/window label) for a booking view.
 
@@ -522,7 +570,7 @@ def booking_plan_and_slot_labels(
         slot = db.get(Slot, slot_id)
         slot_description = slot.description if slot is not None else ""
     else:
-        slot_description = time_range_label(start_time, duration_minutes)
+        slot_description = time_range_label(start_time, duration_minutes, extra_minutes)
     return plan_title, slot_description
 
 
