@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import (
-    ROLE_ADMIN,
+    EXTRA_TIME_ACCESS,
     STAFF_ACCESS,
     CurrentUser,
     assert_location_access,
@@ -298,9 +298,9 @@ def open_availability(
 def extra_time_availability(
     body: ExtraTimeAvailabilityRequest,
     db: Session = Depends(get_db),
-    actor: CurrentUser = Depends(require_role(ROLE_ADMIN)),
+    actor: CurrentUser = Depends(require_role(*EXTRA_TIME_ACCESS)),
 ) -> ExtraTimeAvailabilityRead:
-    """How many extra minutes fit after a window (admin only, OPEN mode).
+    """How many extra minutes fit after a window (admin/receptionist, OPEN mode).
 
     Drives the hint on the booking form; the save path re-checks authoritatively.
     """

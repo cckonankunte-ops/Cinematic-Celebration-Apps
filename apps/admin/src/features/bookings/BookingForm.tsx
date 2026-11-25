@@ -138,7 +138,8 @@ export function BookingForm({
   const isOpenMode = bookingMode === 'open';
   // Extra time is admin-only and only offered on open-mode branches.
   const { user } = useAuth();
-  const canAddExtraTime = isOpenMode && user?.role === 'admin';
+  const canAddExtraTime =
+    isOpenMode && (user?.role === 'admin' || user?.role === 'receptionist');
 
   // Slot mode: availability is scoped to plan + location + date so held slots
   // are flagged and rendered greyed-out / non-selectable.
@@ -611,7 +612,7 @@ export function BookingForm({
         {canAddExtraTime && (
           <fieldset className="space-y-2 rounded border border-gray-200 p-3 md:col-span-2">
             <legend className="px-1 text-sm font-medium text-gray-700">
-              Extra time (admin only, optional)
+              Extra time (optional)
             </legend>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1 text-sm">

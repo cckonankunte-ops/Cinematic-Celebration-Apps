@@ -202,6 +202,35 @@ def test_staff_cannot_add_or_change_extra_time(db: Session) -> None:
         )
 
 
+def test_receptionist_can_add_and_change_extra_time(db: Session) -> None:
+    loc, plan = _setup(db)
+    user = make_user(db, "receptionist", location_id=loc.id)
+    receptionist = CurrentUser(
+        id=user.id, username=user.username, role="receptionist", location_id=loc.id
+    )
+    when = future_date()
+
+    booking = booking_service.create_admin_booking(
+        db,
+        _create(
+            loc.id, plan.id, time(11, 0), 120, when,
+            extra_minutes=30, extra_time_price_paise=EXTRA_PRICE,
+        ),
+        receptionist,
+    )
+    assert booking.extra_minutes == 30
+    assert booking.total_paise == BASE_2H + EXTRA_PRICE
+
+    updated = booking_service.update_booking(
+        db,
+        booking.id,
+        BookingUpdate(extra_minutes=60, extra_time_price_paise=2 * EXTRA_PRICE),
+        receptionist,
+    )
+    assert updated.extra_minutes == 60
+    assert updated.total_paise == BASE_2H + 2 * EXTRA_PRICE
+
+
 def test_extra_time_needs_an_open_branch_and_minutes(db: Session) -> None:
     admin = _admin(db)
     loc, plan = _setup(db)

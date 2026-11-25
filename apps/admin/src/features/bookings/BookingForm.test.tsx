@@ -45,7 +45,7 @@ vi.mock('./catalog-queries', () => ({
 }));
 
 // The signed-in role; extra time is only offered to admins.
-let mockRole: 'admin' | 'staff' = 'admin';
+let mockRole: 'admin' | 'receptionist' | 'staff' = 'admin';
 vi.mock('@/features/auth/useAuth', () => ({
   useAuth: () => ({ user: { role: mockRole } }),
 }));
@@ -420,6 +420,13 @@ describe('BookingForm', () => {
     renderForm();
     expect(screen.getByLabelText(/Extra minutes/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Extra time price/)).toBeInTheDocument();
+  });
+
+  it('offers extra time to a receptionist in open mode', () => {
+    mockBookingMode = 'open';
+    mockRole = 'receptionist';
+    renderForm();
+    expect(screen.getByLabelText(/Extra minutes/)).toBeInTheDocument();
   });
 
   it('hides extra time from staff in open mode', () => {

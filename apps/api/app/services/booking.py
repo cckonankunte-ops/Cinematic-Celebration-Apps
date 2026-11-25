@@ -30,7 +30,11 @@ from app.core.errors import (
     ValidationFailedError,
 )
 from app.core.phone import normalize_indian_mobile
-from app.core.security import ROLE_ADMIN, CurrentUser, assert_location_access
+from app.core.security import (
+    EXTRA_TIME_ACCESS,
+    CurrentUser,
+    assert_location_access,
+)
 from app.integrations.payments import get_payment_provider
 from app.models.advance_rule import AdvanceRule
 from app.models.booking import Booking
@@ -462,15 +466,15 @@ def _enforce_booking_time(
 def _check_extra_time_allowed(
     location: Location, actor: CurrentUser, extra_minutes: int, extra_price_paise: int
 ) -> None:
-    """Extra time is admin-only and only for open-booking branches.
+    """Extra time is for admins and receptionists, on open-booking branches only.
 
     No-op when neither extra minutes nor an extra price is set. A price without
     minutes is rejected, since it would charge for time that is not held.
     """
     if extra_minutes == 0 and extra_price_paise == 0:
         return
-    if actor.role != ROLE_ADMIN:
-        raise ForbiddenError("Only an admin can add extra time to a booking.")
+    if actor.role not in EXTRA_TIME_ACCESS:
+        raise ForbiddenError("Only an admin or receptionist can add extra time.")
     if location.booking_mode != "open":
         raise ValidationFailedError(
             "Extra time is only available for open-booking branches."
@@ -1081,8 +1085,10 @@ def update_booking(
         or extra_price != booking.extra_time_price_paise
     )
     if extra_changed:
-        if actor.role != ROLE_ADMIN:
-            raise ForbiddenError("Only an admin can change a booking's extra time.")
+        if actor.role not in EXTRA_TIME_ACCESS:
+            raise ForbiddenError(
+                "Only an admin or receptionist can change a booking's extra time."
+            )
         extra_location = db.get(Location, booking.location_id)
         if extra_location is None:
             raise ItemInvalidError("The booking's location is no longer valid.")
@@ -1484,11 +1490,11 @@ def preview_booking(
         food_paise = data.food_paise
         other_paise = data.other_paise
         cleaning_paise = data.cleaning_paise
-        # Extra time only prices for admins; staff previews ignore it, matching
-        # what a staff save would reject.
+        # Extra time only prices for admins/receptionists; staff previews ignore
+        # it, matching what a staff save would reject.
         extra_time_price_paise = (
             data.extra_time_price_paise
-            if actor is not None and actor.role == ROLE_ADMIN
+            if actor is not None and actor.role in EXTRA_TIME_ACCESS
             else 0
         )
     else:
