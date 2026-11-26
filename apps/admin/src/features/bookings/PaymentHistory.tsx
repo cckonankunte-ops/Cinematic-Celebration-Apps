@@ -10,7 +10,7 @@
 import { useState } from 'react';
 
 import { ApiError } from '@/api/client';
-import { formatDate } from '@/lib/dates';
+import { formatDateTime } from '@/lib/dates';
 import { formatRupees } from '@/lib/money';
 import { useAuth } from '@/features/auth/useAuth';
 import { PaymentDialog } from './PaymentDialog';
@@ -69,13 +69,22 @@ export function PaymentHistory({
         </ul>
       )}
 
-      <div className="flex justify-between text-sm text-gray-700">
+      <div className="flex justify-between text-sm text-gray-800">
         <span className="font-medium">Amount paid</span>
         <span>{formatRupees(amountPaid)}</span>
       </div>
-      <div className="flex justify-between text-sm text-gray-700">
-        <span className="font-medium">Amount due</span>
-        <span>{formatRupees(amountDue)}</span>
+      {/* Amount due is the number the desk needs, so it is the most prominent. */}
+      <div className="flex items-baseline justify-between rounded bg-gray-100 px-3 py-2">
+        <span className="text-sm font-semibold text-gray-900">Amount due</span>
+        {amountDue === 0 ? (
+          <span className="text-base font-bold text-green-700">Paid in full</span>
+        ) : amountDue < 0 ? (
+          <span className="text-base font-bold text-amber-700">
+            Overpaid by {formatRupees(-amountDue)}
+          </span>
+        ) : (
+          <span className="text-lg font-bold text-gray-900">{formatRupees(amountDue)}</span>
+        )}
       </div>
 
       <PaymentDialog
@@ -85,6 +94,11 @@ export function PaymentHistory({
       />
     </section>
   );
+}
+
+/** "upi" -> "UPI", "cash" -> "Cash". */
+function formatMethod(method: string): string {
+  return method === 'upi' ? 'UPI' : method.charAt(0).toUpperCase() + method.slice(1);
 }
 
 interface PaymentRowProps {
@@ -102,7 +116,7 @@ function PaymentRow({ bookingId, payment, canVoid }: PaymentRowProps): JSX.Eleme
       <div className="flex items-start justify-between gap-3">
         <div className={payment.is_voided ? 'text-gray-400 line-through' : 'text-gray-800'}>
           <p className="font-medium">
-            {payment.method}
+            {formatMethod(payment.method)}
             {isReversal && (
               <span className="ml-2 font-normal text-gray-500">
                 Reversal of #{payment.reverses_payment_id}
@@ -115,7 +129,7 @@ function PaymentRow({ bookingId, payment, canVoid }: PaymentRowProps): JSX.Eleme
             )}
           </p>
           {payment.note && <p className="text-gray-600">{payment.note}</p>}
-          <p className="text-xs text-gray-500">{formatDate(payment.received_at)}</p>
+          <p className="text-xs text-gray-500">{formatDateTime(payment.received_at)}</p>
         </div>
         <span
           className={
@@ -150,7 +164,7 @@ function VoidControl({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs font-medium text-red-600 underline"
+        className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
       >
         Void
       </button>

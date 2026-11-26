@@ -1207,25 +1207,22 @@ function PreviewSummary({
         <span>{formatRupees(breakdown.total_paise)}</span>
       </div>
 
-      <div className="flex justify-between text-gray-700">
-        <span>Advance payable</span>
-        <span>{formatRupees(breakdown.advance_paise)}</span>
-      </div>
+      {/* The advance only matters until it has been paid. Once the amount paid
+          covers it, hide both lines: the payment history below is the single
+          place that shows what is paid and what is still due. */}
+      {breakdown.amount_paid_paise < breakdown.advance_paise && (
+        <>
+          <div className="flex justify-between text-gray-700">
+            <span>Advance payable</span>
+            <span>{formatRupees(breakdown.advance_paise)}</span>
+          </div>
 
-      <div className="flex justify-between text-gray-600">
-        <span>Balance (payable at venue)</span>
-        <span>{formatRupees(breakdown.total_paise - breakdown.advance_paise)}</span>
-      </div>
-
-      <div className="flex justify-between text-gray-600">
-        <span>Amount paid</span>
-        <span>{formatRupees(breakdown.amount_paid_paise)}</span>
-      </div>
-
-      <div className="flex justify-between text-gray-600">
-        <span>Amount due</span>
-        <span>{formatRupees(breakdown.amount_due_paise)}</span>
-      </div>
+          <div className="flex justify-between text-gray-600">
+            <span>Balance (payable at venue)</span>
+            <span>{formatRupees(breakdown.total_paise - breakdown.advance_paise)}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

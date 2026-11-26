@@ -209,6 +209,14 @@ def test_example_led_count_includes_digits() -> None:
     assert led_line.amount_paise == 2 * 4000  # ₹80
 
 
+def test_led_line_is_labelled_with_the_name() -> None:
+    """The summary line reads "LED (NAME)", not just the bare name."""
+    req = ValidatedRequest(plan=_plan(), people=1, led_name="  ARUN 30 ")
+    bd = compute_booking_price(req, is_customer=True)
+    led_line = next(line for line in bd.addon_lines if line.kind == "led")
+    assert led_line.name_snapshot == "LED (ARUN 30)"
+
+
 # ---------------------------------------------------------------------------
 # Standalone cake weight examples (no combo absorbs the cake).
 # ---------------------------------------------------------------------------

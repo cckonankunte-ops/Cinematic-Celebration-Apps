@@ -334,6 +334,38 @@ describe('BookingForm', () => {
     );
   });
 
+  const previewWithPayment = async (advance: number, paid: number): Promise<void> => {
+    previewResult = {
+      onSuccess: {
+        ...couponBreakdown(0, ''),
+        coupon_code: null,
+        advance_paise: advance,
+        amount_paid_paise: paid,
+        amount_due_paise: 100000 - paid,
+      },
+    };
+    renderForm();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Plan' }), {
+      target: { value: '3' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Slot' }), {
+      target: { value: '7' },
+    });
+    await waitFor(() => expect(screen.getByText('Subtotal')).toBeInTheDocument());
+  };
+
+  it('shows the advance payable while the advance is not yet paid', async () => {
+    await previewWithPayment(50000, 0);
+    expect(screen.getByText('Advance payable')).toBeInTheDocument();
+    expect(screen.getByText('Balance (payable at venue)')).toBeInTheDocument();
+  });
+
+  it('hides the advance lines once the amount paid covers the advance', async () => {
+    await previewWithPayment(50000, 300000);
+    expect(screen.queryByText('Advance payable')).not.toBeInTheDocument();
+    expect(screen.queryByText('Balance (payable at venue)')).not.toBeInTheDocument();
+  });
+
   it('renders the slot picker in slot mode', () => {
     mockBookingMode = 'slot';
     render(

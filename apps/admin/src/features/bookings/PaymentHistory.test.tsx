@@ -84,6 +84,34 @@ describe('PaymentHistory', () => {
     expect(screen.getAllByRole('button', { name: 'Void' })).toHaveLength(1);
   });
 
+  it('shows Paid in full when nothing is due', () => {
+    useAuthMock.mockReturnValue({ user: { role: 'admin' } });
+    // Net paid is 30000 (the voided 50000 and its reversal cancel out).
+    render(<PaymentHistory bookingId={9} payments={makePayments()} totalPaise={30000} />);
+    expect(screen.getByText('Paid in full')).toBeInTheDocument();
+  });
+
+  it('shows the amount due while a balance remains', () => {
+    useAuthMock.mockReturnValue({ user: { role: 'admin' } });
+    render(<PaymentHistory bookingId={9} payments={makePayments()} totalPaise={50000} />);
+    expect(screen.queryByText('Paid in full')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Overpaid/)).not.toBeInTheDocument();
+    expect(screen.getByText(/200/)).toBeInTheDocument();
+  });
+
+  it('shows an overpayment instead of a negative due amount', () => {
+    useAuthMock.mockReturnValue({ user: { role: 'admin' } });
+    render(<PaymentHistory bookingId={9} payments={makePayments()} totalPaise={10000} />);
+    expect(screen.getByText(/Overpaid by/)).toBeInTheDocument();
+  });
+
+  it('labels UPI in capitals and other methods capitalised', () => {
+    useAuthMock.mockReturnValue({ user: { role: 'admin' } });
+    render(<PaymentHistory bookingId={9} payments={makePayments()} totalPaise={30000} />);
+    expect(screen.getByText('UPI')).toBeInTheDocument();
+    expect(screen.getAllByText(/^Cash/).length).toBeGreaterThan(0);
+  });
+
   it('hides the Void button for staff', () => {
     useAuthMock.mockReturnValue({ user: { role: 'staff' } });
     render(<PaymentHistory bookingId={9} payments={makePayments()} totalPaise={30000} />);
