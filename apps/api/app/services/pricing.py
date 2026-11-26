@@ -386,7 +386,8 @@ def compute_booking_price(
             AddonLine(
                 kind="led",
                 item_id=None,
-                name_snapshot=req.led_name or "",
+                # Label as "LED (NAME)" so the summary shows what the price is for.
+                name_snapshot=f"LED ({(req.led_name or '').strip()})",
                 unit_price_paise=led_charge,
                 quantity=1,
                 weight_half_kg=None,
