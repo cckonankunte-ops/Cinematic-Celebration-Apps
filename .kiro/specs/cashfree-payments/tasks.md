@@ -15,14 +15,21 @@ the tasks noted.
   - [ ] 1.3 Delete the script once the findings are recorded
 
 - [ ] 2. Configuration
-  - [ ] 2.1 Add the settings in `core/config.py` with the validation in R9.2
-  - [ ] 2.2 Update `.env.example` with every new variable (no real values)
-  - [ ] 2.3 Tests: T29
+  - [ ] 2.1 `core/payment_config.py`: load `PAYMENT_ACCOUNT_<KEY>_*`, the default
+        account and `PAYMENT_BRANCH_ACCOUNTS` into a registry; built-in `manual`
+        account; startup validation per R9.2 (no secret in errors)
+  - [ ] 2.2 Add `GATEWAY_HOLD_MINUTES` (15), `GATEWAY_GRACE_MINUTES` (10),
+        `ONLINE_ADVANCE_MIN_PAISE`, `PUBLIC_SITE_URL` to `core/config.py`
+  - [ ] 2.3 Update `.env.example` with every variable (no real values)
+  - [ ] 2.4 Tests: T29, T33, T35, T36
 
 - [ ] 3. Database migration `0027_add_cashfree_payments`
   - [ ] 3.1 `bookings.payment_channel`, `bookings.hold_expires_at`
-  - [ ] 3.2 `payment_orders` and `payment_webhook_events` with named constraints
-  - [ ] 3.3 `uq_payments_provider_ref` partial unique index
+  - [ ] 3.2 `payment_orders` (with `account_key`) and `payment_webhook_events`
+        (with `account_key`) with named constraints
+  - [ ] 3.3 `payments.provider_account` column and the
+        `uq_payments_provider_ref` partial unique index on
+        `(provider, provider_account, provider_ref)`
   - [ ] 3.4 Extend `ck_booking_events_type` with `payment_failed` and
         `payment_needs_refund`
   - [ ] 3.5 Models and downgrade; update `tests/integration/test_schema_integrity.py`
@@ -31,7 +38,8 @@ the tasks noted.
 - [ ] 4. Provider interface and Manual provider
   - [ ] 4.1 New dataclasses and Protocol in `integrations/payments/base.py`
   - [ ] 4.2 Adapt `ManualProvider` (instructions text moves into `OrderResult`)
-  - [ ] 4.3 `get_payment_provider()` reads `PAYMENT_PROVIDER`
+  - [ ] 4.3 Provider registry; `get_payment_provider(account_key)` and
+        `resolve_account(location)` (branch mapping, else default). Tests: T33, T39
   - [ ] 4.4 Add `GatewayUnavailableError` and `GatewayRejectedError`
   - [ ] 4.5 Tests: T26 (manual path unchanged)
 
@@ -39,7 +47,8 @@ the tasks noted.
   - [ ] 5.1 Promote `httpx==0.28.1` to a runtime dependency (one-line reason in
         the PR: already pinned for tests, avoids hand-rolled HTTP)
   - [ ] 5.2 `create_order` with exact Decimal amount, expiry, return and notify
-        URLs, short timeouts, no retries
+        URLs (notify URL includes the account), branch note and tags, short
+        timeouts, no retries. Tests: T37
   - [ ] 5.3 `get_order` (order + payments) mapped to our enums
   - [ ] 5.4 `verify_webhook`: HMAC check, parse, event keys
   - [ ] 5.5 Tests with `httpx.MockTransport`: T4, T7, T13 (provider side)
@@ -62,16 +71,18 @@ the tasks noted.
   - [ ] 7.3 `POST /public/bookings/{token}/pay` with rate limit. Tests: T15, T28
 
 - [ ] 8. Webhook endpoint
-  - [ ] 8.1 `routers/webhooks/cashfree.py`, size cap, status codes per design
+  - [ ] 8.1 `routers/webhooks/gateway.py` for `/api/v1/webhooks/{provider}/{account}`,
+        size cap, status codes per design
   - [ ] 8.2 Register in `main.py`; confirm no origin or role dependency applies
-  - [ ] 8.3 Tests: T7, T8, T12, T28, T30 (end to end through TestClient)
+  - [ ] 8.3 Tests: T7, T8, T12, T28, T30, T34, T38 (end to end through TestClient)
 
 - [ ] 9. Expiry job
   - [ ] 9.1 Manual pass unchanged; add the gateway pass with reconcile
   - [ ] 9.2 Tests: T17 to T22; existing `test_expire.py` still passes
 
 - [ ] 10. Admin changes
-  - [ ] 10.1 Expose `payment_channel` and `needs_refund` in admin booking schemas
+  - [ ] 10.1 Expose `payment_channel`, `needs_refund` and each payment's
+        `provider_account` in admin schemas
   - [ ] 10.2 Booking list/edit label, "payment received on inactive booking"
         banner, Cashfree rows in payment history
   - [ ] 10.3 Regenerate `openapi.json` and `schema.ts`
@@ -105,7 +116,9 @@ the tasks noted.
 - [ ] 14. Go live
   - [ ] 14.1 Owner: production keys into the server `.env`; whitelist
         `cinematiccelebration.in` and `www`; register the production webhook
-  - [ ] 14.2 Switch `CASHFREE_ENV=production`, `PAYMENT_PROVIDER=cashfree`
+  - [ ] 14.2 Set the `main` account to `ENV=production` with the production keys
+        and webhook URL `/api/v1/webhooks/cashfree/main`; restart the API
   - [ ] 14.3 One small real payment, confirm auto-accept, refund it by hand in
         the dashboard, void the ledger entry
-  - [ ] 14.4 Watch the first few days; rollback is `PAYMENT_PROVIDER=manual`
+  - [ ] 14.4 Watch the first few days; rollback is mapping the default account to
+        `manual` and restarting the API

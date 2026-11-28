@@ -33,6 +33,15 @@ tracked as tasks.
    transfer made straight to our VPA, so there is no auto-confirmation for it.)
 6. Build and test on **Cashfree sandbox first**, then switch to production keys.
 7. The customer page needs **payment pending, failed and retry** states.
+8. **Payment gateway is configured per branch**, as configuration only. Today all
+   three branches use the same Cashfree account; later a branch can point to a
+   different account or a different gateway by changing the config (no code
+   change, no schema change). This keeps the settlement-bank-account decision
+   open.
+9. **Every order is tagged with the branch**, whether or not the branches share
+   an account.
+10. Hold time is **15 minutes to pay plus a 10-minute allowance** for a payment
+    already in flight.
 
 ### Out of scope
 
@@ -44,8 +53,11 @@ tracked as tasks.
 
 ## Glossary
 
-- **Gateway booking**: a customer booking whose advance is paid through Cashfree
-  (`payment_channel = 'gateway'`).
+- **Payment account**: one named set of gateway credentials from configuration
+  (for example `main`): provider (`cashfree` or `manual`), environment (sandbox
+  or production), App ID and secret key. Several branches may share an account.
+- **Gateway booking**: a customer booking whose advance is paid through a
+  gateway payment account (`payment_channel = 'gateway'`).
 - **Manual booking**: a customer booking handled by the manual UPI flow
   (`payment_channel = 'manual'`), the current behaviour.
 - **Payment order**: our record of one Cashfree order (one payment attempt
@@ -62,12 +74,14 @@ tracked as tasks.
 slot is confirmed immediately.
 
 Acceptance criteria:
-1. WHEN `PAYMENT_PROVIDER=cashfree` and a customer submits a valid booking
-   request, THE system SHALL create the booking `pending` with
-   `payment_channel='gateway'`, create a Cashfree order for the advance, and
-   return what the page needs to open checkout.
-2. WHEN `PAYMENT_PROVIDER=manual`, THE system SHALL behave exactly as today
-   (`payment_channel='manual'`, manual UPI instructions, `PENDING_HOLD_MINUTES`).
+1. WHEN a customer submits a valid booking request AND the booking's branch
+   resolves (R11) to a gateway payment account, THE system SHALL create the
+   booking `pending` with `payment_channel='gateway'`, create an order with that
+   account's gateway for the advance, and return what the page needs to open
+   checkout.
+2. WHEN the branch resolves to the built-in `manual` account, THE system SHALL
+   behave exactly as today (`payment_channel='manual'`, manual UPI instructions,
+   `PENDING_HOLD_MINUTES`).
 3. IF Cashfree order creation fails (network error, timeout, 5xx, or auth
    error), THEN THE system SHALL keep the booking, set
    `payment_channel='manual'`, apply the normal manual hold, and return manual
@@ -103,10 +117,12 @@ don't pay.
 
 Acceptance criteria:
 1. A gateway booking SHALL hold its slot (status `pending`) for
-   `GATEWAY_HOLD_MINUTES` (default 20), stored as `bookings.hold_expires_at`.
+   `GATEWAY_HOLD_MINUTES` (default **15**), stored as `bookings.hold_expires_at`.
+   The allowance for a payment already in flight is `GATEWAY_GRACE_MINUTES`
+   (default **10**, matching Cashfree's minimum transaction time limit).
 2. THE Cashfree order SHALL be created with an expiry equal to `hold_expires_at`.
 3. THE expiry job SHALL NOT expire a gateway booking before
-   `hold_expires_at + CASHFREE_TXN_GRACE_MINUTES`, and SHALL first reconcile the
+   `hold_expires_at + GATEWAY_GRACE_MINUTES`, and SHALL first reconcile the
    order's real status with Cashfree (R7).
 4. WHEN a gateway booking is past hold + grace and Cashfree confirms no
    successful payment, THE job SHALL set it `expired`, which frees the slot, and
@@ -143,13 +159,16 @@ Acceptance criteria:
 customer closes the browser.
 
 Acceptance criteria:
-1. THE system SHALL expose `POST /api/v1/webhooks/cashfree`, unauthenticated by
-   user session, protected only by signature verification, and excluded from the
-   admin router so admin origin checks do not apply.
+1. THE system SHALL expose `POST /api/v1/webhooks/{provider}/{account}` (for
+   example `/api/v1/webhooks/cashfree/main`), unauthenticated by user session,
+   protected only by signature verification, and excluded from the admin router
+   so admin origin checks do not apply. Each payment account has its own
+   address, registered in that account's dashboard.
 2. THE system SHALL verify `x-webhook-signature` using HMAC-SHA256 over the
    `x-webhook-timestamp` header plus the **raw request body**, base64-encoded,
-   with the Cashfree secret key, compared in constant time. **[verify in
-   sandbox with the Dev Studio verification tool]**
+   with **that account's** secret key, compared in constant time. A delivery
+   signed with another account's key SHALL be rejected. **[verify in sandbox
+   with the Dev Studio verification tool]**
 3. IF the signature is missing or invalid, THEN THE system SHALL respond `401`,
    change no data, and log only that verification failed (no body, no secrets).
 4. THE system SHALL handle at least the payment success, failed and user-dropped
@@ -242,13 +261,16 @@ Acceptance criteria:
 ### R9: Configuration and security
 
 Acceptance criteria:
-1. THE system SHALL read these from the environment and list them in
-   `.env.example`: `PAYMENT_PROVIDER` (`manual` | `cashfree`), `CASHFREE_ENV`
-   (`sandbox` | `production`), `CASHFREE_APP_ID`, `CASHFREE_SECRET_KEY`,
-   `CASHFREE_API_VERSION`, `GATEWAY_HOLD_MINUTES`,
-   `CASHFREE_TXN_GRACE_MINUTES`, `ONLINE_ADVANCE_MIN_PAISE`, `PUBLIC_SITE_URL`.
-2. IF `PAYMENT_PROVIDER=cashfree` and the App ID or Secret Key is missing, THEN
-   the API SHALL refuse to start with a clear error.
+1. THE system SHALL read payment configuration from the environment (secrets
+   never in the database or admin screens) and list every variable in
+   `.env.example`: the payment accounts and branch mapping described in R11,
+   plus `GATEWAY_HOLD_MINUTES`, `GATEWAY_GRACE_MINUTES`,
+   `ONLINE_ADVANCE_MIN_PAISE` and `PUBLIC_SITE_URL`. Settings that belong to
+   one gateway (such as Cashfree's API version) are part of that account.
+2. IF a payment account is configured with a gateway provider and its
+   credentials are missing, OR a branch is mapped to an account that is not
+   defined, THEN the API SHALL refuse to start with a clear error naming the
+   account (never printing a secret).
 3. THE secret key SHALL never appear in logs, errors, API responses, the repo, or
    the front end. Only the App ID (not secret) and the mode may reach the
    browser, and only the payment session id is returned to the customer page.
@@ -257,8 +279,8 @@ Acceptance criteria:
 5. LOGS SHALL contain only the booking reference, our order id and Cashfree ids,
    never phone, email, names, or the raw webhook body.
 6. THE webhook route SHALL accept only a bounded body size.
-7. Switching `PAYMENT_PROVIDER` back to `manual` SHALL restore today's flow
-   without a code change or migration.
+7. Mapping a branch (or the default) to the built-in `manual` account SHALL
+   restore today's flow for that branch without a code change or migration.
 8. THE customer domain(s) SHALL be whitelisted in the Cashfree dashboard before
    production checkout works (operations task, see tasks).
 
@@ -270,6 +292,43 @@ Acceptance criteria:
 2. THE admin booking list/edit SHALL show whether a booking was paid online or is
    awaiting manual confirmation.
 3. THE existing void, role, and location-access rules SHALL be unchanged.
+4. THE admin payment history SHALL show which payment account took each online
+   payment.
+
+### R11: Payment accounts per branch (configuration only)
+
+**User story:** As the owner, I want each branch to be able to use its own payment
+account or gateway later by changing configuration, so I never have to decide
+upfront whether branches share a settlement bank account.
+
+Acceptance criteria:
+1. THE configuration SHALL define one or more named **payment accounts**, each with
+   a provider (`cashfree` now; others can be added later) and that provider's
+   credentials and environment. A built-in account named `manual` always exists.
+2. THE configuration SHALL define a **default account** and an optional mapping
+   from **branch to account** (keyed by the branch's stable slug). A branch with
+   no mapping SHALL use the default.
+3. TODAY, all three branches SHALL use the same account by configuring only the
+   default. Changing one branch to a different account SHALL need only a
+   configuration change and an API restart.
+4. THE account used for an order SHALL be stored with the order and with each
+   ledger row it produces, so later reconciliation, webhooks and the expiry job
+   use the **same** account even if the mapping changes afterwards.
+5. EACH account SHALL have its own webhook address (R5.1) and its own signature
+   secret. A payment confirmed under one account SHALL NOT be accepted under
+   another.
+6. THE Cashfree-specific code SHALL live behind the provider interface in a
+   single module. Adding another gateway SHALL need a new module plus
+   configuration, with no change to the booking, payment-ledger or admin code.
+7. EVERY order sent to a gateway SHALL be tagged with the branch, regardless of
+   whether branches share an account: the branch name in the order note, and the
+   branch slug and booking reference in the order tags, and the order id SHALL
+   begin with the booking reference (which carries the branch code).
+   **[verify in sandbox]** the tag limits and how they show in the Cashfree
+   dashboard.
+8. THE branch tag SHALL contain no customer personal data.
+9. Per-branch money received SHALL remain reportable from our own data (payment
+   to booking to branch) with no extra work.
 
 ## Test cases (mandatory, listed explicitly)
 
@@ -332,7 +391,7 @@ Acceptance criteria:
 **Fallback and manual**
 - T25: Cashfree create-order fails: booking kept `pending`, channel `manual`,
   manual instructions returned, never auto-accepted.
-- T26: `PAYMENT_PROVIDER=manual` reproduces today's behaviour exactly. Existing
+- T26: A branch on the `manual` account reproduces today's behaviour exactly. Existing
   tests for create, accept and expiry still pass.
 - T27: Accepting a manual booking still requires the recorded advance.
 

@@ -79,8 +79,9 @@ Existing rows become `manual` with no migration of data.
 |---|---|---|
 | `id` | bigint identity PK | |
 | `booking_id` | bigint FK `bookings.id` ON DELETE CASCADE | index |
-| `provider` | text NOT NULL default `'cashfree'` | |
-| `provider_order_id` | text NOT NULL | UNIQUE (`uq_payment_orders_provider_order`); ours, e.g. `<reference>-<attempt>` |
+| `provider` | text NOT NULL | `cashfree` now |
+| `account_key` | text NOT NULL | the payment account used (for example `main`); webhooks, reconcile and the job use **this**, not the current branch mapping |
+| `provider_order_id` | text NOT NULL | UNIQUE (`uq_payment_orders_provider_order`); ours, `<booking_reference>-<attempt>` (the reference carries the branch code) |
 | `cf_order_id` | text NULL | Cashfree's id |
 | `payment_session_id` | text NULL | lets us resume checkout |
 | `amount_paise` | bigint NOT NULL | CHECK `> 0` |
@@ -94,18 +95,23 @@ Existing rows become `manual` with no migration of data.
 |---|---|---|
 | `id` | bigint identity PK | |
 | `provider` | text NOT NULL | |
-| `event_key` | text NOT NULL | UNIQUE with provider; `<type>:<cf_payment_id>:<payment_status>` |
+| `account_key` | text NOT NULL | |
+| `event_key` | text NOT NULL | UNIQUE with (provider, account_key); `<type>:<cf_payment_id>:<payment_status>` |
 | `provider_order_id` | text NULL | |
 | `outcome` | text NOT NULL | `applied`, `duplicate`, `ignored`, `late_refund_needed`... |
 | `received_at` | timestamptz default now | |
 
 No raw payload stored (it contains customer details).
 
-### `payments` (constraints only, no new columns)
+### `payments` (one new column and an index)
+- New nullable column `provider_account` (text): the payment account that took
+  the money, shown in admin payment history.
 - Add partial unique index `uq_payments_provider_ref` on `(provider,
-  provider_ref)` WHERE `provider_ref IS NOT NULL`. Cashfree rows set
-  `provider='cashfree'`, `provider_ref=<cf_payment_id>`, `recorded_by_user_id`
-  NULL.
+  provider_account, provider_ref)` WHERE `provider_ref IS NOT NULL`. Including
+  the account means two accounts can never collide on an id, while a repeat
+  under the same account is idempotent. Cashfree rows set
+  `provider='cashfree'`, `provider_account=<account key>`,
+  `provider_ref=<cf_payment_id>`, `recorded_by_user_id` NULL.
 - Method maps into the existing CHECK: Cashfree group `upi` -> `upi`; credit or
   debit card -> `card`; everything else -> `other`.
 
@@ -173,7 +179,9 @@ class PaymentProvider(Protocol):
     def verify_webhook(self, raw_body: bytes, headers: Mapping[str, str]) -> WebhookEvent: ...
 ```
 
-`get_payment_provider()` reads `settings.PAYMENT_PROVIDER`. Errors raise
+`get_payment_provider(account_key)` returns the provider instance for a payment
+account (see 4.6); `resolve_account(location)` returns the account key for a
+branch. Errors raise
 `GatewayUnavailableError` (network, timeout, 5xx, 401/403 from Cashfree) and
 `GatewayRejectedError` (4xx validation), both subclasses of `AppError` so
 services translate them, never routers.
@@ -184,7 +192,9 @@ services translate them, never routers.
   automatic retries). **Dependency note:** `httpx==0.28.1` moves from dev
   dependencies to runtime dependencies; it is already pinned for tests, small, and
   avoids hand-rolling HTTP with `urllib`. No new service or memory cost.
-- Base URL from `CASHFREE_ENV`. Headers: `x-client-id`, `x-client-secret`,
+- The provider is constructed **per payment account** (App ID, secret, API
+  version and environment come from that account's config). Base URL from the
+  account's `ENV`. Headers: `x-client-id`, `x-client-secret`,
   `x-api-version`, `Content-Type`.
 - `create_order`: builds the body. `order_amount` is a string produced from
   `Decimal(paise) / 100` quantized to 2 places; never a float. `order_meta`
@@ -202,7 +212,7 @@ services translate them, never routers.
 | function | purpose |
 |---|---|
 | `online_advance_paise(booking_total, resolved_advance)` | floor at `ONLINE_ADVANCE_MIN_PAISE`, cap at total |
-| `start_checkout(db, booking)` | create a `payment_orders` row + Cashfree order for the next attempt; return session info |
+| `start_checkout(db, booking)` | resolve the branch's account (first attempt) or reuse the account stored on the previous order; create a `payment_orders` row + gateway order, tagged with the branch; return session info |
 | `begin_gateway_booking(...)` | called by `create_customer_booking` after commit; on `GatewayUnavailableError` flips the booking to manual (R1.3) |
 | `confirm_paid(db, booking, payment, source)` | the single place that records the payment and accepts, in one transaction; idempotent |
 | `handle_webhook(db, raw, headers)` | verify, de-duplicate, confirm via `get_order`, then `confirm_paid` or record failure |
@@ -242,6 +252,7 @@ pass handles gateway bookings:
 
 ```
 for booking in pending gateway bookings where hold_expires_at + grace < now:
+    provider = get_payment_provider(latest_order.account_key)   # the order's own account
     try:  status = provider.get_order(latest order)
     except GatewayUnavailableError: continue          # never expire on unknown
     if paid:       confirm_paid(...)                  # accept
@@ -256,7 +267,8 @@ point (cron, every minute).
 
 - `POST /api/v1/public/bookings` (existing): `CustomerBookingResult` gains
   `payment_channel` (`gateway` | `manual`), `payment_session_id` (nullable),
-  `cashfree_mode` (`sandbox` | `production`, nullable), `online_amount_paise`,
+  `gateway_mode` (`sandbox` | `production`, nullable; the SDK needs it),
+  `online_amount_paise`,
   `hold_expires_at`, `gateway_unavailable` (bool). `payment_instructions`
   stays for the manual channel.
 - `POST /api/v1/public/bookings/{token}/pay` (new, rate limited 5/min): returns
@@ -266,7 +278,9 @@ point (cron, every minute).
   `advance_paise`, `hold_expires_at`, `can_retry`. May reconcile at most once
   per ~5 seconds per booking (in-process timestamp is not allowed to be the only
   guard; use `payment_orders.updated_at`).
-- `POST /api/v1/webhooks/cashfree` (new `routers/webhooks/cashfree.py`):
+- `POST /api/v1/webhooks/{provider}/{account}` (new `routers/webhooks/gateway.py`;
+  for example `/api/v1/webhooks/cashfree/main`): looks up the account (unknown
+  provider or account returns `404`), verifies with **that account's** secret,
   reads the raw body, size capped, calls `payment_gateway.handle_webhook`,
   returns `200` for applied, duplicate, ignored, unknown-order; `401` for a bad
   signature; `503` when confirmation could not be completed. Registered in
@@ -276,22 +290,67 @@ point (cron, every minute).
   rows already expose `provider` and `provider_ref`. The booking detail gains a
   derived `needs_refund` boolean (status not active and paid total > 0).
 
-### 4.6 Configuration (`core/config.py`, `.env.example`)
+### 4.6 Configuration: payment accounts per branch (`core/payment_config.py`)
+
+Accounts are defined in the environment, because secrets never go in the
+database or the admin. A small loader reads variables named
+`PAYMENT_ACCOUNT_<KEY>_<FIELD>` at startup into a registry. The built-in
+`manual` account always exists.
 
 ```
-PAYMENT_PROVIDER=manual            # manual | cashfree
-CASHFREE_ENV=sandbox               # sandbox | production
-CASHFREE_APP_ID=
-CASHFREE_SECRET_KEY=
-CASHFREE_API_VERSION=2023-08-01
-GATEWAY_HOLD_MINUTES=20
-CASHFREE_TXN_GRACE_MINUTES=15      # >= the dashboard Transaction Time Limit
+# Which account a branch uses when it has no mapping of its own
+PAYMENT_DEFAULT_ACCOUNT=main
+
+# One block per account (add another block for another account or gateway)
+PAYMENT_ACCOUNT_MAIN_PROVIDER=cashfree        # cashfree | manual | (future gateways)
+PAYMENT_ACCOUNT_MAIN_ENV=sandbox              # sandbox | production
+PAYMENT_ACCOUNT_MAIN_APP_ID=
+PAYMENT_ACCOUNT_MAIN_SECRET_KEY=
+PAYMENT_ACCOUNT_MAIN_API_VERSION=2023-08-01
+
+# Optional: branch slug -> account. Unlisted branches use the default.
+# PAYMENT_BRANCH_ACCOUNTS=hulimavu:main,ecity:second,jpnagar:main
+
+GATEWAY_HOLD_MINUTES=15
+GATEWAY_GRACE_MINUTES=10          # >= the dashboard Transaction Time Limit (10)
 ONLINE_ADVANCE_MIN_PAISE=50000
 PUBLIC_SITE_URL=https://cinematiccelebration.in
 ```
 
-`Settings` validates: provider `cashfree` requires App ID and Secret Key.
+Today all three branches use `main`, so only the default and one account block
+are needed. Moving a branch to its own account later means adding another block
+(`PAYMENT_ACCOUNT_SECOND_*`), adding one entry to `PAYMENT_BRANCH_ACCOUNTS`,
+registering that account's webhook address in its dashboard, and restarting.
+No code change and no database change.
+
+Rules enforced at startup (the API refuses to start otherwise, without printing
+any secret): every gateway account has the fields its provider needs; the
+default account exists; every account named in the branch mapping exists.
+A branch slug that matches no branch is logged as a warning.
+
+The branch is resolved at booking time from `locations.slug`. The account key is
+then copied onto the `payment_orders` row, so changing the mapping later never
+re-routes an order already in flight (R11.4).
+
+Providers are looked up in a small registry (`{"cashfree": CashfreeProvider,
+"manual": ManualProvider}`). A future gateway is one new module added to that
+registry.
+
 `MANUAL_UPI_VPA` stays.
+
+### 4.7 Branch tagging
+
+Every Cashfree order carries the branch, independent of account:
+- `order_id`: `<booking_reference>-<attempt>`. **[verify in sandbox]** allowed
+  characters and maximum length of an order id.
+- `order_note`: `<Branch name> | <booking reference>`.
+- `order_tags`: `{"branch": "<slug>", "booking_ref": "<reference>"}`.
+  **[verify in sandbox]** tag count and length limits, and whether they are
+  searchable or shown in reports in the dashboard.
+- No phone, email, name or any other personal data in these fields.
+
+Per-branch money received inside our own system needs no extra work: each payment
+belongs to a booking and each booking to a branch (existing analytics by branch).
 
 ## 5. Front end
 
@@ -336,15 +395,16 @@ PUBLIC_SITE_URL=https://cinematiccelebration.in
 
 1. Build and test with fakes and signed fixture payloads (no Cashfree needed).
 2. Sandbox end to end in the **Codespace**, not on the live VPS
-   (`PAYMENT_PROVIDER=cashfree`, `CASHFREE_ENV=sandbox`). Cashfree must reach our
+   (the `main` account with `ENV=sandbox`). Cashfree must reach our
    webhook over public HTTPS, so the API port is forwarded with **public**
    visibility and that URL is registered in the **sandbox** dashboard. Running
    sandbox on the production VPS is avoided because real customers would be sent
    to a test checkout.
 3. Whitelist the production domain, enter production keys, set
-   `CASHFREE_ENV=production`, and run one small real payment, then refund it by
-   hand in the dashboard.
-4. Rollback at any time: `PAYMENT_PROVIDER=manual` and restart the API.
+   the account's `ENV=production`, and run one small real payment, then refund
+   it by hand in the dashboard.
+4. Rollback at any time: map the branch (or the default) to the `manual` account
+   and restart the API.
 
 ## 8. Cost and memory
 
