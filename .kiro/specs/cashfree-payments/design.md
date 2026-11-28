@@ -69,7 +69,7 @@ Cashfree  ----- webhook ----->  VPS (Caddy -> API)
 ### `bookings` (new columns)
 | column | type | notes |
 |---|---|---|
-| `payment_channel` | text NOT NULL default `'manual'` | CHECK `IN ('manual','gateway')` |
+| `payment_mode` | text NOT NULL default `'manual'` | CHECK `IN ('manual','gateway')` |
 | `hold_expires_at` | timestamptz NULL | set for gateway bookings only |
 
 Existing rows become `manual` with no migration of data.
@@ -247,7 +247,7 @@ booking that is `accepted`. A success always goes through `confirm_paid`.
 ### 4.4 Expiry job
 
 `expire_pending_bookings` keeps its current query for manual bookings
-(`payment_channel='manual'`, `created_at + PENDING_HOLD_MINUTES`). A second
+(`payment_mode='manual'`, `created_at + PENDING_HOLD_MINUTES`). A second
 pass handles gateway bookings:
 
 ```
@@ -266,7 +266,7 @@ point (cron, every minute).
 ### 4.5 Routers and schemas
 
 - `POST /api/v1/public/bookings` (existing): `CustomerBookingResult` gains
-  `payment_channel` (`gateway` | `manual`), `payment_session_id` (nullable),
+  `payment_mode` (`gateway` | `manual`), `payment_session_id` (nullable),
   `gateway_mode` (`sandbox` | `production`, nullable; the SDK needs it),
   `online_amount_paise`,
   `hold_expires_at`, `gateway_unavailable` (bool). `payment_instructions`
@@ -274,7 +274,7 @@ point (cron, every minute).
 - `POST /api/v1/public/bookings/{token}/pay` (new, rate limited 5/min): returns
   session info for a `pending` gateway booking within its hold.
 - `GET /api/v1/public/bookings/{token}` (existing): `PublicBookingStatus` gains
-  `payment_channel`, `payment_state` (`none|pending|paid|failed|expired|manual`),
+  `payment_mode`, `payment_state` (`none|pending|paid|failed|expired|manual`),
   `advance_paise`, `hold_expires_at`, `can_retry`. May reconcile at most once
   per ~5 seconds per booking (in-process timestamp is not allowed to be the only
   guard; use `payment_orders.updated_at`).
@@ -286,7 +286,7 @@ point (cron, every minute).
   signature; `503` when confirmation could not be completed. Registered in
   `main.py`; no `require_role`, no `check_origin`; excluded from rate limiting
   defaults.
-- Admin read schemas gain `payment_channel` (booking list/detail) and the payment
+- Admin read schemas gain `payment_mode` (booking list/detail) and the payment
   rows already expose `provider` and `provider_ref`. The booking detail gains a
   derived `needs_refund` boolean (status not active and paid total > 0).
 
@@ -360,7 +360,7 @@ belongs to a booking and each booking to a branch (existing analytics by branch)
   SDK `<script>` once on demand, calls `Cashfree({mode}).checkout({paymentSessionId,
   redirectTarget: '_self'})`. Failure to load shows the manual UPI option. Kept
   out of the main bundle so the booking page stays under the 150 KB budget.
-- `BookingWizard.tsx`: after create, if `payment_channel==='gateway'` go
+- `BookingWizard.tsx`: after create, if `payment_mode==='gateway'` go
   straight to checkout; if `manual`, show today's confirmation card with a short
   note when `gateway_unavailable` is true.
 - `BookingStatus.tsx`: render the states in R6, poll every 3 seconds for up to
@@ -381,7 +381,7 @@ belongs to a booking and each booking to a branch (existing analytics by branch)
 
 | situation | behaviour |
 |---|---|
-| Cashfree down at booking time | booking kept, channel `manual`, manual UPI shown, no auto-accept |
+| Cashfree down at booking time | booking kept, mode `manual`, manual UPI shown, no auto-accept |
 | Customer closes the tab before paying | slot held until `hold_expires_at + grace`, then released after a Cashfree check |
 | Customer pays then loses connection | webhook (or status poll, or job) accepts the booking |
 | Webhook delayed or lost | status read and expiry job reconcile via Get Order |

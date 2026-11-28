@@ -57,9 +57,9 @@ tracked as tasks.
   (for example `main`): provider (`cashfree` or `manual`), environment (sandbox
   or production), App ID and secret key. Several branches may share an account.
 - **Gateway booking**: a customer booking whose advance is paid through a
-  gateway payment account (`payment_channel = 'gateway'`).
+  gateway payment account (`payment_mode = 'gateway'`).
 - **Manual booking**: a customer booking handled by the manual UPI flow
-  (`payment_channel = 'manual'`), the current behaviour.
+  (`payment_mode = 'manual'`), the current behaviour.
 - **Payment order**: our record of one Cashfree order (one payment attempt
   session) for a booking. A booking can have several (retries).
 - **Hold**: the time a `pending` booking keeps its slot.
@@ -76,15 +76,15 @@ slot is confirmed immediately.
 Acceptance criteria:
 1. WHEN a customer submits a valid booking request AND the booking's branch
    resolves (R11) to a gateway payment account, THE system SHALL create the
-   booking `pending` with `payment_channel='gateway'`, create an order with that
+   booking `pending` with `payment_mode='gateway'`, create an order with that
    account's gateway for the advance, and return what the page needs to open
    checkout.
 2. WHEN the branch resolves to the built-in `manual` account, THE system SHALL
-   behave exactly as today (`payment_channel='manual'`, manual UPI instructions,
+   behave exactly as today (`payment_mode='manual'`, manual UPI instructions,
    `PENDING_HOLD_MINUTES`).
 3. IF Cashfree order creation fails (network error, timeout, 5xx, or auth
    error), THEN THE system SHALL keep the booking, set
-   `payment_channel='manual'`, apply the normal manual hold, and return manual
+   `payment_mode='manual'`, apply the normal manual hold, and return manual
    UPI instructions plus a flag telling the page the gateway was unavailable.
    The booking SHALL NOT be accepted automatically.
 4. THE client SHALL send only IDs and quantities. Any client-sent amount or
@@ -389,7 +389,7 @@ Acceptance criteria:
   status unchanged, `payment_needs_refund` event, admin banner data present.
 
 **Fallback and manual**
-- T25: Cashfree create-order fails: booking kept `pending`, channel `manual`,
+- T25: Cashfree create-order fails: booking kept `pending`, mode `manual`,
   manual instructions returned, never auto-accepted.
 - T26: A branch on the `manual` account reproduces today's behaviour exactly. Existing
   tests for create, accept and expiry still pass.

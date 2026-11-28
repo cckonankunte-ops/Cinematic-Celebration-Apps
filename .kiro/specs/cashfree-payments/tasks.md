@@ -24,7 +24,7 @@ the tasks noted.
   - [ ] 2.4 Tests: T29, T33, T35, T36
 
 - [ ] 3. Database migration `0027_add_cashfree_payments`
-  - [ ] 3.1 `bookings.payment_channel`, `bookings.hold_expires_at`
+  - [ ] 3.1 `bookings.payment_mode`, `bookings.hold_expires_at`
   - [ ] 3.2 `payment_orders` (with `account_key`) and `payment_webhook_events`
         (with `account_key`) with named constraints
   - [ ] 3.3 `payments.provider_account` column and the
@@ -81,7 +81,7 @@ the tasks noted.
   - [ ] 9.2 Tests: T17 to T22; existing `test_expire.py` still passes
 
 - [ ] 10. Admin changes
-  - [ ] 10.1 Expose `payment_channel`, `needs_refund` and each payment's
+  - [ ] 10.1 Expose `payment_mode`, `needs_refund` and each payment's
         `provider_account` in admin schemas
   - [ ] 10.2 Booking list/edit label, "payment received on inactive booking"
         banner, Cashfree rows in payment history
