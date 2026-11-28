@@ -23,7 +23,9 @@ the tasks noted.
   - [ ] 2.3 Update `.env.example` with every variable (no real values)
   - [ ] 2.4 Tests: T29, T33, T35, T36
 
-- [ ] 3. Database migration `0027_add_cashfree_payments`
+- [ ] 3. Database migration `0028_add_cashfree_payments`
+        (the `payment-history` spec is built first and takes `0027`; use the next
+        free number if that changes)
   - [ ] 3.1 `bookings.payment_mode`, `bookings.hold_expires_at`
   - [ ] 3.2 `payment_orders` (with `account_key`) and `payment_webhook_events`
         (with `account_key`) with named constraints

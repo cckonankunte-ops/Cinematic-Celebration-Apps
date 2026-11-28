@@ -64,7 +64,7 @@ Cashfree  ----- webhook ----->  VPS (Caddy -> API)
 
 `jobs/expire_pending.py` calls `payment_gateway.reconcile_before_expiry`.
 
-## 3. Data model (migration `0027_add_cashfree_payments`)
+## 3. Data model (migration `0028_add_cashfree_payments`, after `payment-history` `0027`)
 
 ### `bookings` (new columns)
 | column | type | notes |
@@ -114,6 +114,10 @@ No raw payload stored (it contains customer details).
   `provider_ref=<cf_payment_id>`, `recorded_by_user_id` NULL.
 - Method maps into the existing CHECK: Cashfree group `upi` -> `upi`; credit or
   debit card -> `card`; everything else -> `other`.
+- Cashfree rows set the **payment channel** to `cashfree` (the `channel` column
+  and its allowed values come from the `payment-history` spec, which ships
+  first). Not to be confused with `bookings.payment_mode`, which says whether a
+  booking is `manual` or `gateway`.
 
 ### `booking_events` CHECK
 Extend `ck_booking_events_type` (drop and recreate, as migration 0015 did) with
